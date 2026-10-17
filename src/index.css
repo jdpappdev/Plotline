@@ -1,0 +1,288 @@
+@import "tailwindcss";
+
+@property --accent {
+  syntax: '<color>';
+  inherits: true;
+  initial-value: #204282;
+}
+
+@property --accent-deep {
+  syntax: '<color>';
+  inherits: true;
+  initial-value: #132852;
+}
+
+@property --accent-mid {
+  syntax: '<color>';
+  inherits: true;
+  initial-value: #2c52a3;
+}
+
+@property --accent-soft {
+  syntax: '<color>';
+  inherits: true;
+  initial-value: #e9effa;
+}
+
+:root {
+  /* 1. Page Background (#f6f6f5) & Cards (#fcfcf9) — No page-wide texture */
+  --surface-canvas: #f6f6f5;
+  --surface-elevated: #fcfcf9;
+  --surface-sunken: #eeeeeb;
+  --border-hairline: #e4e3de;
+  --border-strong: #cbc9c2;
+  --line: #e4e3de;
+
+  /* 2. Ink Typography Palette */
+  --ink-primary: #161615;
+  --ink-secondary: #4E4D4A;
+  --ink-muted: #7A7873;
+
+  /* 3. "Tide" Default Accent & Derived Surface / Tint Tokens */
+  --accent: #204282;
+  --accent-mid: #2c52a3;
+  --accent-light: #789ce2;
+  --accent-deep: color-mix(in oklab, var(--accent) 68%, black);
+  --surface-accent: linear-gradient(155deg, var(--accent) 0%, var(--accent-deep) 100%);
+  --accent-tint-1: var(--accent);
+  --accent-tint-2: color-mix(in oklab, var(--accent) 74%, white);
+  --accent-tint-3: color-mix(in oklab, var(--accent) 52%, white);
+  --accent-tint-4: var(--accent-deep);
+  --accent-tint-5: color-mix(in oklab, var(--accent) 34%, white);
+  --accent-hover: #2c52a3;
+  --accent-soft: #e9effa;
+  --accent-border: #b8ccf2;
+
+  /* Semantic Status Colors */
+  --status-nominal: #267347;
+  --status-warning: #B86B14;
+  --status-critical: #C9352B;
+
+  /* 4. Typography Families */
+  --font-ui: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  --font-display-num: 'Fraunces', Georgia, serif;
+  --font-mono: 'JetBrains Mono', ui-monospace, SFMono-Regular, monospace;
+
+  /* 5. 8px Spacing Scale */
+  --space-0-5: 4px;
+  --space-1: 8px;
+  --space-2: 16px;
+  --space-3: 24px;
+  --space-4: 32px;
+  --space-5: 40px;
+  --space-6: 48px;
+  --space-8: 64px;
+
+  /* 6. Single Governing Easing Curve & 250ms Re-Tint Transition */
+  --ease-plotline: cubic-bezier(0.16, 1, 0.3, 1);
+  --duration-fast: 160ms;
+  --duration-normal: 200ms;
+  --duration-retint: 250ms;
+
+  /* 7. Border Radii */
+  --radius-xs: 4px;
+  --radius-sm: 6px;
+  --radius-md: 8px;
+  --radius-lg: 14px;
+
+  transition:
+    --accent 250ms var(--ease-plotline),
+    --accent-deep 250ms var(--ease-plotline),
+    --accent-mid 250ms var(--ease-plotline),
+    --accent-soft 250ms var(--ease-plotline);
+}
+
+:root[data-accent="tide"] {
+  --accent: #204282;
+  --accent-mid: #2c52a3;
+  --accent-light: #789ce2;
+  --accent-deep: color-mix(in oklab, var(--accent) 68%, black);
+  --surface-accent: linear-gradient(155deg, var(--accent) 0%, var(--accent-deep) 100%);
+  --accent-hover: #2c52a3;
+  --accent-soft: #e9effa;
+  --accent-border: #b8ccf2;
+}
+
+:root[data-accent="moss"] {
+  --accent: #2E6B47;
+  --accent-mid: #3b8559;
+  --accent-light: #84c29d;
+  --accent-deep: color-mix(in oklab, var(--accent) 68%, black);
+  --surface-accent: linear-gradient(155deg, var(--accent) 0%, var(--accent-deep) 100%);
+  --accent-hover: #3b8559;
+  --accent-soft: #E8F2EC;
+  --accent-border: #A7CBB5;
+}
+
+:root[data-accent="iris"] {
+  --accent: #5B43B8;
+  --accent-mid: #6f56d1;
+  --accent-light: #a594eb;
+  --accent-deep: color-mix(in oklab, var(--accent) 68%, black);
+  --surface-accent: linear-gradient(155deg, var(--accent) 0%, var(--accent-deep) 100%);
+  --accent-hover: #6f56d1;
+  --accent-soft: #EEEBF9;
+  --accent-border: #BEB2EB;
+}
+
+:root[data-accent="signal"] {
+  --accent: #BE3A15;
+  --accent-mid: #d94b24;
+  --accent-light: #f59d84;
+  --accent-deep: color-mix(in oklab, var(--accent) 68%, black);
+  --surface-accent: linear-gradient(155deg, var(--accent) 0%, var(--accent-deep) 100%);
+  --accent-hover: #d94b24;
+  --accent-soft: #FCECE7;
+  --accent-border: #F3B7A5;
+}
+
+* {
+  box-sizing: border-box;
+  transition-property: background-color, border-color, color, fill, stroke;
+  transition-duration: 250ms;
+  transition-timing-function: var(--ease-plotline);
+}
+
+button:focus-visible,
+a:focus-visible,
+input:focus-visible,
+select:focus-visible,
+textarea:focus-visible,
+[role="button"]:focus-visible,
+[role="switch"]:focus-visible,
+[role="option"]:focus-visible,
+[role="combobox"]:focus-visible,
+[tabindex]:not([tabindex="-1"]):focus-visible {
+  outline: 2px solid var(--accent) !important;
+  outline-offset: 2px;
+}
+
+html,
+body {
+  margin: 0;
+  padding: 0;
+  background-color: var(--surface-canvas);
+  color: var(--ink-primary);
+  font-family: var(--font-ui);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  overflow-x: hidden;
+}
+
+/* Serif Display Numerals with Tabular Alignment */
+.font-display-num {
+  font-family: var(--font-display-num);
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: "tnum" 1;
+}
+
+/* UI Sans Tabular Numerals (Used for Focus HH:MM:SS) */
+.font-ui-tabular {
+  font-family: var(--font-ui);
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: "tnum" 1;
+}
+
+/* Clean page surface (No page-wide texture) */
+.contour-surface {
+  background-color: var(--surface-canvas);
+}
+
+/* Accent-derived surface utility (--surface-accent with 1px white 10% inner border) */
+.surface-accent-fill {
+  background: var(--surface-accent);
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.10);
+}
+
+/* Focus card: background var(--surface-accent) + 1px inner border at white 10% */
+.time-tracker-surface {
+  background: var(--surface-accent);
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.10);
+  transition: background 250ms var(--ease-plotline), color 250ms var(--ease-plotline);
+}
+
+/* Single Easing Curve Utility */
+.ease-plotline {
+  transition-timing-function: var(--ease-plotline);
+}
+
+/* Route Change Top 2px Accent Sweep (400ms) */
+@keyframes plotlineRouteSweep {
+  0% {
+    transform: scaleX(0);
+    opacity: 1;
+  }
+  72% {
+    transform: scaleX(1);
+    opacity: 1;
+  }
+  100% {
+    transform: scaleX(1);
+    opacity: 0;
+  }
+}
+
+.plotline-route-sweep {
+  height: 2px;
+  width: 100%;
+  background-color: var(--accent);
+  transform-origin: left center;
+  animation: plotlineRouteSweep 400ms var(--ease-plotline) forwards;
+  pointer-events: none;
+}
+
+/* Page Enter: 300ms fade and unblur with 40ms stagger per card */
+@keyframes plotlineCardEnter {
+  0% {
+    opacity: 0;
+    filter: blur(5px);
+    transform: translateY(6px);
+  }
+  100% {
+    opacity: 1;
+    filter: blur(0px);
+    transform: translateY(0);
+  }
+}
+
+.plotline-enter {
+  animation-name: plotlineCardEnter;
+  animation-duration: 300ms;
+  animation-timing-function: var(--ease-plotline);
+  animation-fill-mode: both;
+  animation-delay: calc(var(--stagger-index, 0) * 40ms);
+}
+
+/* New Project Row Animation */
+@keyframes plotlineRowSlideIn {
+  0% {
+    opacity: 0;
+    transform: translateY(-8px);
+    background-color: var(--accent-soft);
+  }
+  60% {
+    opacity: 1;
+    transform: translateY(0);
+    background-color: var(--accent-soft);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.plotline-row-new {
+  animation: plotlineRowSlideIn 650ms var(--ease-plotline) both;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-delay: 0ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}

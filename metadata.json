@@ -1,0 +1,6 @@
+{
+  "name": "Plotline",
+  "description": "Original project-management workspace with topographic visual language, customizable accent themes, and structured delivery tracking.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
