@@ -200,7 +200,7 @@ export function ContourGlyph({
       fill="none"
       data-seed={String(seed)}
       aria-hidden="true"
-      className={className}
+      className={`motion-contour ${className}`}
     >
       {paths.map((p, idx) => (
         <path

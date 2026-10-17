@@ -115,7 +115,7 @@ function TaskCardContent({
   return (
     <div
       data-testid={`task-card-${task.id}`}
-      className={`bg-[var(--surface-elevated)] border rounded-[var(--radius-md)] p-3.5 space-y-3 select-none transition-shadow ${
+      className={`motion-card bg-[var(--surface-elevated)] border rounded-[var(--radius-md)] p-3.5 space-y-3 select-none transition-shadow ${
         isOverlay
           ? 'shadow-xl border-[var(--accent)] scale-[1.02] cursor-grabbing'
           : isRunningFocus

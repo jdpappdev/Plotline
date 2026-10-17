@@ -718,7 +718,7 @@ export default function App() {
         {/* Main Viewport Canvas (Clean #f6f6f5 background, no page-wide texture) */}
         <main
           key={`route-${activeRoute}`}
-          className="flex-1 contour-surface px-4 sm:px-6 py-3 overflow-x-hidden overflow-y-auto"
+          className="flex-1 contour-surface motion-route px-4 sm:px-6 py-3 overflow-x-hidden overflow-y-auto"
         >
           {activeRoute === 'Dashboard' ? (
             <DashboardScreen />
@@ -844,7 +844,7 @@ export default function App() {
             if (e.target === e.currentTarget) setNewProjectModalOpen(false);
           }}
         >
-          <div className="w-full max-w-md bg-[var(--surface-elevated)] border border-[var(--border-hairline)] rounded-[var(--radius-lg)] p-6 shadow-lg space-y-5">
+          <div className="motion-card w-full max-w-md bg-[var(--surface-elevated)] border border-[var(--border-hairline)] rounded-[var(--radius-lg)] p-6 shadow-lg space-y-5">
             <div className="flex items-start justify-between gap-4 border-b border-[var(--border-hairline)] pb-4">
               <div>
                 <span
@@ -966,7 +966,7 @@ export default function App() {
             if (e.target === e.currentTarget) setNewTaskModalOpen(false);
           }}
         >
-          <div className="w-full max-w-md bg-[var(--surface-elevated)] border border-[var(--border-hairline)] rounded-[var(--radius-lg)] p-6 shadow-lg space-y-4">
+          <div className="motion-card w-full max-w-md bg-[var(--surface-elevated)] border border-[var(--border-hairline)] rounded-[var(--radius-lg)] p-6 shadow-lg space-y-4">
             <div className="flex items-start justify-between gap-4 border-b border-[var(--border-hairline)] pb-3">
               <div>
                 <span

@@ -20,6 +20,7 @@ import {
   usePlotlineStore,
 } from '../store';
 import { ContourGlyph } from '../utils/contourGlyph';
+import { AnimatedNumber } from '../motion/primitives';
 
 interface CountUpNumeralProps {
   value: number;
@@ -40,8 +41,7 @@ function CountUpNumeral({
       className={`font-display-num tabular-nums ${className}`}
       style={style}
     >
-      {value}
-      {suffix}
+      <AnimatedNumber value={value} suffix={suffix} />
     </span>
   );
 }
