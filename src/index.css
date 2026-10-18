@@ -1,364 +1,330 @@
 @import "tailwindcss";
 
+@property --accent {
+  syntax: '<color>';
+  inherits: true;
+  initial-value: #204282;
+}
+
+@property --accent-deep {
+  syntax: '<color>';
+  inherits: true;
+  initial-value: #132852;
+}
+
+@property --accent-mid {
+  syntax: '<color>';
+  inherits: true;
+  initial-value: #2c52a3;
+}
+
+@property --accent-soft {
+  syntax: '<color>';
+  inherits: true;
+  initial-value: #e9effa;
+}
+
 :root {
-  --bg-canvas: #ECEEF2;
-  --bg-shell: #F5F6F8;
-  --surface: #FFFFFF;
-  --surface-subtle: #F7F8FA;
-  --surface-muted: #EFF1F5;
-  --surface-hover: #F2F4F8;
+  /* 1. Page Background (#f6f6f5) & Cards (#fcfcf9) — No page-wide texture */
+  --surface-canvas: #f6f6f5;
+  --surface-elevated: #fcfcf9;
+  --surface-sunken: #eeeeeb;
+  --border-hairline: #e4e3de;
+  --border-strong: #cbc9c2;
+  --line: #e4e3de;
 
-  --text-primary: #0F172A;
-  --text-secondary: #475569;
-  --text-muted: #64748B;
-  --text-faint: #94A3B8;
+  /* 2. Ink Typography Palette */
+  --ink-primary: #161615;
+  --ink-secondary: #4E4D4A;
+  --ink-muted: #7A7873;
 
-  --border-hairline: #E6E8EE;
-  --border-subtle: #E6E8EE;
-  --border-strong: #CBD5E1;
-
+  /* 3. "Tide" Default Accent & Derived Surface / Tint Tokens */
   --accent: #204282;
   --accent-mid: #2c52a3;
   --accent-light: #789ce2;
   --accent-deep: color-mix(in oklab, var(--accent) 68%, black);
   --surface-accent: linear-gradient(155deg, var(--accent) 0%, var(--accent-deep) 100%);
-  --accent-hover: #173266;
-  --accent-soft: #E9EFFA;
-  --accent-border: #B8CCF2;
-
   --accent-tint-1: var(--accent);
-  --accent-tint-2: color-mix(in srgb, var(--accent) 80%, white);
-  --accent-tint-3: color-mix(in srgb, var(--accent) 62%, white);
-  --accent-tint-4: color-mix(in srgb, var(--accent) 44%, white);
-  --accent-tint-5: color-mix(in srgb, var(--accent) 28%, white);
+  --accent-tint-2: color-mix(in oklab, var(--accent) 74%, white);
+  --accent-tint-3: color-mix(in oklab, var(--accent) 52%, white);
+  --accent-tint-4: var(--accent-deep);
+  --accent-tint-5: color-mix(in oklab, var(--accent) 34%, white);
+  --accent-hover: #2c52a3;
+  --accent-soft: #e9effa;
+  --accent-border: #b8ccf2;
 
-  --positive: #15803D;
-  --positive-soft: #DCFCE7;
-  --warning: #B45309;
-  --warning-soft: #FEF3C7;
-  --danger: #B91C1C;
-  --danger-soft: #FEE2E2;
+  /* Semantic Status Colors */
+  --status-nominal: #267347;
+  --status-warning: #B86B14;
+  --status-critical: #C9352B;
 
-  --radius-card: 22px;
-  --radius-panel: 20px;
-  --radius-control: 12px;
-  --radius-pill: 9999px;
+  /* 4. Typography Families */
+  --font-ui: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  --font-display-num: 'Fraunces', Georgia, serif;
+  --font-mono: 'JetBrains Mono', ui-monospace, SFMono-Regular, monospace;
 
-  --z-sticky: 20;
-  --z-dropdown: 50;
-  --z-modal: 80;
-  --z-tour: 90;
-  --z-toast: 100;
+  /* 5. 8px Spacing Scale */
+  --space-0-5: 4px;
+  --space-1: 8px;
+  --space-2: 16px;
+  --space-3: 24px;
+  --space-4: 32px;
+  --space-5: 40px;
+  --space-6: 48px;
+  --space-8: 64px;
 
-  --duration-fast: 150ms;
-  --duration-normal: 220ms;
-  --duration-slow: 420ms;
-  --ease-out: cubic-bezier(0.22, 1, 0.36, 1);
+  /* 6. Single Governing Easing Curve & 250ms Re-Tint Transition */
+  --ease-plotline: cubic-bezier(0.16, 1, 0.3, 1);
+  --duration-fast: 160ms;
+  --duration-normal: 200ms;
+  --duration-retint: 250ms;
 
-  --shadow-shell: 0 24px 60px -16px rgba(15, 23, 42, 0.08), 0 4px 16px -2px rgba(15, 23, 42, 0.03);
-  --shadow-card: 0 1px 2px rgba(15, 23, 42, 0.04), 0 4px 12px -2px rgba(15, 23, 42, 0.03);
-  --shadow-card-hover: 0 10px 24px -6px rgba(15, 23, 42, 0.07), 0 2px 6px -1px rgba(15, 23, 42, 0.04);
+  /* 7. Border Radii */
+  --radius-xs: 4px;
+  --radius-sm: 6px;
+  --radius-md: 8px;
+  --radius-lg: 14px;
 
-  --font-sans: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, sans-serif;
-  --font-display: 'Instrument Serif', Georgia, serif;
-  --font-mono: 'JetBrains Mono', monospace;
+  /* 8. Z-Index Scale */
+  --z-content: 0;
+  --z-sticky-header: 20;
+  --z-popover: 50;
+  --z-dialog: 60;
+  --z-toast: 70;
+
+  transition:
+    --accent 250ms var(--ease-plotline),
+    --accent-deep 250ms var(--ease-plotline),
+    --accent-mid 250ms var(--ease-plotline),
+    --accent-soft 250ms var(--ease-plotline);
+}
+
+:root[data-accent="tide"] {
+  --accent: #204282;
+  --accent-mid: #2c52a3;
+  --accent-light: #789ce2;
+  --accent-deep: color-mix(in oklab, var(--accent) 68%, black);
+  --surface-accent: linear-gradient(155deg, var(--accent) 0%, var(--accent-deep) 100%);
+  --accent-hover: #2c52a3;
+  --accent-soft: #e9effa;
+  --accent-border: #b8ccf2;
+}
+
+:root[data-accent="moss"] {
+  --accent: #2E6B47;
+  --accent-mid: #3b8559;
+  --accent-light: #84c29d;
+  --accent-deep: color-mix(in oklab, var(--accent) 68%, black);
+  --surface-accent: linear-gradient(155deg, var(--accent) 0%, var(--accent-deep) 100%);
+  --accent-hover: #3b8559;
+  --accent-soft: #E8F2EC;
+  --accent-border: #A7CBB5;
+}
+
+:root[data-accent="iris"] {
+  --accent: #5B43B8;
+  --accent-mid: #6f56d1;
+  --accent-light: #a594eb;
+  --accent-deep: color-mix(in oklab, var(--accent) 68%, black);
+  --surface-accent: linear-gradient(155deg, var(--accent) 0%, var(--accent-deep) 100%);
+  --accent-hover: #6f56d1;
+  --accent-soft: #EEEBF9;
+  --accent-border: #BEB2EB;
+}
+
+:root[data-accent="signal"] {
+  --accent: #BE3A15;
+  --accent-mid: #d94b24;
+  --accent-light: #f59d84;
+  --accent-deep: color-mix(in oklab, var(--accent) 68%, black);
+  --surface-accent: linear-gradient(155deg, var(--accent) 0%, var(--accent-deep) 100%);
+  --accent-hover: #d94b24;
+  --accent-soft: #FCECE7;
+  --accent-border: #F3B7A5;
 }
 
 * {
   box-sizing: border-box;
+  transition-property: background-color, border-color, color, fill, stroke;
+  transition-duration: 250ms;
+  transition-timing-function: var(--ease-plotline);
+}
+
+button:focus-visible,
+a:focus-visible,
+input:focus-visible,
+select:focus-visible,
+textarea:focus-visible,
+[role="button"]:focus-visible,
+[role="switch"]:focus-visible,
+[role="option"]:focus-visible,
+[role="combobox"]:focus-visible,
+[tabindex]:not([tabindex="-1"]):focus-visible {
+  outline: 2px solid var(--accent) !important;
+  outline-offset: 2px;
 }
 
 html,
-body {
+body,
+#root {
+  height: 100dvh;
+  max-height: 100dvh;
+  width: 100%;
   margin: 0;
   padding: 0;
-  background-color: var(--bg-canvas);
-  color: var(--text-primary);
-  font-family: var(--font-sans);
+  background-color: var(--surface-canvas);
+  color: var(--ink-primary);
+  font-family: var(--font-ui);
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
-  letter-spacing: -0.011em;
 }
 
-.font-display {
-  font-family: var(--font-display);
+.touch-scroll-y {
+  min-height: 0;
+  overflow-y: auto;
+  overflow-x: hidden;
+  -webkit-overflow-scrolling: touch;
 }
 
-.font-mono-tabular {
-  font-family: var(--font-mono);
+/* Date & Time form inputs styling */
+input[type="date"],
+input[type="time"] {
+  color-scheme: light dark;
+  accent-color: var(--accent);
+}
+
+input[type="date"]::-webkit-calendar-picker-indicator,
+input[type="time"]::-webkit-calendar-picker-indicator {
+  cursor: pointer;
+  filter: opacity(0.7);
+  transition: filter 160ms var(--ease-plotline);
+}
+
+input[type="date"]::-webkit-calendar-picker-indicator:hover,
+input[type="time"]::-webkit-calendar-picker-indicator:hover {
+  filter: opacity(1);
+}
+
+/* Serif Display Numerals with Tabular Alignment */
+.font-display-num {
+  font-family: var(--font-display-num);
   font-variant-numeric: tabular-nums;
+  font-feature-settings: "tnum" 1;
 }
 
-.tabular-nums {
+/* UI Sans Tabular Numerals (Used for Focus HH:MM:SS) */
+.font-ui-tabular {
+  font-family: var(--font-ui);
   font-variant-numeric: tabular-nums;
+  font-feature-settings: "tnum" 1;
 }
 
-.bento-card {
-  background: var(--surface);
-  border: 1px solid var(--border-subtle);
-  border-radius: var(--radius-card);
-  box-shadow: var(--shadow-card);
-  transition: transform var(--duration-normal) var(--ease-out),
-    box-shadow var(--duration-normal) var(--ease-out),
-    border-color var(--duration-normal) ease;
+/* Responsive dashboard cards size to their content without collapsing grid children. */
+.dashboard-grid > * {
+  min-width: 0;
+  min-height: 116px;
 }
 
-.bento-card-hover:hover {
-  transform: translateY(-2px);
-  box-shadow: var(--shadow-card-hover);
-  border-color: var(--border-strong);
+@media (min-width: 640px) {
+  .dashboard-grid > * {
+    min-height: 132px;
+  }
 }
 
-.hero-Executable-card {
+.dashboard-rings-card {
+  container-type: inline-size;
+}
+
+/* Clean page surface (No page-wide texture) */
+.contour-surface {
+  background-color: var(--surface-canvas);
+}
+
+/* Accent-derived surface utility (--surface-accent with 1px white 10% inner border) */
+.surface-accent-fill {
   background: var(--surface-accent);
-  color: #FFFFFF;
-  border-radius: var(--radius-card);
-  box-shadow: 0 14px 30px -8px rgba(15, 23, 42, 0.22);
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.10);
 }
 
-.timer-console-surface {
-  background: radial-gradient(120% 120% at 85% 15%, rgba(32, 66, 130, 0.38) 0%, rgba(11, 18, 34, 0.98) 65%), #0B1222;
-  color: #F8FAFC;
-  border-radius: var(--radius-card);
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  box-shadow: 0 16px 36px -10px rgba(11, 18, 34, 0.35);
+/* Focus card: background var(--surface-accent) + 1px inner border at white 10% */
+.time-tracker-surface {
+  background: var(--surface-accent);
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.10);
+  transition: background 250ms var(--ease-plotline), color 250ms var(--ease-plotline);
 }
 
-.hatched-bar {
-  background-color: #E2E8F0;
-  background-image: repeating-linear-gradient(
-    -45deg,
-    rgba(100, 116, 139, 0.18),
-    rgba(100, 116, 139, 0.18) 5px,
-    transparent 5px,
-    transparent 10px
-  );
+/* Single Easing Curve Utility */
+.ease-plotline {
+  transition-timing-function: var(--ease-plotline);
 }
 
-/* Semantic Status, Priority, and Category Tokens */
-.badge-status-done {
-  background-color: #ECFDF5;
-  color: #047857;
-  border-color: rgba(167, 243, 208, 0.8);
-}
-
-.badge-status-progress {
-  background-color: #FFFBEB;
-  color: #B45309;
-  border-color: rgba(253, 230, 138, 0.8);
-}
-
-.badge-status-review {
-  background-color: #F0F9FF;
-  color: #0369A1;
-  border-color: rgba(186, 230, 253, 0.8);
-}
-
-.badge-status-pending {
-  background-color: #F1F5F9;
-  color: #475569;
-  border-color: rgba(226, 232, 240, 0.8);
-}
-
-.badge-priority-high {
-  background-color: #FFF1F2;
-  color: #BE123C;
-  border-color: rgba(254, 205, 211, 0.8);
-}
-
-.badge-priority-medium {
-  background-color: #FFFBEB;
-  color: #B45309;
-  border-color: rgba(253, 230, 138, 0.8);
-}
-
-.badge-priority-low {
-  background-color: #F1F5F9;
-  color: #475569;
-  border-color: rgba(226, 232, 240, 0.8);
-}
-
-.badge-project-ended {
-  background-color: #ECFDF5;
-  color: #047857;
-  border-color: #A7F3D0;
-}
-
-.badge-project-running {
-  background-color: var(--accent-soft);
-  color: var(--accent);
-  border-color: var(--accent-border);
-}
-
-.badge-project-pending {
-  background-color: #FFFBEB;
-  color: #92400E;
-  border-color: #FDE68A;
-}
-
-.badge-category-meeting {
-  background-color: #EFF6FF;
-  color: #1D4ED8;
-  border-color: #BFDBFE;
-}
-.dot-category-meeting {
-  background-color: #2563EB;
-}
-
-.badge-category-team {
-  background-color: #ECFDF5;
-  color: #047857;
-  border-color: #A7F3D0;
-}
-.dot-category-team {
-  background-color: #10B981;
-}
-
-.badge-category-review {
-  background-color: #F5F3FF;
-  color: #6D28D9;
-  border-color: #DDD6FE;
-}
-.dot-category-review {
-  background-color: #7C3AED;
-}
-
-.badge-category-deadline {
-  background-color: #FFF1F2;
-  color: #BE123C;
-  border-color: #FECDD3;
-}
-.dot-category-deadline {
-  background-color: #E11D48;
-}
-
-.badge-category-social {
-  background-color: #FFFBEB;
-  color: #B45309;
-  border-color: #FDE68A;
-}
-.dot-category-social {
-  background-color: #F59E0B;
-}
-
-.presence-dot-online {
-  background-color: #10B981;
-}
-.presence-dot-away {
-  background-color: #F59E0B;
-}
-.presence-dot-offline {
-  background-color: #CBD5E1;
-}
-
-.swatch-tide {
-  background-color: #204282;
-}
-.swatch-moss {
-  background-color: #2E6B47;
-}
-.swatch-iris {
-  background-color: #5B43B8;
-}
-.swatch-signal {
-  background-color: #BE3A15;
-}
-
-.tint-dot-0 {
-  background-color: var(--accent-tint-1);
-}
-.tint-dot-1 {
-  background-color: var(--accent-tint-2);
-}
-.tint-dot-2 {
-  background-color: var(--accent-tint-3);
-}
-.tint-dot-3 {
-  background-color: var(--accent-tint-4);
-}
-.tint-dot-4 {
-  background-color: var(--accent-tint-5);
-}
-
-/* Custom subtle scrollbars */
-::-webkit-scrollbar {
-  width: 6px;
-  height: 6px;
-}
-
-::-webkit-scrollbar-track {
-  background: transparent;
-}
-
-::-webkit-scrollbar-thumb {
-  background: #CBD5E1;
-  border-radius: 9999px;
-}
-
-::-webkit-scrollbar-thumb:hover {
-  background: #94A3B8;
-}
-
-@keyframes pulse-ring {
+/* Route Change Top 2px Accent Sweep (400ms) */
+@keyframes plotlineRouteSweep {
   0% {
-    transform: scale(0.95);
-    opacity: 0.8;
+    transform: scaleX(0);
+    opacity: 1;
   }
-  50% {
-    transform: scale(1.15);
-    opacity: 0.35;
+  72% {
+    transform: scaleX(1);
+    opacity: 1;
   }
   100% {
-    transform: scale(0.95);
-    opacity: 0.8;
+    transform: scaleX(1);
+    opacity: 0;
   }
 }
 
-.animate-pulse-ring {
-  animation: pulse-ring 2.2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+.plotline-route-sweep {
+  height: 2px;
+  width: 100%;
+  background-color: var(--accent);
+  transform-origin: left center;
+  animation: plotlineRouteSweep 400ms var(--ease-plotline) forwards;
+  pointer-events: none;
 }
 
-@keyframes row-highlight-fade {
-  0% {
-    background-color: var(--accent-soft);
-  }
-  100% {
-    background-color: transparent;
-  }
-}
-
-.animate-row-highlight {
-  animation: row-highlight-fade 2.4s ease-out forwards;
-}
-
-@keyframes modal-pop {
+/* Page Enter: 300ms fade and unblur with 40ms stagger per card */
+@keyframes plotlineCardEnter {
   0% {
     opacity: 0;
-    transform: scale(0.97) translateY(6px);
+    filter: blur(5px);
+    transform: translateY(6px);
   }
   100% {
     opacity: 1;
-    transform: scale(1) translateY(0);
+    filter: none;
+    transform: none;
   }
 }
 
-.animate-modal-pop {
-  animation: modal-pop var(--duration-normal) var(--ease-out) forwards;
+.plotline-enter {
+  animation-name: plotlineCardEnter;
+  animation-duration: 300ms;
+  animation-timing-function: var(--ease-plotline);
+  animation-fill-mode: backwards;
+  animation-delay: calc(var(--stagger-index, 0) * 40ms);
 }
 
-@keyframes card-enter {
-  from {
+/* New Project Row Animation */
+@keyframes plotlineRowSlideIn {
+  0% {
     opacity: 0;
-    transform: translateY(8px);
+    transform: translateY(-8px);
+    background-color: var(--accent-soft);
   }
-  to {
+  60% {
+    opacity: 1;
+    transform: translateY(0);
+    background-color: var(--accent-soft);
+  }
+  100% {
     opacity: 1;
     transform: translateY(0);
   }
 }
 
-.motion-card {
-  animation: card-enter var(--duration-slow) var(--ease-out) both;
+.plotline-row-new {
+  animation: plotlineRowSlideIn 650ms var(--ease-plotline) both;
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -366,8 +332,20 @@ body {
   *::before,
   *::after {
     animation-duration: 0.01ms !important;
+    animation-delay: 0ms !important;
     animation-iteration-count: 1 !important;
     transition-duration: 0.01ms !important;
     scroll-behavior: auto !important;
   }
 }
+
+/* Whole-app blur (6px) and depth scale (0.985) when any Dialog is open */
+body.dialog-open #root > div {
+  filter: blur(6px);
+  transform: scale(0.985);
+  transform-origin: center center;
+  transition: filter 240ms cubic-bezier(0.16, 1, 0.3, 1), transform 240ms cubic-bezier(0.16, 1, 0.3, 1);
+  pointer-events: none;
+  user-select: none;
+}
+
