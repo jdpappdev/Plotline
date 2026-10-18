@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
   BarChart3,
   Calendar,
@@ -220,11 +220,11 @@ export default function App() {
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
 
-  const handleNavigate = (routeId: RouteId) => {
+  const handleNavigate = useCallback((routeId: RouteId) => {
     setActiveRoute(routeId);
     window.history.replaceState(null, '', `#/${routeId.toLowerCase()}`);
     setMobileMenuOpen(false);
-  };
+  }, [setActiveRoute]);
 
   const handleCreateProject = (e: React.FormEvent) => {
     e.preventDefault();

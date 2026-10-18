@@ -97,12 +97,20 @@ class TourErrorBoundary extends Component<React.PropsWithChildren, { hasError: b
     return { hasError: true };
   }
 
-  componentDidCatch(error: Error, info: ErrorInfo) {
-    console.error('[Plotline] Guided tour failed safely', error, info.componentStack);
+  componentDidCatch(_error: Error, _info: ErrorInfo) {
+    // Keep tour failures isolated without surfacing a console error to users.
   }
 
   render() {
     return this.state.hasError ? null : this.props.children;
+  }
+}
+
+function findTourTarget(selector: string): Element | null {
+  try {
+    return document.querySelector(selector);
+  } catch {
+    return null;
   }
 }
 
@@ -126,7 +134,7 @@ function TourOverlayContent({ onNavigate }: { onNavigate: (route: RouteId) => vo
 
     const finishIfFound = () => {
       if (cancelled) return;
-      const element = document.querySelector(currentConfig.targetSelector);
+      const element = findTourTarget(currentConfig.targetSelector);
       if (!element) return false;
       const reduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
       element.scrollIntoView({ block: 'nearest', behavior: reduced ? 'auto' : 'smooth' });
@@ -148,7 +156,7 @@ function TourOverlayContent({ onNavigate }: { onNavigate: (route: RouteId) => vo
     }
 
     const updateRect = () => {
-      if (document.querySelector(currentConfig.targetSelector)) finishIfFound();
+      if (findTourTarget(currentConfig.targetSelector)) finishIfFound();
     };
     const onKeyDown = (event: KeyboardEvent) => {
       if (event.key === 'Escape') setTourStep(null);
@@ -166,7 +174,7 @@ function TourOverlayContent({ onNavigate }: { onNavigate: (route: RouteId) => vo
       window.removeEventListener('keydown', onKeyDown);
       document.body.style.removeProperty('overflow');
     };
-  }, [currentConfig, onNavigate, setTourStep]);
+  }, [tourStep]);
 
   if (!currentConfig) return null;
 
