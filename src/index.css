@@ -183,6 +183,16 @@ body {
   font-feature-settings: "tnum" 1;
 }
 
+/* Responsive dashboard cards size to their content without collapsing grid children. */
+.dashboard-grid > * {
+  min-width: 0;
+  min-height: 132px;
+}
+
+.dashboard-rings-card {
+  container-type: inline-size;
+}
+
 /* Clean page surface (No page-wide texture) */
 .contour-surface {
   background-color: var(--surface-canvas);

@@ -382,7 +382,7 @@ export default function DashboardScreen() {
   );
 
   return (
-    <div className="max-w-[1360px] mx-auto lg:h-full flex flex-col gap-3">
+    <div className="max-w-[1360px] mx-auto xl:h-full flex min-w-0 flex-col gap-3">
       {/* Header Row: Page title + one-line subtitle, "New project" primary button, "Import" secondary */}
       <div
         style={{ '--stagger-index': 0 } as React.CSSProperties}
@@ -423,7 +423,7 @@ export default function DashboardScreen() {
           - >=1024px (lg): 12 columns, locked 3 rows so 1440x900 fits with no scroll
           - 640px–1023px (sm): 2 columns
           - <640px: 1 column */}
-      <div className="flex-1 min-h-0 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-12 lg:grid-rows-[114px_minmax(0,1fr)_minmax(0,1fr)] gap-3.5">
+      <div className="dashboard-grid flex-1 min-h-0 min-w-0 grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-12 gap-3.5 [grid-auto-rows:auto]">
         {/* ==================== ROW 1: FOUR EQUAL STAT CARDS (3 COLS EACH) ==================== */}
         {/* Card 1: Total (Uses --surface-accent, white text >=4.5:1) */}
         <div
@@ -431,7 +431,7 @@ export default function DashboardScreen() {
             '--stagger-index': 1,
             background: 'var(--surface-accent)',
           } as React.CSSProperties}
-          className="plotline-enter sm:col-span-1 lg:col-span-3 rounded-[var(--radius-lg)] p-4 text-white flex flex-col justify-between shadow-[inset_0_0_0_1px_rgba(255,255,255,0.10)]"
+          className="plotline-enter sm:col-span-1 xl:col-span-3 rounded-[var(--radius-lg)] p-4 text-white flex flex-col justify-between shadow-[inset_0_0_0_1px_rgba(255,255,255,0.10)]"
         >
           <div className="flex items-center justify-between gap-2">
             <span className="text-sm font-semibold text-white">Total</span>
@@ -449,7 +449,7 @@ export default function DashboardScreen() {
             value={totalCount}
             className="text-4xl font-semibold leading-none tracking-tight text-white"
           />
-          <p className="text-xs text-white/90 truncate">
+          <p className="text-xs text-white/90 max-h-[2.5rem] overflow-hidden leading-snug">
             {uniqueProjects.length} active streams and {tasks.length} deliverables
           </p>
         </div>
@@ -457,7 +457,7 @@ export default function DashboardScreen() {
         {/* Card 2: Ended */}
         <div
           style={{ '--stagger-index': 2 } as React.CSSProperties}
-          className="plotline-enter sm:col-span-1 lg:col-span-3 bg-[var(--surface-elevated)] border border-[var(--border-hairline)] rounded-[var(--radius-lg)] p-4 flex flex-col justify-between"
+          className="plotline-enter sm:col-span-1 xl:col-span-3 bg-[var(--surface-elevated)] border border-[var(--border-hairline)] rounded-[var(--radius-lg)] p-4 flex flex-col justify-between"
         >
           <div className="flex items-center justify-between gap-2">
             <span className="text-sm font-semibold text-[var(--ink-primary)]">Ended</span>
@@ -469,7 +469,7 @@ export default function DashboardScreen() {
             value={endedCount}
             className="text-4xl font-semibold leading-none tracking-tight text-[var(--ink-primary)]"
           />
-          <p className="text-xs text-[var(--ink-secondary)] truncate">
+          <p className="text-xs text-[var(--ink-secondary)] max-h-[2.5rem] overflow-hidden leading-snug">
             Verified and signed off this cycle
           </p>
         </div>
@@ -477,7 +477,7 @@ export default function DashboardScreen() {
         {/* Card 3: Running */}
         <div
           style={{ '--stagger-index': 3 } as React.CSSProperties}
-          className="plotline-enter sm:col-span-1 lg:col-span-3 bg-[var(--surface-elevated)] border border-[var(--border-hairline)] rounded-[var(--radius-lg)] p-4 flex flex-col justify-between"
+          className="plotline-enter sm:col-span-1 xl:col-span-3 bg-[var(--surface-elevated)] border border-[var(--border-hairline)] rounded-[var(--radius-lg)] p-4 flex flex-col justify-between"
         >
           <div className="flex items-center justify-between gap-2">
             <span className="text-sm font-semibold text-[var(--ink-primary)]">Running</span>
@@ -489,7 +489,7 @@ export default function DashboardScreen() {
             value={runningCount}
             className="text-4xl font-semibold leading-none tracking-tight text-[var(--ink-primary)]"
           />
-          <p className="text-xs text-[var(--ink-secondary)] truncate">
+          <p className="text-xs text-[var(--ink-secondary)] max-h-[2.5rem] overflow-hidden leading-snug">
             Active field execution across {uniqueProjects.length} streams
           </p>
         </div>
@@ -497,7 +497,7 @@ export default function DashboardScreen() {
         {/* Card 4: Pending */}
         <div
           style={{ '--stagger-index': 4 } as React.CSSProperties}
-          className="plotline-enter sm:col-span-1 lg:col-span-3 bg-[var(--surface-elevated)] border border-[var(--border-hairline)] rounded-[var(--radius-lg)] p-4 flex flex-col justify-between"
+          className="plotline-enter sm:col-span-1 xl:col-span-3 bg-[var(--surface-elevated)] border border-[var(--border-hairline)] rounded-[var(--radius-lg)] p-4 flex flex-col justify-between"
         >
           <div className="flex items-center justify-between gap-2">
             <span className="text-sm font-semibold text-[var(--ink-primary)]">Pending</span>
@@ -509,7 +509,7 @@ export default function DashboardScreen() {
             value={pendingCount}
             className="text-4xl font-semibold leading-none tracking-tight text-[var(--ink-primary)]"
           />
-          <p className="text-xs text-[var(--ink-secondary)] truncate">
+          <p className="text-xs text-[var(--ink-secondary)] max-h-[2.5rem] overflow-hidden leading-snug">
             Scheduled in planning and intake queue
           </p>
         </div>
@@ -519,7 +519,7 @@ export default function DashboardScreen() {
         <section
           aria-labelledby="weekly-output-heading"
           style={{ '--stagger-index': 5 } as React.CSSProperties}
-          className="plotline-enter sm:col-span-2 lg:col-span-6 bg-[var(--surface-elevated)] border border-[var(--border-hairline)] rounded-[var(--radius-lg)] p-4 flex flex-col justify-between min-h-0 relative"
+          className="plotline-enter sm:col-span-2 xl:col-span-6 bg-[var(--surface-elevated)] border border-[var(--border-hairline)] rounded-[var(--radius-lg)] p-4 flex flex-col justify-between min-h-0 relative"
         >
           <div className="flex items-center justify-between shrink-0">
             <h2
@@ -626,7 +626,7 @@ export default function DashboardScreen() {
                           data-testid="weekly-output-today-hours"
                           data-seconds={col.totalSeconds}
                           style={{ color: 'var(--accent)' }}
-                          className="absolute -top-6 left-1/2 -translate-x-1/2 px-1.5 py-0.5 rounded-[var(--radius-xs)] bg-[var(--surface-elevated)] border border-[var(--accent-border)] text-[10px] font-semibold font-ui-tabular whitespace-nowrap shadow-2xs"
+                          className="absolute -top-6 left-1/2 -translate-x-1/2 min-w-[2.25rem] px-1 py-0.5 rounded-[var(--radius-xs)] bg-[var(--surface-elevated)] border border-[var(--accent-border)] text-[10px] font-semibold font-ui-tabular text-center whitespace-nowrap shadow-2xs"
                         >
                           {col.formattedTotal}
                         </span>
@@ -674,7 +674,7 @@ export default function DashboardScreen() {
         <section
           aria-labelledby="next-up-heading"
           style={{ '--stagger-index': 6 } as React.CSSProperties}
-          className="plotline-enter sm:col-span-1 lg:col-span-3 bg-[var(--surface-elevated)] border border-[var(--border-hairline)] rounded-[var(--radius-lg)] p-4 flex flex-col justify-between gap-2 min-h-0"
+          className="plotline-enter sm:col-span-1 xl:col-span-3 bg-[var(--surface-elevated)] border border-[var(--border-hairline)] rounded-[var(--radius-lg)] p-4 flex flex-col justify-between gap-2 min-h-0"
         >
           <h2
             id="next-up-heading"
@@ -737,7 +737,7 @@ export default function DashboardScreen() {
         <section
           aria-labelledby="projects-card-heading"
           style={{ '--stagger-index': 7 } as React.CSSProperties}
-          className="plotline-enter sm:col-span-1 lg:col-span-3 bg-[var(--surface-elevated)] border border-[var(--border-hairline)] rounded-[var(--radius-lg)] p-4 flex flex-col justify-between gap-1.5 min-h-0 overflow-hidden"
+          className="plotline-enter sm:col-span-1 xl:col-span-3 bg-[var(--surface-elevated)] border border-[var(--border-hairline)] rounded-[var(--radius-lg)] p-4 flex flex-col justify-between gap-1.5 min-h-0 overflow-hidden"
         >
           <div className="flex items-center justify-between gap-2 shrink-0">
             <h2
@@ -808,7 +808,7 @@ export default function DashboardScreen() {
         <section
           aria-labelledby="in-motion-heading"
           style={{ '--stagger-index': 8 } as React.CSSProperties}
-          className="plotline-enter sm:col-span-2 lg:col-span-5 bg-[var(--surface-elevated)] border border-[var(--border-hairline)] rounded-[var(--radius-lg)] p-4 flex flex-col justify-between gap-2 min-h-0 overflow-hidden"
+          className="plotline-enter sm:col-span-2 xl:col-span-5 bg-[var(--surface-elevated)] border border-[var(--border-hairline)] rounded-[var(--radius-lg)] p-4 flex flex-col justify-between gap-2 min-h-0 overflow-hidden"
         >
           <div className="flex items-center justify-between gap-2 shrink-0">
             <h2
@@ -917,7 +917,7 @@ export default function DashboardScreen() {
         <section
           aria-labelledby="project-rings-heading"
           style={{ '--stagger-index': 9 } as React.CSSProperties}
-          className="plotline-enter sm:col-span-1 lg:col-span-4 bg-[var(--surface-elevated)] border border-[var(--border-hairline)] rounded-[var(--radius-lg)] p-4 flex flex-col justify-between min-h-0"
+          className="dashboard-rings-card plotline-enter sm:col-span-1 xl:col-span-4 bg-[var(--surface-elevated)] border border-[var(--border-hairline)] rounded-[var(--radius-lg)] p-4 flex min-w-0 flex-col justify-between min-h-0"
         >
           <div className="flex items-center justify-between shrink-0">
             <h2
@@ -939,7 +939,7 @@ export default function DashboardScreen() {
             </div>
           ) : (
             <div className="my-auto flex items-center justify-between gap-2.5 min-h-0">
-              <div className="relative w-[112px] h-[112px] xl:w-[132px] xl:h-[132px] flex items-center justify-center shrink-0 mx-auto">
+              <div className="dashboard-ring-visual relative w-[clamp(104px,42cqw,132px)] aspect-square flex items-center justify-center shrink-0 mx-auto">
                 <svg
                   viewBox="0 0 136 136"
                   className="w-full h-full overflow-visible"
@@ -1038,7 +1038,7 @@ export default function DashboardScreen() {
             '--stagger-index': 10,
             background: 'var(--surface-accent)',
           } as React.CSSProperties}
-          className="plotline-enter sm:col-span-1 lg:col-span-3 time-tracker-surface rounded-[var(--radius-lg)] p-3.5 text-white flex flex-col justify-between w-full lg:h-full max-h-[212px] self-start relative overflow-hidden"
+          className="plotline-enter sm:col-span-1 xl:col-span-3 time-tracker-surface rounded-[var(--radius-lg)] p-3.5 text-white flex flex-col justify-between w-full lg:h-full max-h-[212px] self-start relative overflow-hidden"
         >
           {/* Large Contour Glyph Texture in White at 8–10% Opacity, Seeded from Active Task ID */}
           <div
