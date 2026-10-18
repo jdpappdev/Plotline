@@ -222,7 +222,7 @@ export default function App() {
 
   const handleNavigate = useCallback((routeId: RouteId) => {
     setActiveRoute(routeId);
-    window.history.replaceState(null, '', `#/${routeId.toLowerCase()}`);
+    window.history.replaceState(null, '', `#${routeId.toLowerCase()}`);
     setMobileMenuOpen(false);
   }, [setActiveRoute]);
 
