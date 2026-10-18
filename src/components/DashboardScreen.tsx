@@ -9,9 +9,9 @@ import {
   Plus,
   Square,
   Video,
-  X,
 } from 'lucide-react';
 import {
+  computeDaysAgoFromIso,
   formatDuration,
   formatLoggedDuration,
   getProjectStatus,
@@ -24,6 +24,7 @@ import {
 import { ContourGlyph } from '../utils/contourGlyph';
 import { AnimatedNumber } from '../motion/primitives';
 import { DeleteButton } from './DeleteButton';
+import { AnchoredPopover, AnchoredTooltip } from '../ui/Popover';
 
 interface CountUpNumeralProps {
   value: number;
@@ -135,7 +136,6 @@ export default function DashboardScreen() {
     setNewProjectModalOpen,
     setNewTaskModalOpen,
     setActiveRoute,
-    importSampleBatch,
     toggleEventCheckIn,
     toggleTimer,
     resetTimer,
@@ -147,10 +147,12 @@ export default function DashboardScreen() {
 
   // Task selector popover inside Focus card
   const [taskPickerOpen, setTaskPickerOpen] = useState(false);
-  const taskPickerRef = useRef<HTMLDivElement>(null);
+  const taskPickerTriggerRef = useRef<HTMLButtonElement>(null);
 
-  // Hovered day column in Weekly Output
+  // Hovered / tapped day column in Weekly Output
   const [hoveredDayIndex, setHoveredDayIndex] = useState<number | null>(null);
+  const weeklyChartRef = useRef<HTMLDivElement>(null);
+  const dayColumnRefs = useRef<Map<number, HTMLDivElement>>(new Map());
 
   // Project Rings 700ms mount animation state
   const [ringsAnimated, setRingsAnimated] = useState<boolean>(() => {
@@ -178,15 +180,15 @@ export default function DashboardScreen() {
   }, []);
 
   useEffect(() => {
-    if (!taskPickerOpen) return;
-    const onOutside = (e: MouseEvent) => {
-      if (taskPickerRef.current && !taskPickerRef.current.contains(e.target as Node)) {
-        setTaskPickerOpen(false);
+    if (hoveredDayIndex === null) return;
+    const onOutsideTouch = (e: PointerEvent) => {
+      if (weeklyChartRef.current && !weeklyChartRef.current.contains(e.target as Node)) {
+        setHoveredDayIndex(null);
       }
     };
-    document.addEventListener('mousedown', onOutside);
-    return () => document.removeEventListener('mousedown', onOutside);
-  }, [taskPickerOpen]);
+    document.addEventListener('pointerdown', onOutsideTouch);
+    return () => document.removeEventListener('pointerdown', onOutsideTouch);
+  }, [hoveredDayIndex]);
 
   // Dedupe project rows by id
   const uniqueProjects = useMemo(() => {
@@ -255,7 +257,6 @@ export default function DashboardScreen() {
   }, [team, uniqueTasks, timerRunning, timerTaskId]);
 
   // --- Store-Derived Metrics ---
-  // Row 1: Four equal stat cards (3 cols each): Total, Ended, Running, Pending
   const totalCount = uniqueProjects.length;
   const { endedCount, runningCount, pendingCount } = useMemo(() => {
     let ended = 0;
@@ -271,7 +272,7 @@ export default function DashboardScreen() {
   }, [uniqueProjects, tasks]);
   const openTasksCount = uniqueTasks.filter((t) => t.status !== 'Done').length;
 
-  // Row 2 Col 1-6: Weekly output — 7 slim columns (~28px wide, 8px radius), segmented by project with 2px gaps
+  // Weekly output — 7 slim columns, segmented by project with 2px gaps
   const todayWeekdayIndex = new Date().getDay();
 
   const dayOrder =
@@ -297,9 +298,11 @@ export default function DashboardScreen() {
 
   const weeklyColumns = useMemo(() => {
     return dayOrder.map((d, idx) => {
-      const daySessions = focusSessions.filter(
-        (s) => (s.daysAgo === undefined || s.daysAgo < 7) && s.weekdayIndex === d.dayIndex
-      );
+      const daySessions = focusSessions.filter((s) => {
+        const dAgo =
+          typeof s.daysAgo === 'number' ? s.daysAgo : computeDaysAgoFromIso(s.date);
+        return dAgo >= 0 && dAgo < 7 && s.weekdayIndex === d.dayIndex;
+      });
       const byProject = new Map<
         string,
         {
@@ -363,13 +366,13 @@ export default function DashboardScreen() {
     [weeklyColumns]
   );
 
-  // Row 2 Col 7-9: Next up (formerly Reminders)
+  // Next up
   const nextEvent = events[0];
   const isMeetingStarted = nextEvent
     ? checkedInEventIds.includes(nextEvent.id)
     : false;
 
-  // Row 3 Col 6-9: Project rings — up to 4 concentric rings for the projects due soonest
+  // Project rings — up to 4 concentric rings for the projects due soonest
   const soonestProjects = useMemo(() => {
     return [...uniqueProjects]
       .sort((a, b) => a.targetDate.localeCompare(b.targetDate))
@@ -396,7 +399,7 @@ export default function DashboardScreen() {
       {/* Header Row: Page title + one-line subtitle, "New project" primary button, "Import" secondary */}
       <div
         style={{ '--stagger-index': 0 } as React.CSSProperties}
-        className="plotline-enter flex flex-col sm:flex-row sm:items-center justify-between gap-2 shrink-0"
+        className="plotline-enter flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 shrink-0"
       >
         <div className="min-w-0">
           <h1 className="text-2xl font-bold tracking-tight text-[var(--ink-primary)] leading-tight">
@@ -412,7 +415,7 @@ export default function DashboardScreen() {
             type="button"
             onClick={() => setNewProjectModalOpen(true)}
             style={{ backgroundColor: 'var(--accent)' }}
-            className="inline-flex items-center gap-1.5 px-4 py-2 rounded-full text-xs sm:text-sm font-semibold text-white hover:opacity-95 transition-opacity whitespace-nowrap shrink-0 cursor-pointer shadow-2xs"
+            className="inline-flex items-center justify-center gap-1.5 min-h-[44px] sm:min-h-[38px] px-4 py-2 rounded-full text-xs sm:text-sm font-semibold text-white hover:opacity-95 transition-opacity whitespace-nowrap shrink-0 cursor-pointer shadow-2xs"
           >
             <Plus className="w-4 h-4" />
             <span>New project</span>
@@ -421,7 +424,7 @@ export default function DashboardScreen() {
           <button
             type="button"
             onClick={() => setImportModalOpen(true)}
-            className="inline-flex items-center gap-1.5 px-4 py-2 rounded-full text-xs sm:text-sm font-semibold bg-[var(--surface-elevated)] text-[var(--ink-primary)] border border-[var(--border-strong)] hover:bg-[var(--surface-sunken)] transition-colors whitespace-nowrap shrink-0 cursor-pointer"
+            className="inline-flex items-center justify-center gap-1.5 min-h-[44px] sm:min-h-[38px] px-4 py-2 rounded-full text-xs sm:text-sm font-semibold bg-[var(--surface-elevated)] text-[var(--ink-primary)] border border-[var(--border-strong)] hover:bg-[var(--surface-sunken)] transition-colors whitespace-nowrap shrink-0 cursor-pointer"
           >
             <Download className="w-3.5 h-3.5 text-[var(--ink-secondary)]" />
             <span>Import</span>
@@ -429,9 +432,13 @@ export default function DashboardScreen() {
         </div>
       </div>
 
-      {/* Responsive Grid */}
-      <div className="dashboard-grid flex-1 min-h-0 min-w-0 grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-12 gap-3.5 [grid-auto-rows:auto]">
-        {/* ==================== ROW 1: FOUR EQUAL STAT CARDS (3 COLS EACH) ==================== */}
+      {/* Responsive Grid:
+          - <640px: 2-col base grid where the 4 stat cards are col-span-1 (2x2 grid) and all other cards are col-span-2 (single column) in exact order:
+            stat cards (2x2), Next up, Focus timer, In motion, Weekly output, Projects, Project rings.
+          - 640-1023px: 2 columns (sm:grid-cols-2).
+          - >=1280px: 12-column desktop bento (xl:grid-cols-12). */}
+      <div className="dashboard-grid flex-1 min-h-0 min-w-0 grid grid-cols-2 sm:grid-cols-2 xl:grid-cols-12 gap-3 sm:gap-3.5 [grid-auto-rows:auto]">
+        {/* ==================== STAT CARDS (2x2 on <640px, 2x2 on 640-1279px, 4x1 on >=1280px) ==================== */}
         {/* Card 1: Total */}
         <button
           type="button"
@@ -444,7 +451,7 @@ export default function DashboardScreen() {
             '--stagger-index': 1,
             background: 'var(--surface-accent)',
           } as React.CSSProperties}
-          className="plotline-enter group text-left sm:col-span-1 xl:col-span-3 rounded-[var(--radius-lg)] p-4 text-white flex flex-col justify-between shadow-[inset_0_0_0_1px_rgba(255,255,255,0.10)] focus:outline-none focus-visible:ring-2 focus-visible:ring-white cursor-pointer hover:opacity-98 transition-all"
+          className="plotline-enter group text-left col-span-1 sm:col-span-1 xl:col-span-3 sm:order-1 rounded-[var(--radius-lg)] p-3.5 sm:p-4 text-white flex flex-col justify-between shadow-[inset_0_0_0_1px_rgba(255,255,255,0.10)] focus:outline-none focus-visible:ring-2 focus-visible:ring-white cursor-pointer hover:opacity-98 transition-all"
         >
           <div className="flex items-center justify-between gap-2">
             <span className="text-sm font-semibold text-white">Total</span>
@@ -457,9 +464,9 @@ export default function DashboardScreen() {
           </div>
           <CountUpNumeral
             value={totalCount}
-            className="text-4xl font-semibold leading-none tracking-tight text-white"
+            className="text-3xl sm:text-4xl font-semibold leading-none tracking-tight text-white my-1"
           />
-          <p className="text-xs text-white/90 max-h-[2.5rem] overflow-hidden leading-snug">
+          <p className="text-[11px] sm:text-xs text-white/90 max-h-[2.5rem] overflow-hidden leading-snug">
             {pluralize(totalCount, 'project')} · {pluralize(openTasksCount, 'open task')}
           </p>
         </button>
@@ -473,7 +480,7 @@ export default function DashboardScreen() {
           }}
           aria-label={`View ${pluralize(endedCount, 'ended project')}`}
           style={{ '--stagger-index': 2 } as React.CSSProperties}
-          className="plotline-enter group text-left sm:col-span-1 xl:col-span-3 bg-[var(--surface-elevated)] border border-[var(--border-hairline)] rounded-[var(--radius-lg)] p-4 flex flex-col justify-between focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)] cursor-pointer hover:border-[var(--border-strong)] transition-all"
+          className="plotline-enter group text-left col-span-1 sm:col-span-1 xl:col-span-3 sm:order-2 bg-[var(--surface-elevated)] border border-[var(--border-hairline)] rounded-[var(--radius-lg)] p-3.5 sm:p-4 flex flex-col justify-between focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)] cursor-pointer hover:border-[var(--border-strong)] transition-all"
         >
           <div className="flex items-center justify-between gap-2">
             <span className="text-sm font-semibold text-[var(--ink-primary)]">Ended</span>
@@ -483,9 +490,9 @@ export default function DashboardScreen() {
           </div>
           <CountUpNumeral
             value={endedCount}
-            className="text-4xl font-semibold leading-none tracking-tight text-[var(--ink-primary)]"
+            className="text-3xl sm:text-4xl font-semibold leading-none tracking-tight text-[var(--ink-primary)] my-1"
           />
-          <p className="text-xs text-[var(--ink-secondary)] max-h-[2.5rem] overflow-hidden leading-snug">
+          <p className="text-[11px] sm:text-xs text-[var(--ink-secondary)] max-h-[2.5rem] overflow-hidden leading-snug">
             {pluralize(endedCount, 'project')} · {pluralize(openTasksCount, 'open task')}
           </p>
         </button>
@@ -499,7 +506,7 @@ export default function DashboardScreen() {
           }}
           aria-label={`View ${pluralize(runningCount, 'running project')}`}
           style={{ '--stagger-index': 3 } as React.CSSProperties}
-          className="plotline-enter group text-left sm:col-span-1 xl:col-span-3 bg-[var(--surface-elevated)] border border-[var(--border-hairline)] rounded-[var(--radius-lg)] p-4 flex flex-col justify-between focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)] cursor-pointer hover:border-[var(--border-strong)] transition-all"
+          className="plotline-enter group text-left col-span-1 sm:col-span-1 xl:col-span-3 sm:order-3 bg-[var(--surface-elevated)] border border-[var(--border-hairline)] rounded-[var(--radius-lg)] p-3.5 sm:p-4 flex flex-col justify-between focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)] cursor-pointer hover:border-[var(--border-strong)] transition-all"
         >
           <div className="flex items-center justify-between gap-2">
             <span className="text-sm font-semibold text-[var(--ink-primary)]">Running</span>
@@ -509,9 +516,9 @@ export default function DashboardScreen() {
           </div>
           <CountUpNumeral
             value={runningCount}
-            className="text-4xl font-semibold leading-none tracking-tight text-[var(--ink-primary)]"
+            className="text-3xl sm:text-4xl font-semibold leading-none tracking-tight text-[var(--ink-primary)] my-1"
           />
-          <p className="text-xs text-[var(--ink-secondary)] max-h-[2.5rem] overflow-hidden leading-snug">
+          <p className="text-[11px] sm:text-xs text-[var(--ink-secondary)] max-h-[2.5rem] overflow-hidden leading-snug">
             {pluralize(runningCount, 'project')} · {pluralize(openTasksCount, 'open task')}
           </p>
         </button>
@@ -525,7 +532,7 @@ export default function DashboardScreen() {
           }}
           aria-label={`View ${pluralize(pendingCount, 'pending project')}`}
           style={{ '--stagger-index': 4 } as React.CSSProperties}
-          className="plotline-enter group text-left sm:col-span-1 xl:col-span-3 bg-[var(--surface-elevated)] border border-[var(--border-hairline)] rounded-[var(--radius-lg)] p-4 flex flex-col justify-between focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)] cursor-pointer hover:border-[var(--border-strong)] transition-all"
+          className="plotline-enter group text-left col-span-1 sm:col-span-1 xl:col-span-3 sm:order-4 bg-[var(--surface-elevated)] border border-[var(--border-hairline)] rounded-[var(--radius-lg)] p-3.5 sm:p-4 flex flex-col justify-between focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)] cursor-pointer hover:border-[var(--border-strong)] transition-all"
         >
           <div className="flex items-center justify-between gap-2">
             <span className="text-sm font-semibold text-[var(--ink-primary)]">Pending</span>
@@ -535,174 +542,18 @@ export default function DashboardScreen() {
           </div>
           <CountUpNumeral
             value={pendingCount}
-            className="text-4xl font-semibold leading-none tracking-tight text-[var(--ink-primary)]"
+            className="text-3xl sm:text-4xl font-semibold leading-none tracking-tight text-[var(--ink-primary)] my-1"
           />
-          <p className="text-xs text-[var(--ink-secondary)] max-h-[2.5rem] overflow-hidden leading-snug">
+          <p className="text-[11px] sm:text-xs text-[var(--ink-secondary)] max-h-[2.5rem] overflow-hidden leading-snug">
             {pluralize(pendingCount, 'project')} · {pluralize(openTasksCount, 'open task')}
           </p>
         </button>
 
-        {/* ==================== ROW 2: WEEKLY OUTPUT (6) + NEXT UP (3) + PROJECTS (3) ==================== */}
-        {/* Weekly Output (6 cols): 7 slim columns (~28px wide, 8px radius), segmented by project with 2px gaps */}
-        <section
-          aria-labelledby="weekly-output-heading"
-          style={{ '--stagger-index': 5 } as React.CSSProperties}
-          className="plotline-enter sm:col-span-2 xl:col-span-6 bg-[var(--surface-elevated)] border border-[var(--border-hairline)] rounded-[var(--radius-lg)] p-4 flex flex-col justify-between min-h-0 relative"
-        >
-          <div className="flex items-center justify-between shrink-0">
-            <h2
-              id="weekly-output-heading"
-              className="text-base font-semibold text-[var(--ink-primary)]"
-            >
-              Weekly Output
-            </h2>
-            <span
-              data-testid="weekly-output-total"
-              data-seconds={weekTotalSeconds}
-              className="text-xs text-[var(--ink-muted)] font-ui-tabular"
-            >
-              {weekStart === 'monday' ? 'Mon–Sun' : 'Sun–Sat'} ·{' '}
-              {formatDuration(weekTotalSeconds)} total
-            </span>
-          </div>
-
-          {/* Seven slim columns (~28px wide, 8px radius), segmented by project with 2px gaps */}
-          <div className="flex-1 flex items-end justify-between gap-2 sm:gap-4 pt-7 pb-1 px-2 min-h-[140px]">
-            {weeklyColumns.map((col, colIdx) => {
-              const colHeightPct =
-                col.totalSeconds > 0
-                  ? Math.max(
-                      24,
-                      Math.min(100, Math.round((col.totalHours / maxDailyHours) * 100))
-                    )
-                  : 18;
-              const isHovered = hoveredDayIndex === col.dayIndex;
-              const tooltipPosClass =
-                colIdx <= 1
-                  ? 'left-0'
-                  : colIdx >= 5
-                  ? 'right-0'
-                  : 'left-1/2 -translate-x-1/2';
-
-              return (
-                <div
-                  key={col.key}
-                  onMouseEnter={() => setHoveredDayIndex(col.dayIndex)}
-                  onMouseLeave={() => setHoveredDayIndex(null)}
-                  onFocus={() => setHoveredDayIndex(col.dayIndex)}
-                  onBlur={() => setHoveredDayIndex(null)}
-                  tabIndex={0}
-                  aria-label={`${col.full}: ${col.formattedTotal} across ${col.segments.length} projects`}
-                  className="relative flex-1 h-full flex flex-col items-center justify-end gap-1.5 group rounded-[var(--radius-sm)]"
-                >
-                  {/* Hover Per-Project Breakdown Tooltip */}
-                  {isHovered && (
-                    <div
-                      role="tooltip"
-                      className={`absolute bottom-full mb-2 ${tooltipPosClass} w-48 sm:w-52 bg-[var(--surface-elevated)] border border-[var(--border-strong)] rounded-[var(--radius-md)] shadow-lg p-2.5 z-30 pointer-events-none text-[11px] space-y-1.5`}
-                    >
-                      <div className="flex items-center justify-between font-semibold text-[var(--ink-primary)] border-b border-[var(--border-hairline)] pb-1">
-                        <span>
-                          {col.full} {col.isToday ? '(Today)' : ''}
-                        </span>
-                        <span className="font-ui-tabular" style={{ color: 'var(--accent)' }}>
-                          {col.formattedTotal}
-                        </span>
-                      </div>
-                      {col.segments.length === 0 ? (
-                        <p className="text-[var(--ink-muted)]">No sessions logged</p>
-                      ) : (
-                        <div className="space-y-1">
-                          {col.segments.map((seg) => (
-                            <div
-                              key={seg.projectId}
-                              className="flex items-center justify-between gap-2"
-                            >
-                              <span className="flex items-center gap-1.5 min-w-0">
-                                <span
-                                  className="w-2 h-2 rounded-full shrink-0"
-                                  style={{ backgroundColor: seg.tint }}
-                                />
-                                <span className="truncate text-[var(--ink-secondary)]">
-                                  {seg.projectName}
-                                </span>
-                              </span>
-                              <span className="font-ui-tabular font-semibold text-[var(--ink-primary)] shrink-0">
-                                {formatDuration(seg.seconds)}
-                              </span>
-                            </div>
-                          ))}
-                        </div>
-                      )}
-                    </div>
-                  )}
-
-                  <div className="relative w-full flex-1 flex items-end justify-center">
-                    {/* Slim 28px column container with 8px radius and 2px segment gaps */}
-                    <div
-                      data-testid={col.isToday ? 'weekly-output-today-column' : undefined}
-                      style={{
-                        height: `${colHeightPct}%`,
-                        outline: col.isToday ? '2px solid var(--accent)' : undefined,
-                        outlineOffset: col.isToday ? '2px' : undefined,
-                      }}
-                      className="relative w-[28px] rounded-[8px] flex flex-col justify-end gap-[2px] p-[1px] transition-all duration-250 ease-plotline"
-                    >
-                      {/* Today's Total-Duration Label */}
-                      {col.isToday && (
-                        <span
-                          data-testid="weekly-output-today-hours"
-                          data-seconds={col.totalSeconds}
-                          style={{ color: 'var(--accent)' }}
-                          className="absolute -top-6 left-1/2 -translate-x-1/2 min-w-[2.25rem] px-1 py-0.5 rounded-[var(--radius-xs)] bg-[var(--surface-elevated)] border border-[var(--accent-border)] text-[10px] font-semibold font-ui-tabular text-center whitespace-nowrap shadow-2xs"
-                        >
-                          {col.formattedTotal}
-                        </span>
-                      )}
-
-                      {col.segments.length === 0 ? (
-                        <div className="w-full h-full rounded-[6px] bg-[var(--surface-sunken)]" />
-                      ) : (
-                        col.segments.map((seg) => {
-                          const segShare =
-                            col.totalSeconds > 0
-                              ? (seg.seconds / col.totalSeconds) * 100
-                              : 100;
-                          return (
-                            <div
-                              key={seg.projectId}
-                              style={{
-                                height: `${Math.max(14, segShare)}%`,
-                                backgroundColor: seg.tint,
-                              }}
-                              className="w-full rounded-[6px] transition-all duration-250 ease-plotline"
-                            />
-                          );
-                        })
-                      )}
-                    </div>
-                  </div>
-
-                  <span
-                    className={`text-xs font-medium ${
-                      col.isToday
-                        ? 'font-bold text-[var(--ink-primary)]'
-                        : 'text-[var(--ink-muted)]'
-                    }`}
-                  >
-                    {col.short}
-                  </span>
-                </div>
-              );
-            })}
-          </div>
-        </section>
-
-        {/* Next up (3 cols) */}
+        {/* ==================== NEXT UP (Mobile #2, Desktop Row 2 Col 7-9) ==================== */}
         <section
           aria-labelledby="next-up-heading"
           style={{ '--stagger-index': 6 } as React.CSSProperties}
-          className="plotline-enter sm:col-span-1 xl:col-span-3 bg-[var(--surface-elevated)] border border-[var(--border-hairline)] rounded-[var(--radius-lg)] p-4 flex flex-col justify-between gap-2 min-h-0"
+          className="plotline-enter col-span-2 sm:col-span-1 xl:col-span-3 sm:order-6 bg-[var(--surface-elevated)] border border-[var(--border-hairline)] rounded-[var(--radius-lg)] p-4 flex flex-col justify-between gap-2.5 min-h-0"
         >
           <h2
             id="next-up-heading"
@@ -718,7 +569,7 @@ export default function DashboardScreen() {
                   setActiveRoute('Calendar');
                   if (typeof window !== 'undefined') window.history.pushState(null, '', '#calendar');
                 }}
-                className="my-auto space-y-1 cursor-pointer hover:opacity-90 transition-opacity"
+                className="my-auto space-y-1 cursor-pointer hover:opacity-90 transition-opacity py-1"
               >
                 <h3
                   className="text-base sm:text-lg font-semibold leading-snug line-clamp-2"
@@ -740,7 +591,7 @@ export default function DashboardScreen() {
                 style={{
                   backgroundColor: isMeetingStarted ? '#216E3E' : 'var(--accent)',
                 }}
-                className="w-full py-2.5 px-4 rounded-full text-xs sm:text-sm font-semibold text-white flex items-center justify-center gap-2 hover:opacity-95 transition-opacity cursor-pointer shrink-0 shadow-[inset_0_0_0_1px_rgba(255,255,255,0.10)]"
+                className="w-full min-h-[44px] py-2.5 px-4 rounded-full text-xs sm:text-sm font-semibold text-white flex items-center justify-center gap-2 hover:opacity-95 transition-opacity cursor-pointer shrink-0 shadow-[inset_0_0_0_1px_rgba(255,255,255,0.10)]"
               >
                 <Video className="w-4 h-4 shrink-0" />
                 <span>{isMeetingStarted ? 'Checked in ✓' : 'Start meeting'}</span>
@@ -759,7 +610,7 @@ export default function DashboardScreen() {
                   if (typeof window !== 'undefined') window.history.pushState(null, '', '#calendar');
                 }}
                 style={{ color: 'var(--accent)' }}
-                className="text-xs font-semibold hover:underline cursor-pointer"
+                className="min-h-[44px] px-3 text-xs font-semibold hover:underline cursor-pointer inline-flex items-center"
               >
                 + Schedule in Calendar
               </button>
@@ -767,89 +618,157 @@ export default function DashboardScreen() {
           )}
         </section>
 
-        {/* Projects (3 cols) */}
+        {/* ==================== FOCUS TIMER (Mobile #3, Desktop Row 3 Col 10-12) ==================== */}
         <section
-          aria-labelledby="projects-card-heading"
-          style={{ '--stagger-index': 7 } as React.CSSProperties}
-          className="plotline-enter sm:col-span-1 xl:col-span-3 bg-[var(--surface-elevated)] border border-[var(--border-hairline)] rounded-[var(--radius-lg)] p-4 flex flex-col justify-between gap-1.5 min-h-0 overflow-hidden"
+          aria-labelledby="focus-card-heading"
+          data-tour="timer"
+          style={{
+            '--stagger-index': 10,
+            background: 'var(--surface-accent)',
+          } as React.CSSProperties}
+          className="plotline-enter col-span-2 sm:col-span-1 xl:col-span-3 sm:order-10 time-tracker-surface rounded-[var(--radius-lg)] p-4 sm:p-3.5 text-white flex flex-col justify-between gap-2.5 w-full lg:h-full xl:max-h-[212px] self-start relative"
         >
-          <div className="flex items-center justify-between gap-2 shrink-0">
-            <h2
-              id="projects-card-heading"
-              className="text-base font-semibold text-[var(--ink-primary)]"
-            >
-              Projects
-            </h2>
-            <button
-              type="button"
-              onClick={() => setNewProjectModalOpen(true)}
-              className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full border border-[var(--border-strong)] text-xs font-medium text-[var(--ink-primary)] hover:bg-[var(--surface-sunken)] transition-colors cursor-pointer"
-            >
-              <Plus className="w-3 h-3" />
-              <span>New</span>
-            </button>
+          {/* Large Contour Glyph Texture in White at 8–10% Opacity, Seeded from Active Task ID */}
+          <div
+            aria-hidden="true"
+            className="pointer-events-none absolute inset-0 overflow-hidden rounded-[var(--radius-lg)]"
+          >
+            <div className="absolute -right-6 -bottom-6 flex items-center justify-center">
+              <ContourGlyph
+                seed={activeFocusTask?.id || 'focus-default'}
+                size={210}
+                stroke="#ffffff"
+                strokeWidth={1.25}
+                minOpacity={0.08}
+                maxOpacity={0.10}
+              />
+            </div>
           </div>
 
-          {uniqueProjects.length === 0 ? (
-            <div className="flex-1 flex flex-col items-center justify-center text-center gap-2 py-2">
-              <ContourGlyph seed="dashboard-projects-empty" size={38} />
-              <p className="text-xs text-[var(--ink-secondary)]">
-                No active project streams yet.
-              </p>
+          {/* Top-left title "Focus" 13px/500 in white + pulsing red dot ONLY while running */}
+          <div className="relative flex items-center justify-between shrink-0">
+            <h2
+              id="focus-card-heading"
+              className="text-[13px] font-medium text-white leading-none"
+            >
+              Focus
+            </h2>
+            {timerRunning && (
+              <span
+                aria-label="Recording active"
+                className="w-2 h-2 rounded-full bg-[#EF4444] animate-pulse"
+              />
+            )}
+          </div>
+
+          {/* Centered HH:MM:SS in UI sans, tabular-nums, white */}
+          <div className="relative my-auto flex flex-col items-center justify-center py-1">
+            <div
+              data-testid="focus-timer-readout"
+              className="font-ui-tabular text-[32px] xl:text-[38px] font-semibold tracking-tight leading-none text-white text-center select-none"
+            >
+              {formatTimerHMS(timerSeconds)}
+            </div>
+
+            {/* Two 44px round buttons with 12px between: white play/pause & red stop */}
+            <div className="mt-2.5 flex items-center justify-center gap-3 shrink-0">
               <button
                 type="button"
-                onClick={() => setNewProjectModalOpen(true)}
-                style={{ color: 'var(--accent)' }}
-                className="text-xs font-semibold hover:underline cursor-pointer"
+                onClick={toggleTimer}
+                aria-label={timerRunning ? 'Pause timer' : 'Start timer'}
+                style={{ color: 'var(--accent-deep)' }}
+                className="w-[44px] h-[44px] min-w-[44px] min-h-[44px] rounded-full bg-white flex items-center justify-center hover:scale-105 transition-transform cursor-pointer shadow-xs"
               >
-                + Create first project
+                {timerRunning ? (
+                  <Pause className="w-4 h-4 fill-current" />
+                ) : (
+                  <Play className="w-4 h-4 fill-current ml-0.5" />
+                )}
+              </button>
+
+              <button
+                type="button"
+                onClick={resetTimer}
+                aria-label="Stop and log focus session"
+                className="w-[44px] h-[44px] min-w-[44px] min-h-[44px] rounded-full bg-[#DC2626] text-white flex items-center justify-center hover:scale-105 transition-transform cursor-pointer shadow-xs"
+              >
+                <Square className="w-4 h-4 fill-current" />
               </button>
             </div>
-          ) : (
-            <ul className="flex-1 flex flex-col justify-between min-h-0 overflow-hidden">
-              {uniqueProjects.slice(0, 5).map((project) => {
-                const isNew = project.id === lastAddedProjectId;
+          </div>
+
+          {/* Tappable "Focusing on: [task]" line under the buttons */}
+          <div className="relative pt-1 shrink-0">
+            <button
+              ref={taskPickerTriggerRef}
+              type="button"
+              onClick={() => setTaskPickerOpen((prev) => !prev)}
+              aria-expanded={taskPickerOpen}
+              aria-haspopup="menu"
+              className="w-full min-h-[44px] sm:min-h-[32px] px-3 py-1.5 sm:py-1 rounded-[var(--radius-sm)] bg-white/10 hover:bg-white/15 border border-white/15 text-[11px] text-white flex items-center justify-between gap-1.5 cursor-pointer transition-colors"
+            >
+              <span className="truncate text-left">
+                <span className="text-white/75">Focusing on: </span>
+                <span className="font-semibold text-white">
+                  {activeFocusTask?.title || 'Select task'}
+                </span>
+              </span>
+              <ChevronDown className="w-3.5 h-3.5 text-white/80 shrink-0" />
+            </button>
+
+            {/* Task Chooser Popover portaled to document.body */}
+            <AnchoredPopover
+              isOpen={taskPickerOpen}
+              onClose={() => setTaskPickerOpen(false)}
+              triggerRef={taskPickerTriggerRef}
+              placement="top-start"
+              matchTriggerWidth={true}
+              ariaLabel="Choose task to focus on"
+              sheetTitle="Focus on task"
+              role="menu"
+              className="sm:max-h-56 sm:overflow-y-auto bg-[var(--surface-elevated)] text-[var(--ink-primary)] border border-[var(--border-strong)] rounded-[var(--radius-md)] shadow-xl p-1.5 space-y-0.5"
+            >
+              {tasks.map((t) => {
+                const isCurrent = t.id === activeFocusTask?.id;
                 return (
-                  <li
-                    key={project.id}
-                    onClick={() => openProjectDialog(project.id)}
-                    className={`flex items-center justify-between gap-2.5 p-1 rounded-[var(--radius-sm)] cursor-pointer hover:bg-[var(--surface-sunken)] transition-colors ${
-                      isNew ? 'plotline-row-new' : ''
+                  <button
+                    key={t.id}
+                    type="button"
+                    role="menuitem"
+                    onClick={() => {
+                      setTimerTask(t.id);
+                      setTaskPickerOpen(false);
+                    }}
+                    className={`w-full min-h-[44px] sm:min-h-[34px] text-left px-2.5 py-2 sm:py-1.5 rounded-[var(--radius-xs)] text-xs flex items-center justify-between gap-2 cursor-pointer ${
+                      isCurrent
+                        ? 'bg-[var(--accent-soft)] font-semibold text-[var(--ink-primary)]'
+                        : 'hover:bg-[var(--surface-sunken)] text-[var(--ink-primary)]'
                     }`}
                   >
-                    <div className="flex items-center gap-2.5 min-w-0 flex-1">
-                      <span
-                        className="w-9 h-9 rounded-[var(--radius-sm)] bg-[var(--accent-soft)] flex items-center justify-center shrink-0"
-                        title={`Contour glyph for ${project.name}`}
-                      >
-                        <ContourGlyph seed={project.id} size={36} />
-                      </span>
-                      <div className="min-w-0 flex-1">
-                        <p className="text-xs font-semibold text-[var(--ink-primary)] truncate leading-tight">
-                          {project.name}
-                        </p>
-                        <p className="text-[10px] text-[var(--ink-muted)] truncate leading-tight">
-                          Due date: {formatShortDate(project.targetDate)}
-                        </p>
-                      </div>
-                    </div>
-                    <DeleteButton
-                      name={project.name}
-                      onDelete={() => deleteProject(project.id)}
-                    />
-                  </li>
+                    <span className="truncate">
+                      <span className="font-semibold" style={{ color: 'var(--accent)' }}>
+                        {t.code}
+                      </span>{' '}
+                      · {t.title}
+                    </span>
+                    {isCurrent && (
+                      <Check
+                        className="w-3.5 h-3.5 shrink-0"
+                        style={{ color: 'var(--accent)' }}
+                      />
+                    )}
+                  </button>
                 );
               })}
-            </ul>
-          )}
+            </AnchoredPopover>
+          </div>
         </section>
 
-        {/* ==================== ROW 3: IN MOTION (5) + PROJECT RINGS (4) + FOCUS (3) ==================== */}
-        {/* In motion (5 cols) */}
+        {/* ==================== IN MOTION (Mobile #4, Desktop Row 3 Col 1-5) ==================== */}
         <section
           aria-labelledby="in-motion-heading"
           style={{ '--stagger-index': 8 } as React.CSSProperties}
-          className="plotline-enter sm:col-span-2 xl:col-span-5 bg-[var(--surface-elevated)] border border-[var(--border-hairline)] rounded-[var(--radius-lg)] p-4 flex flex-col justify-between gap-2 min-h-0 overflow-hidden"
+          className="plotline-enter col-span-2 sm:col-span-2 xl:col-span-5 sm:order-8 bg-[var(--surface-elevated)] border border-[var(--border-hairline)] rounded-[var(--radius-lg)] p-4 flex flex-col justify-between gap-2 min-h-0"
         >
           <div className="flex items-center justify-between gap-2 shrink-0">
             <h2
@@ -861,9 +780,9 @@ export default function DashboardScreen() {
             <button
               type="button"
               onClick={() => setNewTaskModalOpen(true)}
-              className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full border border-[var(--border-strong)] text-xs font-medium text-[var(--ink-primary)] hover:bg-[var(--surface-sunken)] transition-colors cursor-pointer"
+              className="inline-flex items-center justify-center gap-1 min-h-[44px] sm:min-h-[28px] px-3 sm:px-2.5 py-1 sm:py-0.5 rounded-full border border-[var(--border-strong)] text-xs font-medium text-[var(--ink-primary)] hover:bg-[var(--surface-sunken)] transition-colors cursor-pointer"
             >
-              <Plus className="w-3 h-3" />
+              <Plus className="w-3.5 h-3.5 sm:w-3 sm:h-3" />
               <span>Add task</span>
             </button>
           </div>
@@ -878,13 +797,13 @@ export default function DashboardScreen() {
                 type="button"
                 onClick={() => setNewTaskModalOpen(true)}
                 style={{ color: 'var(--accent)' }}
-                className="text-xs font-semibold hover:underline cursor-pointer"
+                className="min-h-[44px] px-3 text-xs font-semibold hover:underline cursor-pointer inline-flex items-center"
               >
                 + Dispatch a task
               </button>
             </div>
           ) : (
-            <div className="divide-y divide-[var(--border-hairline)] flex-1 flex flex-col justify-around min-h-0">
+            <div className="divide-y divide-[var(--border-hairline)] flex-1 flex flex-col justify-around min-h-0 overflow-hidden">
               {memberCollaborationRows.map(({ member, task }) => {
                 if (!task) return null;
                 const badge = taskStatusBadge(task.status);
@@ -898,7 +817,7 @@ export default function DashboardScreen() {
                         window.history.pushState(null, '', `#/tasks?taskId=${task.id}`);
                       }
                     }}
-                    className="py-1 px-1 rounded hover:bg-[var(--surface-sunken)] transition-colors cursor-pointer flex items-center justify-between gap-2.5"
+                    className="py-2 sm:py-1 px-1 min-h-[44px] rounded hover:bg-[var(--surface-sunken)] transition-colors cursor-pointer flex items-center justify-between gap-2.5"
                   >
                     <div className="flex items-center gap-2.5 min-w-0">
                       <span
@@ -960,11 +879,249 @@ export default function DashboardScreen() {
           )}
         </section>
 
-        {/* Project Rings (4 cols — up to 4 concentric rings for the projects due soonest, track var(--line), round caps, arcs in accent tints, animated from 0 over 700ms on mount) */}
+        {/* ==================== WEEKLY OUTPUT (Mobile #5, Desktop Row 2 Col 1-6) ==================== */}
+        <section
+          aria-labelledby="weekly-output-heading"
+          style={{ '--stagger-index': 5 } as React.CSSProperties}
+          className="plotline-enter col-span-2 sm:col-span-2 xl:col-span-6 sm:order-5 bg-[var(--surface-elevated)] border border-[var(--border-hairline)] rounded-[var(--radius-lg)] p-4 flex flex-col justify-between min-h-0 relative"
+        >
+          <div className="flex items-center justify-between shrink-0 gap-2">
+            <h2
+              id="weekly-output-heading"
+              className="text-base font-semibold text-[var(--ink-primary)]"
+            >
+              Weekly Output
+            </h2>
+            <span
+              data-testid="weekly-output-total"
+              data-seconds={weekTotalSeconds}
+              className="text-xs text-[var(--ink-muted)] font-ui-tabular"
+            >
+              {weekStart === 'monday' ? 'Mon–Sun' : 'Sun–Sat'} ·{' '}
+              {formatDuration(weekTotalSeconds)} total
+            </span>
+          </div>
+
+          {/* Seven slim columns (~28px wide, 8px radius), segmented by project with 2px gaps; tap or hover for tooltip */}
+          <div
+            ref={weeklyChartRef}
+            className="flex-1 flex items-end justify-between gap-2 sm:gap-4 pt-7 pb-1 px-1 sm:px-2 min-h-[140px]"
+          >
+            {weeklyColumns.map((col) => {
+              const colHeightPct =
+                col.totalSeconds > 0
+                  ? Math.max(
+                      24,
+                      Math.min(100, Math.round((col.totalHours / maxDailyHours) * 100))
+                    )
+                  : 18;
+              const isHovered = hoveredDayIndex === col.dayIndex;
+
+              return (
+                <div
+                  key={col.key}
+                  ref={(el) => {
+                    if (el) dayColumnRefs.current.set(col.dayIndex, el);
+                    else dayColumnRefs.current.delete(col.dayIndex);
+                  }}
+                  onMouseEnter={() => setHoveredDayIndex(col.dayIndex)}
+                  onMouseLeave={() => setHoveredDayIndex(null)}
+                  onFocus={() => setHoveredDayIndex(col.dayIndex)}
+                  onBlur={() => setHoveredDayIndex(null)}
+                  onClick={() =>
+                    setHoveredDayIndex((prev) =>
+                      prev === col.dayIndex ? null : col.dayIndex
+                    )
+                  }
+                  tabIndex={0}
+                  role="button"
+                  aria-label={`${col.full}: ${col.formattedTotal} across ${col.segments.length} projects`}
+                  className="relative flex-1 min-w-[36px] h-full flex flex-col items-center justify-end gap-1.5 group rounded-[var(--radius-sm)] cursor-pointer select-none"
+                >
+                  {/* Hover / Tap Per-Project Breakdown Tooltip portaled to document.body */}
+                  <AnchoredTooltip
+                    isOpen={isHovered}
+                    anchorEl={dayColumnRefs.current.get(col.dayIndex) || null}
+                    className="w-48 sm:w-52 bg-[var(--surface-elevated)] border border-[var(--border-strong)] rounded-[var(--radius-md)] shadow-lg p-2.5 text-[11px] space-y-1.5"
+                  >
+                    <div className="flex items-center justify-between font-semibold text-[var(--ink-primary)] border-b border-[var(--border-hairline)] pb-1">
+                      <span>
+                        {col.full} {col.isToday ? '(Today)' : ''}
+                      </span>
+                      <span className="font-ui-tabular" style={{ color: 'var(--accent)' }}>
+                        {col.formattedTotal}
+                      </span>
+                    </div>
+                    {col.segments.length === 0 ? (
+                      <p className="text-[var(--ink-muted)]">No sessions logged</p>
+                    ) : (
+                      <div className="space-y-1">
+                        {col.segments.map((seg) => (
+                          <div
+                            key={seg.projectId}
+                            className="flex items-center justify-between gap-2"
+                          >
+                            <span className="flex items-center gap-1.5 min-w-0">
+                              <span
+                                className="w-2 h-2 rounded-full shrink-0"
+                                style={{ backgroundColor: seg.tint }}
+                              />
+                              <span className="truncate text-[var(--ink-secondary)]">
+                                {seg.projectName}
+                              </span>
+                            </span>
+                            <span className="font-ui-tabular font-semibold text-[var(--ink-primary)] shrink-0">
+                              {formatDuration(seg.seconds)}
+                            </span>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </AnchoredTooltip>
+
+                  <div className="relative w-full flex-1 flex items-end justify-center">
+                    {/* Slim 28px column container with 8px radius and 2px segment gaps */}
+                    <div
+                      data-testid={col.isToday ? 'weekly-output-today-column' : undefined}
+                      style={{
+                        height: `${colHeightPct}%`,
+                        outline: col.isToday ? '2px solid var(--accent)' : undefined,
+                        outlineOffset: col.isToday ? '2px' : undefined,
+                      }}
+                      className="relative w-full max-w-[28px] rounded-[8px] flex flex-col justify-end gap-[2px] p-[1px] transition-all duration-250 ease-plotline"
+                    >
+                      {/* Today's Total-Duration Label */}
+                      {col.isToday && (
+                        <span
+                          data-testid="weekly-output-today-hours"
+                          data-seconds={col.totalSeconds}
+                          style={{ color: 'var(--accent)' }}
+                          className="absolute -top-6 left-1/2 -translate-x-1/2 min-w-[2.25rem] px-1 py-0.5 rounded-[var(--radius-xs)] bg-[var(--surface-elevated)] border border-[var(--accent-border)] text-[10px] font-semibold font-ui-tabular text-center whitespace-nowrap shadow-2xs"
+                        >
+                          {col.formattedTotal}
+                        </span>
+                      )}
+
+                      {col.segments.length === 0 ? (
+                        <div className="w-full h-full rounded-[6px] bg-[var(--surface-sunken)]" />
+                      ) : (
+                        col.segments.map((seg) => {
+                          const segShare =
+                            col.totalSeconds > 0
+                              ? (seg.seconds / col.totalSeconds) * 100
+                              : 100;
+                          return (
+                            <div
+                              key={seg.projectId}
+                              style={{
+                                height: `${Math.max(14, segShare)}%`,
+                                backgroundColor: seg.tint,
+                              }}
+                              className="w-full rounded-[6px] transition-all duration-250 ease-plotline"
+                            />
+                          );
+                        })
+                      )}
+                    </div>
+                  </div>
+
+                  <span
+                    className={`text-xs font-medium ${
+                      col.isToday
+                        ? 'font-bold text-[var(--ink-primary)]'
+                        : 'text-[var(--ink-muted)]'
+                    }`}
+                  >
+                    {col.short}
+                  </span>
+                </div>
+              );
+            })}
+          </div>
+        </section>
+
+        {/* ==================== PROJECTS (Mobile #6, Desktop Row 2 Col 10-12) ==================== */}
+        <section
+          aria-labelledby="projects-card-heading"
+          style={{ '--stagger-index': 7 } as React.CSSProperties}
+          className="plotline-enter col-span-2 sm:col-span-1 xl:col-span-3 sm:order-7 bg-[var(--surface-elevated)] border border-[var(--border-hairline)] rounded-[var(--radius-lg)] p-4 flex flex-col justify-between gap-1.5 min-h-0"
+        >
+          <div className="flex items-center justify-between gap-2 shrink-0">
+            <h2
+              id="projects-card-heading"
+              className="text-base font-semibold text-[var(--ink-primary)]"
+            >
+              Projects
+            </h2>
+            <button
+              type="button"
+              onClick={() => setNewProjectModalOpen(true)}
+              className="inline-flex items-center justify-center gap-1 min-h-[44px] sm:min-h-[28px] px-3 sm:px-2.5 py-1 sm:py-0.5 rounded-full border border-[var(--border-strong)] text-xs font-medium text-[var(--ink-primary)] hover:bg-[var(--surface-sunken)] transition-colors cursor-pointer"
+            >
+              <Plus className="w-3.5 h-3.5 sm:w-3 sm:h-3" />
+              <span>New</span>
+            </button>
+          </div>
+
+          {uniqueProjects.length === 0 ? (
+            <div className="flex-1 flex flex-col items-center justify-center text-center gap-2 py-2">
+              <ContourGlyph seed="dashboard-projects-empty" size={38} />
+              <p className="text-xs text-[var(--ink-secondary)]">
+                No active project streams yet.
+              </p>
+              <button
+                type="button"
+                onClick={() => setNewProjectModalOpen(true)}
+                style={{ color: 'var(--accent)' }}
+                className="min-h-[44px] px-3 text-xs font-semibold hover:underline cursor-pointer inline-flex items-center"
+              >
+                + Create first project
+              </button>
+            </div>
+          ) : (
+            <ul className="flex-1 flex flex-col justify-between min-h-0 overflow-hidden divide-y sm:divide-y-0 divide-[var(--border-hairline)]">
+              {uniqueProjects.slice(0, 5).map((project) => {
+                const isNew = project.id === lastAddedProjectId;
+                return (
+                  <li
+                    key={project.id}
+                    onClick={() => openProjectDialog(project.id)}
+                    className={`flex items-center justify-between gap-2.5 py-1.5 sm:p-1 min-h-[44px] sm:min-h-0 rounded-[var(--radius-sm)] cursor-pointer hover:bg-[var(--surface-sunken)] transition-colors ${
+                      isNew ? 'plotline-row-new' : ''
+                    }`}
+                  >
+                    <div className="flex items-center gap-2.5 min-w-0 flex-1">
+                      <span
+                        className="w-9 h-9 rounded-[var(--radius-sm)] bg-[var(--accent-soft)] flex items-center justify-center shrink-0"
+                        title={`Contour glyph for ${project.name}`}
+                      >
+                        <ContourGlyph seed={project.id} size={36} />
+                      </span>
+                      <div className="min-w-0 flex-1">
+                        <p className="text-xs font-semibold text-[var(--ink-primary)] truncate leading-tight">
+                          {project.name}
+                        </p>
+                        <p className="text-[10px] text-[var(--ink-muted)] truncate leading-tight mt-0.5">
+                          Due date: {formatShortDate(project.targetDate)}
+                        </p>
+                      </div>
+                    </div>
+                    <DeleteButton
+                      name={project.name}
+                      onDelete={() => deleteProject(project.id)}
+                    />
+                  </li>
+                );
+              })}
+            </ul>
+          )}
+        </section>
+
+        {/* ==================== PROJECT RINGS (Mobile #7, Desktop Row 3 Col 6-9) ==================== */}
         <section
           aria-labelledby="project-rings-heading"
           style={{ '--stagger-index': 9 } as React.CSSProperties}
-          className="dashboard-rings-card plotline-enter sm:col-span-1 xl:col-span-4 bg-[var(--surface-elevated)] border border-[var(--border-hairline)] rounded-[var(--radius-lg)] p-4 flex min-w-0 flex-col justify-between min-h-0"
+          className="dashboard-rings-card plotline-enter col-span-2 sm:col-span-1 xl:col-span-4 sm:order-9 bg-[var(--surface-elevated)] border border-[var(--border-hairline)] rounded-[var(--radius-lg)] p-4 flex min-w-0 flex-col justify-between gap-3 min-h-0"
         >
           <div className="flex items-center justify-between shrink-0">
             <h2
@@ -985,8 +1142,8 @@ export default function DashboardScreen() {
               </p>
             </div>
           ) : (
-            <div className="my-auto flex items-center justify-between gap-2.5 min-h-0">
-              <div className="dashboard-ring-visual relative w-[clamp(104px,42cqw,132px)] aspect-square flex items-center justify-center shrink-0 mx-auto">
+            <div className="my-auto flex items-center justify-between gap-3 min-h-0">
+              <div className="dashboard-ring-visual relative w-[clamp(104px,38cqw,132px)] aspect-square flex items-center justify-center shrink-0 mx-auto">
                 <svg
                   viewBox="0 0 136 136"
                   className="w-full h-full overflow-visible"
@@ -1048,14 +1205,15 @@ export default function DashboardScreen() {
               </div>
 
               {/* Compact Legend (Name + %) */}
-              <div className="flex-1 min-w-0 space-y-1.5">
+              <div className="flex-1 min-w-0 space-y-1">
                 {soonestProjects.map((proj, idx) => {
                   const tint = ACCENT_TINTS[idx % ACCENT_TINTS.length];
                   return (
-                    <div
+                    <button
                       key={proj.id}
+                      type="button"
                       onClick={() => openProjectDialog(proj.id)}
-                      className="flex items-center justify-between gap-2 text-xs p-1 rounded cursor-pointer hover:bg-[var(--surface-sunken)] transition-colors"
+                      className="w-full min-h-[36px] sm:min-h-0 flex items-center justify-between gap-2 text-xs p-1.5 sm:p-1 rounded cursor-pointer hover:bg-[var(--surface-sunken)] transition-colors text-left"
                     >
                       <span className="flex items-center gap-1.5 min-w-0">
                         <span
@@ -1069,153 +1227,12 @@ export default function DashboardScreen() {
                       <span className="text-[11px] font-semibold font-ui-tabular text-[var(--ink-primary)] shrink-0">
                         {proj.progress}%
                       </span>
-                    </div>
+                    </button>
                   );
                 })}
               </div>
             </div>
           )}
-        </section>
-
-        {/* Focus (3 cols — renamed from Time Tracker; large white contourGlyph at 8-10% opacity seeded from active task id; tappable "Focusing on: [task]" line under buttons) */}
-        <section
-          aria-labelledby="focus-card-heading"
-          data-tour="timer"
-          ref={taskPickerRef}
-          style={{
-            '--stagger-index': 10,
-            background: 'var(--surface-accent)',
-          } as React.CSSProperties}
-          className="plotline-enter sm:col-span-1 xl:col-span-3 time-tracker-surface rounded-[var(--radius-lg)] p-3.5 text-white flex flex-col justify-between w-full lg:h-full max-h-[212px] self-start relative overflow-hidden"
-        >
-          {/* Large Contour Glyph Texture in White at 8–10% Opacity, Seeded from Active Task ID */}
-          <div
-            aria-hidden="true"
-            className="pointer-events-none absolute -right-6 -bottom-6 z-0 flex items-center justify-center"
-          >
-            <ContourGlyph
-              seed={activeFocusTask?.id || 'focus-default'}
-              size={210}
-              stroke="#ffffff"
-              strokeWidth={1.25}
-              minOpacity={0.08}
-              maxOpacity={0.10}
-            />
-          </div>
-
-          {/* Top-left title "Focus" 13px/500 in white + pulsing red dot ONLY while running */}
-          <div className="relative z-10 flex items-center justify-between shrink-0">
-            <h2
-              id="focus-card-heading"
-              className="text-[13px] font-medium text-white leading-none"
-            >
-              Focus
-            </h2>
-            {timerRunning && (
-              <span
-                aria-label="Recording active"
-                className="w-2 h-2 rounded-full bg-[#EF4444] animate-pulse"
-              />
-            )}
-          </div>
-
-          {/* Centered HH:MM:SS in UI sans, tabular-nums, white */}
-          <div className="relative z-10 my-auto flex flex-col items-center justify-center">
-            <div
-              data-testid="focus-timer-readout"
-              className="font-ui-tabular text-[32px] xl:text-[38px] font-semibold tracking-tight leading-none text-white text-center select-none"
-            >
-              {formatTimerHMS(timerSeconds)}
-            </div>
-
-            {/* Two 44px round buttons with 12px between: white play/pause (icon in --accent-deep) & red stop (logs session & resets) */}
-            <div className="mt-2.5 flex items-center justify-center gap-3 shrink-0">
-              <button
-                type="button"
-                onClick={toggleTimer}
-                aria-label={timerRunning ? 'Pause timer' : 'Start timer'}
-                style={{ color: 'var(--accent-deep)' }}
-                className="w-[44px] h-[44px] rounded-full bg-white flex items-center justify-center hover:scale-105 transition-transform cursor-pointer shadow-xs"
-              >
-                {timerRunning ? (
-                  <Pause className="w-4 h-4 fill-current" />
-                ) : (
-                  <Play className="w-4 h-4 fill-current ml-0.5" />
-                )}
-              </button>
-
-              <button
-                type="button"
-                onClick={resetTimer}
-                aria-label="Stop and log focus session"
-                className="w-[44px] h-[44px] rounded-full bg-[#DC2626] text-white flex items-center justify-center hover:scale-105 transition-transform cursor-pointer shadow-xs"
-              >
-                <Square className="w-4 h-4 fill-current" />
-              </button>
-            </div>
-          </div>
-
-          {/* Tappable "Focusing on: [task]" line under the buttons */}
-          <div className="relative z-20 pt-1 shrink-0">
-            <button
-              type="button"
-              onClick={() => setTaskPickerOpen((prev) => !prev)}
-              aria-expanded={taskPickerOpen}
-              aria-haspopup="listbox"
-              className="w-full px-2.5 py-1 rounded-[var(--radius-sm)] bg-white/10 hover:bg-white/15 border border-white/15 text-[11px] text-white flex items-center justify-between gap-1.5 cursor-pointer transition-colors"
-            >
-              <span className="truncate text-left">
-                <span className="text-white/75">Focusing on: </span>
-                <span className="font-semibold text-white">
-                  {activeFocusTask?.title || 'Select task'}
-                </span>
-              </span>
-              <ChevronDown className="w-3.5 h-3.5 text-white/80 shrink-0" />
-            </button>
-
-            {/* Task Chooser Popover */}
-            {taskPickerOpen && (
-              <div
-                role="listbox"
-                aria-label="Choose task to focus on"
-                className="absolute bottom-full mb-1.5 left-0 right-0 max-h-44 overflow-y-auto bg-[var(--surface-elevated)] text-[var(--ink-primary)] border border-[var(--border-strong)] rounded-[var(--radius-md)] shadow-xl p-1 z-40 space-y-0.5"
-              >
-                {tasks.map((t) => {
-                  const isCurrent = t.id === activeFocusTask?.id;
-                  return (
-                    <button
-                      key={t.id}
-                      type="button"
-                      role="option"
-                      aria-selected={isCurrent}
-                      onClick={() => {
-                        setTimerTask(t.id);
-                        setTaskPickerOpen(false);
-                      }}
-                      className={`w-full text-left px-2.5 py-1.5 rounded-[var(--radius-xs)] text-xs flex items-center justify-between gap-2 cursor-pointer ${
-                        isCurrent
-                          ? 'bg-[var(--accent-soft)] font-semibold text-[var(--ink-primary)]'
-                          : 'hover:bg-[var(--surface-sunken)] text-[var(--ink-primary)]'
-                      }`}
-                    >
-                      <span className="truncate">
-                        <span className="font-semibold" style={{ color: 'var(--accent)' }}>
-                          {t.code}
-                        </span>{' '}
-                        · {t.title}
-                      </span>
-                      {isCurrent && (
-                        <Check
-                          className="w-3.5 h-3.5 shrink-0"
-                          style={{ color: 'var(--accent)' }}
-                        />
-                      )}
-                    </button>
-                  );
-                })}
-              </div>
-            )}
-          </div>
         </section>
       </div>
     </div>

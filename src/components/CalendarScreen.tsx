@@ -6,8 +6,6 @@ import {
   Clock,
   MapPin,
   Plus,
-  Trash2,
-  X,
 } from 'lucide-react';
 import {
   CalendarEvent,
@@ -93,6 +91,19 @@ function formatDateBadge(isoDate: string): { monthShort: string; dayNum: string 
   };
 }
 
+function formatFullAgendaHeading(isoDate: string, todayIso: string): string {
+  if (isoDate === todayIso) return "Today's Agenda";
+  const parts = isoDate.split('-').map(Number);
+  if (parts.length !== 3) return `Agenda · ${isoDate}`;
+  const d = new Date(parts[0], parts[1] - 1, parts[2]);
+  if (Number.isNaN(d.getTime())) return `Agenda · ${isoDate}`;
+  return d.toLocaleDateString('en-US', {
+    weekday: 'short',
+    month: 'short',
+    day: 'numeric',
+  });
+}
+
 export default function CalendarScreen() {
   const {
     events,
@@ -109,6 +120,7 @@ export default function CalendarScreen() {
 
   const [viewYear, setViewYear] = useState<number>(initialDateParts[0] || 2026);
   const [viewMonth, setViewMonth] = useState<number>((initialDateParts[1] || 10) - 1);
+  const [selectedDateIso, setSelectedDateIso] = useState<string>(todayIso);
   const [expandedDayIso, setExpandedDayIso] = useState<string | null>(null);
 
   // Modal State (handles both "New event" and "Edit/Delete event")
@@ -185,9 +197,9 @@ export default function CalendarScreen() {
     return map;
   }, [events]);
 
-  const todayEvents = useMemo(
-    () => eventsByDate.get(todayIso) || [],
-    [eventsByDate, todayIso]
+  const selectedDayEvents = useMemo(
+    () => eventsByDate.get(selectedDateIso) || [],
+    [eventsByDate, selectedDateIso]
   );
 
   const comingUpEvents = useMemo(() => {
@@ -228,6 +240,7 @@ export default function CalendarScreen() {
     const parts = todayIso.split('-').map(Number);
     setViewYear(parts[0]);
     setViewMonth(parts[1] - 1);
+    setSelectedDateIso(todayIso);
   };
 
   const [isSavingEvent, setIsSavingEvent] = useState(false);
@@ -318,6 +331,7 @@ export default function CalendarScreen() {
       });
     }
 
+    setSelectedDateIso(evtDate);
     setModalOpen(false);
     setIsSavingEvent(false);
     savingEventRef.current = false;
@@ -327,6 +341,13 @@ export default function CalendarScreen() {
     if (!editingEventId) return;
     deleteEvent(editingEventId);
     setModalOpen(false);
+  };
+
+  const handleDayCellClick = (iso: string) => {
+    setSelectedDateIso(iso);
+    if (typeof window !== 'undefined' && window.innerWidth >= 640) {
+      openNewEventModal(iso);
+    }
   };
 
   return (
@@ -349,7 +370,7 @@ export default function CalendarScreen() {
           <button
             type="button"
             onClick={handleGoToday}
-            className="px-3.5 py-1.5 rounded-full text-xs font-semibold bg-[var(--surface-elevated)] border border-[var(--border-strong)] text-[var(--ink-primary)] hover:bg-[var(--surface-sunken)] transition-colors cursor-pointer"
+            className="px-3.5 py-1.5 min-h-[44px] sm:min-h-0 rounded-full text-xs font-semibold bg-[var(--surface-elevated)] border border-[var(--border-strong)] text-[var(--ink-primary)] hover:bg-[var(--surface-sunken)] transition-colors cursor-pointer"
           >
             Today
           </button>
@@ -359,13 +380,13 @@ export default function CalendarScreen() {
               type="button"
               onClick={handlePrevMonth}
               aria-label="Previous month"
-              className="p-1.5 rounded-full text-[var(--ink-secondary)] hover:text-[var(--ink-primary)] hover:bg-[var(--surface-sunken)] cursor-pointer"
+              className="w-10 h-10 sm:w-auto sm:h-auto p-1.5 rounded-full flex items-center justify-center text-[var(--ink-secondary)] hover:text-[var(--ink-primary)] hover:bg-[var(--surface-sunken)] cursor-pointer"
             >
               <ChevronLeft className="w-4 h-4" />
             </button>
             <span
               data-testid="calendar-month-label"
-              className="px-3 text-xs sm:text-sm font-semibold text-[var(--ink-primary)] min-w-[132px] text-center"
+              className="px-2 sm:px-3 text-xs sm:text-sm font-semibold text-[var(--ink-primary)] min-w-[120px] sm:min-w-[132px] text-center"
             >
               {monthTitle}
             </span>
@@ -373,7 +394,7 @@ export default function CalendarScreen() {
               type="button"
               onClick={handleNextMonth}
               aria-label="Next month"
-              className="p-1.5 rounded-full text-[var(--ink-secondary)] hover:text-[var(--ink-primary)] hover:bg-[var(--surface-sunken)] cursor-pointer"
+              className="w-10 h-10 sm:w-auto sm:h-auto p-1.5 rounded-full flex items-center justify-center text-[var(--ink-secondary)] hover:text-[var(--ink-primary)] hover:bg-[var(--surface-sunken)] cursor-pointer"
             >
               <ChevronRight className="w-4 h-4" />
             </button>
@@ -381,9 +402,9 @@ export default function CalendarScreen() {
 
           <button
             type="button"
-            onClick={() => openNewEventModal(todayIso)}
+            onClick={() => openNewEventModal(selectedDateIso || todayIso)}
             style={{ backgroundColor: 'var(--accent)' }}
-            className="inline-flex items-center gap-1.5 px-4 py-2 rounded-full text-xs sm:text-sm font-semibold text-white hover:opacity-95 transition-opacity cursor-pointer shadow-2xs"
+            className="inline-flex items-center gap-1.5 px-4 py-2 min-h-[44px] sm:min-h-0 rounded-full text-xs sm:text-sm font-semibold text-white hover:opacity-95 transition-opacity cursor-pointer shadow-2xs"
           >
             <Plus className="w-4 h-4" />
             <span>New event</span>
@@ -397,27 +418,29 @@ export default function CalendarScreen() {
         <section
           aria-label="Month calendar grid"
           style={{ '--stagger-index': 1 } as React.CSSProperties}
-          className="plotline-enter xl:col-span-8 bg-[var(--surface-elevated)] border border-[var(--border-hairline)] rounded-[var(--radius-lg)] overflow-hidden"
+          className="plotline-enter xl:col-span-8 bg-[var(--surface-elevated)] border border-[var(--border-hairline)] rounded-[var(--radius-lg)]"
         >
-          {/* Weekday Headers */}
-          <div
-            data-testid="calendar-weekday-headers"
-            className="grid grid-cols-7 border-b border-[var(--border-hairline)] bg-[var(--surface-sunken)]/60"
-          >
-            {weekdayHeaders.map((dayName) => (
-              <div
-                key={dayName}
-                className="py-2.5 px-2 text-center text-xs font-semibold text-[var(--ink-secondary)]"
-              >
-                {dayName}
-              </div>
-            ))}
-          </div>
+          <div className="overflow-hidden rounded-[var(--radius-lg)]">
+            {/* Weekday Headers */}
+            <div
+              data-testid="calendar-weekday-headers"
+              className="grid grid-cols-7 border-b border-[var(--border-hairline)] bg-[var(--surface-sunken)]/60"
+            >
+              {weekdayHeaders.map((dayName) => (
+                <div
+                  key={dayName}
+                  className="py-2 sm:py-2.5 px-1 sm:px-2 text-center text-[11px] sm:text-xs font-semibold text-[var(--ink-secondary)]"
+                >
+                  {dayName}
+                </div>
+              ))}
+            </div>
 
-          {/* 6x7 Day Cells */}
-          <div className="grid grid-cols-7 divide-x divide-y divide-[var(--border-hairline)]">
+            {/* 6x7 Day Cells */}
+            <div className="grid grid-cols-7 divide-x divide-y divide-[var(--border-hairline)]">
             {calendarDays.map((cell) => {
               const dayEvents = eventsByDate.get(cell.iso) || [];
+              const isSelected = selectedDateIso === cell.iso;
               const isExpanded = expandedDayIso === cell.iso;
               const maxVisible = isExpanded ? dayEvents.length : 2;
               const visibleEvents = dayEvents.slice(0, maxVisible);
@@ -429,29 +452,38 @@ export default function CalendarScreen() {
                   data-testid={`calendar-day-${cell.iso}`}
                   role="button"
                   tabIndex={0}
-                  aria-label={`${cell.iso}, ${dayEvents.length} events. Activate to schedule event.`}
-                  onClick={() => openNewEventModal(cell.iso)}
+                  aria-pressed={isSelected}
+                  aria-label={`${cell.iso}, ${dayEvents.length} events.`}
+                  onClick={() => handleDayCellClick(cell.iso)}
                   onKeyDown={(e) => {
                     if (e.key === 'Enter' || e.key === ' ') {
                       e.preventDefault();
-                      openNewEventModal(cell.iso);
+                      handleDayCellClick(cell.iso);
                     }
                   }}
-                  className={`min-h-[104px] min-w-0 overflow-hidden p-1 sm:p-1.5 flex flex-col justify-between transition-colors cursor-pointer group ${
-                    cell.inCurrentMonth
+                  className={`min-h-[54px] sm:min-h-[104px] min-w-0 overflow-hidden p-1 sm:p-1.5 flex flex-col items-center sm:items-stretch justify-start sm:justify-between transition-colors cursor-pointer group ${
+                    isSelected
+                      ? 'bg-[var(--accent-soft)]/55 sm:bg-[var(--surface-elevated)]'
+                      : cell.inCurrentMonth
                       ? 'bg-[var(--surface-elevated)] hover:bg-[var(--surface-sunken)]/45'
                       : 'bg-[var(--surface-canvas)]/60 text-[var(--ink-muted)] hover:bg-[var(--surface-sunken)]/45'
                   }`}
                 >
-                  <div className="flex items-center justify-between gap-1 min-w-0">
+                  <div className="flex items-center justify-center sm:justify-between gap-1 min-w-0 w-full">
                     <span
                       style={
                         cell.isToday
                           ? { backgroundColor: 'var(--accent)', color: '#ffffff' }
+                          : isSelected
+                          ? {
+                              backgroundColor: 'var(--accent-soft)',
+                              color: 'var(--accent)',
+                              border: '1px solid var(--accent)',
+                            }
                           : undefined
                       }
-                      className={`w-6 h-6 rounded-full text-xs font-ui-tabular flex items-center justify-center shrink-0 ${
-                        cell.isToday
+                      className={`w-7 h-7 sm:w-6 sm:h-6 rounded-full text-xs font-ui-tabular flex items-center justify-center shrink-0 ${
+                        cell.isToday || isSelected
                           ? 'font-bold'
                           : cell.inCurrentMonth
                           ? 'font-medium text-[var(--ink-primary)]'
@@ -466,8 +498,27 @@ export default function CalendarScreen() {
                     </span>
                   </div>
 
-                  {/* Category-colored Event Chips */}
-                  <div className="mt-1 space-y-1 flex-1 min-w-0">
+                  {/* Mobile Compact Colored Dots (<640px) */}
+                  {dayEvents.length > 0 && (
+                    <div
+                      data-testid={`calendar-dots-${cell.iso}`}
+                      className="flex sm:hidden items-center justify-center gap-1 mt-1.5 flex-wrap max-w-full px-0.5"
+                    >
+                      {dayEvents.slice(0, 4).map((evt) => {
+                        const chip = categoryChipStyles(evt.category);
+                        return (
+                          <span
+                            key={evt.id}
+                            style={{ backgroundColor: chip.dot }}
+                            className="w-1.5 h-1.5 rounded-full shrink-0"
+                          />
+                        );
+                      })}
+                    </div>
+                  )}
+
+                  {/* Tablet/Desktop Category-colored Event Chips (>=640px) */}
+                  <div className="hidden sm:block mt-1 space-y-1 flex-1 min-w-0 w-full">
                     {visibleEvents.map((evt) => {
                       const chip = categoryChipStyles(evt.category);
                       return (
@@ -510,47 +561,64 @@ export default function CalendarScreen() {
                 </div>
               );
             })}
+            </div>
           </div>
         </section>
 
-        {/* Right Panel: Today's Agenda + Coming Up (4 cols) */}
+        {/* Right / Bottom Panel: Selected Day's Agenda + Coming Up (4 cols) */}
         <aside
           style={{ '--stagger-index': 2 } as React.CSSProperties}
           className="plotline-enter xl:col-span-4 space-y-4"
         >
-          {/* Today's Agenda Card */}
-          <div className="bg-[var(--surface-elevated)] border border-[var(--border-hairline)] rounded-[var(--radius-lg)] p-4 space-y-3">
-            <div className="flex items-center justify-between border-b border-[var(--border-hairline)] pb-2.5">
+          {/* Selected Day's Agenda Card */}
+          <div
+            data-testid="calendar-selected-day-agenda"
+            className="bg-[var(--surface-elevated)] border border-[var(--border-hairline)] rounded-[var(--radius-lg)] p-4 space-y-3"
+          >
+            <div className="flex items-center justify-between border-b border-[var(--border-hairline)] pb-2.5 gap-2">
               <div>
                 <h2 className="text-sm font-semibold text-[var(--ink-primary)]">
-                  Today's Agenda
+                  {formatFullAgendaHeading(selectedDateIso, todayIso)}
                 </h2>
                 <p className="text-[11px] text-[var(--ink-muted)] mt-0.5">
-                  {todayIso} · {todayEvents.length}{' '}
-                  {todayEvents.length === 1 ? 'session' : 'sessions'}
+                  {selectedDateIso} · {selectedDayEvents.length}{' '}
+                  {selectedDayEvents.length === 1 ? 'session' : 'sessions'}
                 </p>
               </div>
-              <CalendarIcon className="w-4 h-4" style={{ color: 'var(--accent)' }} />
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => openNewEventModal(selectedDateIso)}
+                  style={{ color: 'var(--accent)' }}
+                  className="sm:hidden inline-flex items-center gap-1 px-2.5 py-1.5 min-h-[36px] rounded-full text-xs font-semibold bg-[var(--accent-soft)] cursor-pointer"
+                >
+                  <Plus className="w-3.5 h-3.5" />
+                  <span>Add</span>
+                </button>
+                <CalendarIcon className="w-4 h-4 shrink-0" style={{ color: 'var(--accent)' }} />
+              </div>
             </div>
 
-            {todayEvents.length === 0 ? (
+            {selectedDayEvents.length === 0 ? (
               <div className="py-6 flex flex-col items-center justify-center text-center gap-2">
-                <ContourGlyph seed="calendar-today-empty" size={40} />
+                <ContourGlyph seed={`calendar-empty-${selectedDateIso}`} size={40} />
                 <p className="text-xs text-[var(--ink-secondary)]">
-                  No events scheduled for today.
+                  {selectedDateIso === todayIso
+                    ? 'No events scheduled for today.'
+                    : `No events scheduled for ${selectedDateIso}.`}
                 </p>
                 <button
                   type="button"
-                  onClick={() => openNewEventModal(todayIso)}
+                  onClick={() => openNewEventModal(selectedDateIso)}
                   style={{ color: 'var(--accent)' }}
-                  className="text-xs font-semibold hover:underline cursor-pointer"
+                  className="min-h-[44px] sm:min-h-0 px-3 py-1.5 text-xs font-semibold hover:underline cursor-pointer"
                 >
                   + Schedule an event
                 </button>
               </div>
             ) : (
               <div className="space-y-2.5">
-                {todayEvents.map((evt) => {
+                {selectedDayEvents.map((evt) => {
                   const chip = categoryChipStyles(evt.category);
                   return (
                     <div
@@ -647,7 +715,7 @@ export default function CalendarScreen() {
                   type="button"
                   onClick={() => openNewEventModal(todayIso)}
                   style={{ color: 'var(--accent)' }}
-                  className="text-xs font-semibold hover:underline cursor-pointer"
+                  className="min-h-[44px] sm:min-h-0 px-3 py-1.5 text-xs font-semibold hover:underline cursor-pointer"
                 >
                   + Schedule an event
                 </button>
@@ -759,7 +827,7 @@ export default function CalendarScreen() {
               <button
                 type="button"
                 onClick={() => setModalOpen(false)}
-                className="px-4 py-2 rounded-full text-xs font-medium text-[var(--ink-secondary)] hover:text-[var(--ink-primary)] hover:bg-[var(--surface-sunken)] cursor-pointer"
+                className="px-4 py-2 min-h-[44px] sm:min-h-0 rounded-full text-xs font-medium text-[var(--ink-secondary)] hover:text-[var(--ink-primary)] hover:bg-[var(--surface-sunken)] cursor-pointer"
               >
                 Cancel
               </button>
@@ -768,7 +836,7 @@ export default function CalendarScreen() {
                 form="calendar-event-form"
                 disabled={isSavingEvent}
                 style={{ backgroundColor: 'var(--accent)' }}
-                className="px-4 py-2 rounded-full text-xs font-semibold text-white hover:opacity-95 disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
+                className="px-4 py-2 min-h-[44px] sm:min-h-0 rounded-full text-xs font-semibold text-white hover:opacity-95 disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
               >
                 {isSavingEvent
                   ? 'Saving…'
@@ -780,7 +848,7 @@ export default function CalendarScreen() {
           </div>
         }
       >
-        <form id="calendar-event-form" onSubmit={handleSaveEvent} className="p-6 space-y-3.5" noValidate>
+        <form id="calendar-event-form" onSubmit={handleSaveEvent} className="p-4 sm:p-6 space-y-3.5" noValidate>
           <div>
             <label
               htmlFor="calendar-event-title"
@@ -799,11 +867,11 @@ export default function CalendarScreen() {
                 if (formError) setFormError('');
               }}
               placeholder="e.g. Sub-bottom Sonar Calibration Review"
-              className="w-full h-10 px-3 rounded-[var(--radius-sm)] bg-[var(--surface-sunken)] border border-[var(--border-strong)] text-sm text-[var(--ink-primary)] placeholder:text-[var(--ink-muted)] focus:outline-2 focus:outline-[var(--accent)] focus:bg-[var(--surface-elevated)]"
+              className="w-full h-11 sm:h-10 px-3 rounded-[var(--radius-sm)] bg-[var(--surface-sunken)] border border-[var(--border-strong)] text-sm text-[var(--ink-primary)] placeholder:text-[var(--ink-muted)] focus:outline-2 focus:outline-[var(--accent)] focus:bg-[var(--surface-elevated)]"
             />
           </div>
 
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div>
               <label
                 htmlFor="calendar-event-category"
@@ -815,7 +883,7 @@ export default function CalendarScreen() {
                 id="calendar-event-category"
                 value={evtCategory}
                 onChange={(e) => setEvtCategory(e.target.value as EventCategory)}
-                className="w-full h-10 px-2.5 rounded-[var(--radius-sm)] bg-[var(--surface-sunken)] border border-[var(--border-strong)] text-xs sm:text-sm text-[var(--ink-primary)] focus:outline-2 focus:outline-[var(--accent)]"
+                className="w-full h-11 sm:h-10 px-2.5 rounded-[var(--radius-sm)] bg-[var(--surface-sunken)] border border-[var(--border-strong)] text-xs sm:text-sm text-[var(--ink-primary)] focus:outline-2 focus:outline-[var(--accent)]"
               >
                 {EVENT_CATEGORIES.map((cat) => (
                   <option key={cat} value={cat}>
@@ -838,7 +906,7 @@ export default function CalendarScreen() {
                 required
                 value={evtDate}
                 onChange={(e) => setEvtDate(e.target.value)}
-                className="w-full h-10 px-2.5 rounded-[var(--radius-sm)] bg-[var(--surface-sunken)] border border-[var(--border-strong)] text-xs sm:text-sm text-[var(--ink-primary)] focus:outline-2 focus:outline-[var(--accent)]"
+                className="w-full h-11 sm:h-10 px-2.5 rounded-[var(--radius-sm)] bg-[var(--surface-sunken)] border border-[var(--border-strong)] text-xs sm:text-sm text-[var(--ink-primary)] focus:outline-2 focus:outline-[var(--accent)]"
               />
             </div>
           </div>
@@ -856,7 +924,7 @@ export default function CalendarScreen() {
                 type="time"
                 value={evtStart}
                 onChange={(e) => setEvtStart(e.target.value)}
-                className="w-full h-10 px-2.5 rounded-[var(--radius-sm)] bg-[var(--surface-sunken)] border border-[var(--border-strong)] text-xs sm:text-sm text-[var(--ink-primary)] focus:outline-2 focus:outline-[var(--accent)]"
+                className="w-full h-11 sm:h-10 px-2.5 rounded-[var(--radius-sm)] bg-[var(--surface-sunken)] border border-[var(--border-strong)] text-xs sm:text-sm text-[var(--ink-primary)] focus:outline-2 focus:outline-[var(--accent)]"
               />
             </div>
 
@@ -872,7 +940,7 @@ export default function CalendarScreen() {
                 type="time"
                 value={evtEnd}
                 onChange={(e) => setEvtEnd(e.target.value)}
-                className="w-full h-10 px-2.5 rounded-[var(--radius-sm)] bg-[var(--surface-sunken)] border border-[var(--border-strong)] text-xs sm:text-sm text-[var(--ink-primary)] focus:outline-2 focus:outline-[var(--accent)]"
+                className="w-full h-11 sm:h-10 px-2.5 rounded-[var(--radius-sm)] bg-[var(--surface-sunken)] border border-[var(--border-strong)] text-xs sm:text-sm text-[var(--ink-primary)] focus:outline-2 focus:outline-[var(--accent)]"
               />
             </div>
           </div>
@@ -890,7 +958,7 @@ export default function CalendarScreen() {
               value={evtLocation}
               onChange={(e) => setEvtLocation(e.target.value)}
               placeholder="e.g. Room 04 · Cartography Lab"
-              className="w-full h-10 px-3 rounded-[var(--radius-sm)] bg-[var(--surface-sunken)] border border-[var(--border-strong)] text-xs sm:text-sm text-[var(--ink-primary)] placeholder:text-[var(--ink-muted)] focus:outline-2 focus:outline-[var(--accent)]"
+              className="w-full h-11 sm:h-10 px-3 rounded-[var(--radius-sm)] bg-[var(--surface-sunken)] border border-[var(--border-strong)] text-xs sm:text-sm text-[var(--ink-primary)] placeholder:text-[var(--ink-muted)] focus:outline-2 focus:outline-[var(--accent)]"
             />
           </div>
 
@@ -916,7 +984,7 @@ export default function CalendarScreen() {
                           }
                         : undefined
                     }
-                    className={`px-2.5 py-1 rounded-full border text-xs font-medium flex items-center gap-1.5 cursor-pointer transition-colors ${
+                    className={`px-3 py-1.5 min-h-[40px] sm:min-h-0 rounded-full border text-xs font-medium flex items-center gap-1.5 cursor-pointer transition-colors ${
                       selected
                         ? 'font-semibold'
                         : 'bg-[var(--surface-sunken)] border-[var(--border-hairline)] text-[var(--ink-secondary)] hover:text-[var(--ink-primary)]'

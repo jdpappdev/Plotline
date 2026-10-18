@@ -120,6 +120,7 @@ export interface TaskItem {
   coAssigneeId?: string;
   status: 'Backlog' | 'In Progress' | 'In Review' | 'Done';
   priority: 'High' | 'Medium' | 'Low';
+  startDate: string;
   dueDate: string;
   estimateHours: number;
   loggedSeconds?: number;
@@ -144,9 +145,6 @@ export interface FocusSession {
   daysAgo?: number;
   seconds: number;
   hours: number;
-  tasksCompletedCount?: number;
-  cycleDays?: number;
-  onTimeCount?: number;
   createdAt: string;
 }
 
@@ -205,6 +203,7 @@ export interface NewTaskInput {
   priority: TaskItem['priority'];
   assigneeId: string;
   dueDate: string;
+  startDate?: string;
   status?: TaskItem['status'];
 }
 
@@ -253,11 +252,11 @@ const WEEK_START_STORAGE_KEY = 'plotline-week-start-v3';
 const TIMER_SECONDS_STORAGE_KEY = 'plotline-timer-seconds-v3';
 const TIMER_RUNNING_STORAGE_KEY = 'plotline-timer-running-v3';
 const TIMER_TASK_STORAGE_KEY = 'plotline-timer-task-v3';
-const TASKS_STORAGE_KEY = 'plotline-tasks-v4';
-const PROJECTS_STORAGE_KEY = 'plotline-projects-v4';
-const TEAM_STORAGE_KEY = 'plotline-team-v4';
-const EVENTS_STORAGE_KEY = 'plotline-events-v4';
-const FOCUS_SESSIONS_STORAGE_KEY = 'plotline-focus-sessions-v4';
+const TASKS_STORAGE_KEY = 'plotline-tasks-v6';
+const PROJECTS_STORAGE_KEY = 'plotline-projects-v6';
+const TEAM_STORAGE_KEY = 'plotline-team-v6';
+const EVENTS_STORAGE_KEY = 'plotline-events-v6';
+const FOCUS_SESSIONS_STORAGE_KEY = 'plotline-focus-sessions-v6';
 const NOTIFICATIONS_STORAGE_KEY = 'plotline-notifications-v3';
 const CURRENT_USER_STORAGE_KEY = 'plotline-current-user-v3';
 const SIGNED_OUT_STORAGE_KEY = 'plotline-signed-out-v3';
@@ -279,6 +278,63 @@ export function getIsoDateOffset(daysOffset: number): string {
   const m = String(d.getMonth() + 1).padStart(2, '0');
   const day = String(d.getDate()).padStart(2, '0');
   return `${y}-${m}-${day}`;
+}
+
+export function computeDaysAgoFromIso(dateIso: string): number {
+  if (!dateIso) return 9999;
+  const todayIso = getTodayIsoDate();
+  const todayParts = todayIso.split('-').map(Number);
+  const parts = dateIso.split('-').map(Number);
+  if (parts.length !== 3 || todayParts.length !== 3) return 9999;
+  const todayUtc = Date.UTC(todayParts[0], todayParts[1] - 1, todayParts[2]);
+  const dateUtc = Date.UTC(parts[0], parts[1] - 1, parts[2]);
+  return Math.round((todayUtc - dateUtc) / (1000 * 60 * 60 * 24));
+}
+
+export function computeDaysBetweenIso(startIso: string, endIso: string): number {
+  if (!startIso || !endIso) return 0;
+  const sParts = startIso.split('-').map(Number);
+  const eParts = endIso.split('-').map(Number);
+  if (sParts.length !== 3 || eParts.length !== 3) return 0;
+  const sUtc = Date.UTC(sParts[0], sParts[1] - 1, sParts[2]);
+  const eUtc = Date.UTC(eParts[0], eParts[1] - 1, eParts[2]);
+  return Math.max(0, Math.round((eUtc - sUtc) / (1000 * 60 * 60 * 24)));
+}
+
+export function getTaskCycleDays(task: TaskItem): number {
+  if (task.startDate && task.completedDate) {
+    return computeDaysBetweenIso(task.startDate, task.completedDate);
+  }
+  return task.cycleDays ?? 0;
+}
+
+export function isTaskCompletedOnTime(task: TaskItem): boolean {
+  if (!task.completedDate || !task.dueDate) return true;
+  return task.completedDate <= task.dueDate;
+}
+
+export function getTaskFactorBand(status: TaskItem['status']): [number, number] {
+  switch (status) {
+    case 'Done':
+      return [0.55, 0.7];
+    case 'In Review':
+      return [0.5, 0.65];
+    case 'In Progress':
+      return [0.25, 0.4];
+    case 'Backlog':
+    default:
+      return [0, 0];
+  }
+}
+
+export function isTaskCompletedInRange(
+  task: TaskItem,
+  minDaysAgoInclusive: number,
+  maxDaysAgoExclusive: number
+): boolean {
+  if (task.status !== 'Done' || !task.completedDate) return false;
+  const daysAgo = computeDaysAgoFromIso(task.completedDate);
+  return daysAgo >= minDaysAgoInclusive && daysAgo < maxDaysAgoExclusive;
 }
 
 export function formatDuration(totalSeconds: number): string {
@@ -675,8 +731,9 @@ export function createSeedTasks(): TaskItem[] {
       assigneeId: 'usr-mireia',
       status: 'Done',
       priority: 'Medium',
-      dueDate: getIsoDateOffset(-28),
-      completedDate: getIsoDateOffset(-28),
+      startDate: getIsoDateOffset(-29),
+      completedDate: getIsoDateOffset(-23),
+      dueDate: getIsoDateOffset(-22),
       estimateHours: 10,
       progress: 100,
       subtasksDone: 3,
@@ -691,8 +748,9 @@ export function createSeedTasks(): TaskItem[] {
       assigneeId: 'usr-mireia',
       status: 'Done',
       priority: 'Medium',
-      dueDate: getIsoDateOffset(-24),
-      completedDate: getIsoDateOffset(-24),
+      startDate: getIsoDateOffset(-24),
+      completedDate: getIsoDateOffset(-19),
+      dueDate: getIsoDateOffset(-18),
       estimateHours: 6,
       progress: 100,
       subtasksDone: 2,
@@ -707,8 +765,10 @@ export function createSeedTasks(): TaskItem[] {
       assigneeId: 'usr-nadia',
       status: 'Done',
       priority: 'High',
-      dueDate: getIsoDateOffset(-17),
+      startDate: getIsoDateOffset(-25),
       completedDate: getIsoDateOffset(-17),
+      dueDate: getIsoDateOffset(-19), // Finished 2 days late!
+      onTime: false,
       estimateHours: 16,
       progress: 100,
       subtasksDone: 4,
@@ -723,8 +783,9 @@ export function createSeedTasks(): TaskItem[] {
       assigneeId: 'usr-nadia',
       status: 'Done',
       priority: 'High',
-      dueDate: getIsoDateOffset(-10),
-      completedDate: getIsoDateOffset(-10),
+      startDate: getIsoDateOffset(-15),
+      completedDate: getIsoDateOffset(-8),
+      dueDate: getIsoDateOffset(-8),
       estimateHours: 14,
       progress: 100,
       subtasksDone: 4,
@@ -739,6 +800,7 @@ export function createSeedTasks(): TaskItem[] {
       assigneeId: 'usr-tarek',
       status: 'In Progress',
       priority: 'High',
+      startDate: getIsoDateOffset(-6),
       dueDate: getIsoDateOffset(6),
       estimateHours: 18,
       progress: 55,
@@ -754,6 +816,7 @@ export function createSeedTasks(): TaskItem[] {
       assigneeId: 'usr-nadia',
       status: 'In Review',
       priority: 'Medium',
+      startDate: getIsoDateOffset(-5),
       dueDate: getIsoDateOffset(2),
       estimateHours: 8,
       progress: 80,
@@ -769,6 +832,7 @@ export function createSeedTasks(): TaskItem[] {
       assigneeId: 'usr-tarek',
       status: 'Backlog',
       priority: 'Low',
+      startDate: getIsoDateOffset(2),
       dueDate: getIsoDateOffset(12),
       estimateHours: 6,
       progress: 15,
@@ -786,8 +850,9 @@ export function createSeedTasks(): TaskItem[] {
       assigneeId: 'usr-nadia',
       status: 'Done',
       priority: 'High',
-      dueDate: getIsoDateOffset(-11),
+      startDate: getIsoDateOffset(-18),
       completedDate: getIsoDateOffset(-11),
+      dueDate: getIsoDateOffset(-10),
       estimateHours: 12,
       progress: 100,
       subtasksDone: 3,
@@ -802,8 +867,9 @@ export function createSeedTasks(): TaskItem[] {
       assigneeId: 'usr-juno',
       status: 'Done',
       priority: 'Medium',
-      dueDate: getIsoDateOffset(-8),
+      startDate: getIsoDateOffset(-13),
       completedDate: getIsoDateOffset(-8),
+      dueDate: getIsoDateOffset(-8),
       estimateHours: 8,
       progress: 100,
       subtasksDone: 2,
@@ -818,6 +884,7 @@ export function createSeedTasks(): TaskItem[] {
       assigneeId: 'usr-nadia',
       status: 'In Progress',
       priority: 'High',
+      startDate: getIsoDateOffset(-8),
       dueDate: getIsoDateOffset(-1), // overdue!
       estimateHours: 14,
       progress: 50,
@@ -833,6 +900,7 @@ export function createSeedTasks(): TaskItem[] {
       assigneeId: 'usr-jade',
       status: 'In Progress',
       priority: 'High',
+      startDate: getIsoDateOffset(-9),
       dueDate: getIsoDateOffset(14),
       estimateHours: 20,
       progress: 45,
@@ -848,6 +916,7 @@ export function createSeedTasks(): TaskItem[] {
       assigneeId: 'usr-juno',
       status: 'Backlog',
       priority: 'Low',
+      startDate: getIsoDateOffset(5),
       dueDate: getIsoDateOffset(28),
       estimateHours: 5,
       progress: 10,
@@ -865,8 +934,9 @@ export function createSeedTasks(): TaskItem[] {
       assigneeId: 'usr-kaelen',
       status: 'Done',
       priority: 'Medium',
-      dueDate: getIsoDateOffset(-21),
+      startDate: getIsoDateOffset(-26),
       completedDate: getIsoDateOffset(-21),
+      dueDate: getIsoDateOffset(-20),
       estimateHours: 6,
       progress: 100,
       subtasksDone: 2,
@@ -881,8 +951,9 @@ export function createSeedTasks(): TaskItem[] {
       assigneeId: 'usr-jade',
       status: 'Done',
       priority: 'High',
-      dueDate: getIsoDateOffset(-13),
+      startDate: getIsoDateOffset(-19),
       completedDate: getIsoDateOffset(-13),
+      dueDate: getIsoDateOffset(-12),
       estimateHours: 12,
       progress: 100,
       subtasksDone: 3,
@@ -897,6 +968,7 @@ export function createSeedTasks(): TaskItem[] {
       assigneeId: 'usr-tarek',
       status: 'In Progress',
       priority: 'High',
+      startDate: getIsoDateOffset(-10),
       dueDate: getIsoDateOffset(7),
       estimateHours: 22,
       progress: 60,
@@ -912,6 +984,7 @@ export function createSeedTasks(): TaskItem[] {
       assigneeId: 'usr-soren',
       status: 'In Review',
       priority: 'Medium',
+      startDate: getIsoDateOffset(-6),
       dueDate: getIsoDateOffset(1),
       estimateHours: 6,
       progress: 85,
@@ -927,6 +1000,7 @@ export function createSeedTasks(): TaskItem[] {
       assigneeId: 'usr-kaelen',
       status: 'Backlog',
       priority: 'Low',
+      startDate: getIsoDateOffset(3),
       dueDate: getIsoDateOffset(9),
       estimateHours: 6,
       progress: 15,
@@ -944,8 +1018,9 @@ export function createSeedTasks(): TaskItem[] {
       assigneeId: 'usr-nadia',
       status: 'Done',
       priority: 'High',
+      startDate: getIsoDateOffset(-29),
+      completedDate: getIsoDateOffset(-21),
       dueDate: getIsoDateOffset(-20),
-      completedDate: getIsoDateOffset(-20),
       estimateHours: 14,
       progress: 100,
       subtasksDone: 4,
@@ -960,8 +1035,9 @@ export function createSeedTasks(): TaskItem[] {
       assigneeId: 'usr-jade',
       status: 'Done',
       priority: 'High',
-      dueDate: getIsoDateOffset(-15),
+      startDate: getIsoDateOffset(-22),
       completedDate: getIsoDateOffset(-15),
+      dueDate: getIsoDateOffset(-14),
       estimateHours: 12,
       progress: 100,
       subtasksDone: 3,
@@ -976,8 +1052,9 @@ export function createSeedTasks(): TaskItem[] {
       assigneeId: 'usr-tarek',
       status: 'Done',
       priority: 'High',
-      dueDate: getIsoDateOffset(-6),
+      startDate: getIsoDateOffset(-13),
       completedDate: getIsoDateOffset(-6),
+      dueDate: getIsoDateOffset(-5),
       estimateHours: 16,
       progress: 100,
       subtasksDone: 4,
@@ -992,6 +1069,7 @@ export function createSeedTasks(): TaskItem[] {
       assigneeId: 'usr-soren',
       status: 'In Review',
       priority: 'Medium',
+      startDate: getIsoDateOffset(-5),
       dueDate: getIsoDateOffset(3),
       estimateHours: 4,
       progress: 80,
@@ -1009,8 +1087,9 @@ export function createSeedTasks(): TaskItem[] {
       assigneeId: 'usr-juno',
       status: 'Done',
       priority: 'Medium',
-      dueDate: getIsoDateOffset(-30),
+      startDate: getIsoDateOffset(-37),
       completedDate: getIsoDateOffset(-30),
+      dueDate: getIsoDateOffset(-30),
       estimateHours: 16,
       progress: 100,
       subtasksDone: 4,
@@ -1025,8 +1104,9 @@ export function createSeedTasks(): TaskItem[] {
       assigneeId: 'usr-tarek',
       status: 'Done',
       priority: 'High',
-      dueDate: getIsoDateOffset(-22),
-      completedDate: getIsoDateOffset(-22),
+      startDate: getIsoDateOffset(-28),
+      completedDate: getIsoDateOffset(-21),
+      dueDate: getIsoDateOffset(-21),
       estimateHours: 14,
       progress: 100,
       subtasksDone: 3,
@@ -1041,8 +1121,9 @@ export function createSeedTasks(): TaskItem[] {
       assigneeId: 'usr-jade',
       status: 'Done',
       priority: 'High',
-      dueDate: getIsoDateOffset(-11),
+      startDate: getIsoDateOffset(-15),
       completedDate: getIsoDateOffset(-11),
+      dueDate: getIsoDateOffset(-11),
       estimateHours: 4,
       progress: 100,
       subtasksDone: 2,
@@ -1057,8 +1138,9 @@ export function createSeedTasks(): TaskItem[] {
       assigneeId: 'usr-kaelen',
       status: 'Done',
       priority: 'Medium',
-      dueDate: getIsoDateOffset(-9),
+      startDate: getIsoDateOffset(-13),
       completedDate: getIsoDateOffset(-9),
+      dueDate: getIsoDateOffset(-9),
       estimateHours: 3,
       progress: 100,
       subtasksDone: 1,
@@ -1075,6 +1157,7 @@ export function createSeedTasks(): TaskItem[] {
       assigneeId: 'usr-juno',
       status: 'Backlog',
       priority: 'Medium',
+      startDate: getIsoDateOffset(8),
       dueDate: getIsoDateOffset(16),
       estimateHours: 10,
       progress: 10,
@@ -1090,6 +1173,7 @@ export function createSeedTasks(): TaskItem[] {
       assigneeId: 'usr-mireia',
       status: 'Backlog',
       priority: 'High',
+      startDate: getIsoDateOffset(10),
       dueDate: getIsoDateOffset(24),
       estimateHours: 12,
       progress: 15,
@@ -1099,65 +1183,228 @@ export function createSeedTasks(): TaskItem[] {
   ];
 }
 
-export function createSeedFocusSessions(tasks: TaskItem[], projects: Project[]): FocusSession[] {
-  const sessions: FocusSession[] = [];
+// Per-task deterministic factor within each status band:
+// Done: 0.55–0.70, In Review: 0.50–0.65, In Progress: 0.25–0.40, Backlog: 0
+const SEED_TASK_FACTORS: Record<string, number> = {
+  // Done (0.55–0.70)
+  'tsk-h-1': 0.62,  // 10h -> 6.2h
+  'tsk-h-2': 0.60,  // 6h -> 3.6h
+  'tsk-h-3': 0.625, // 16h -> 10.0h
+  'tsk-h-4': 0.60,  // 14h -> 8.4h
+  'tsk-f-1': 0.60,  // 12h -> 7.2h
+  'tsk-f-2': 0.625, // 8h -> 5.0h
+  'tsk-o-1': 0.60,  // 6h -> 3.6h
+  'tsk-o-2': 0.625, // 12h -> 7.5h
+  'tsk-a-1': 0.60,  // 14h -> 8.4h
+  'tsk-a-2': 0.60,  // 12h -> 7.2h
+  'tsk-a-3': 0.60,  // 16h -> 9.6h
+  'tsk-l-1': 0.625, // 16h -> 10.0h (previous 30D)
+  'tsk-l-2': 0.60,  // 14h -> 8.4h
+  'tsk-l-3': 0.625, // 4h -> 2.5h
+  'tsk-l-4': 0.60,  // 3h -> 1.8h
+  // In Review (0.50–0.65)
+  'tsk-h-6': 0.575, // 8h -> 4.6h
+  'tsk-o-4': 0.55,  // 6h -> 3.3h
+  'tsk-a-4': 0.575, // 4h -> 2.3h
+  // In Progress (0.25–0.40)
+  'tsk-h-5': 1 / 3, // 18h -> 6.0h (0.333)
+  'tsk-f-3': 0.3214,// 14h -> 4.5h (0.321)
+  'tsk-f-4': 0.325, // 20h -> 6.5h (0.325)
+  'tsk-o-3': 0.3182,// 22h -> 7.0h (0.318)
+};
+
+export function createSeedFocusSessions(tasks: TaskItem[], _projects: Project[]): FocusSession[] {
+  const now = new Date();
+  const nowMs = now.getTime();
   const todayIso = getTodayIsoDate();
 
+  // Reset loggedSeconds and populate cycleDays / onTime on all tasks
   tasks.forEach((task) => {
-    let multiplier = 0;
-    if (task.status === 'Done') {
-      multiplier = 0.95;
-    } else if (task.status === 'In Review') {
-      multiplier = 0.85;
-    } else if (task.status === 'In Progress') {
-      multiplier = 0.50;
+    task.loggedSeconds = 0;
+    if (!task.startDate) {
+      task.startDate = task.completedDate
+        ? getIsoDateOffset(-Math.max(5, computeDaysAgoFromIso(task.completedDate) + 6))
+        : getIsoDateOffset(-6);
     }
+    if (task.status === 'Done' && task.completedDate) {
+      task.cycleDays = computeDaysBetweenIso(task.startDate, task.completedDate);
+      task.onTime = task.completedDate <= task.dueDate;
+    }
+  });
 
-    if (multiplier === 0) {
+  // Build lookup of all past/current weekdays up to 60 days ago
+  interface WeekdaySlot {
+    dateStr: string;
+    daysAgo: number;
+    weekdayIdx: number;
+    baseTimeMs: number;
+  }
+  const weekdayByDate = new Map<string, WeekdaySlot>();
+  for (let daysAgo = 60; daysAgo >= 0; daysAgo--) {
+    const dateStr = getIsoDateOffset(-daysAgo);
+    const parts = dateStr.split('-').map(Number);
+    const dateObj = new Date(parts[0], parts[1] - 1, parts[2], 12, 0, 0);
+    const weekdayIdx = dateObj.getDay();
+    if (weekdayIdx === 0 || weekdayIdx === 6) continue; // 0 on weekends
+
+    const defaultSessionMs = new Date(parts[0], parts[1] - 1, parts[2], 14, 0, 0).getTime();
+    const baseTimeMs =
+      daysAgo === 0 ? Math.min(nowMs - 15 * 60 * 1000, defaultSessionMs) : defaultSessionMs;
+    if (baseTimeMs > nowMs) continue; // nothing after now
+
+    weekdayByDate.set(dateStr, {
+      dateStr,
+      daysAgo,
+      weekdayIdx,
+      baseTimeMs,
+    });
+  }
+
+  // Track tenths of an hour (1 tenth = 0.1h = 360s) per person per day (max 60 = 6.0h) and team per day (max 120 = 12.0h)
+  const personDayTenths = new Map<string, number>();
+  const teamDayTenths = new Map<string, number>();
+
+  const getPersonDayKey = (memberId: string, dateStr: string) => `${memberId}|${dateStr}`;
+  const getPersonTenths = (memberId: string, dateStr: string) =>
+    personDayTenths.get(getPersonDayKey(memberId, dateStr)) ?? 0;
+  const getTeamTenths = (dateStr: string) => teamDayTenths.get(dateStr) ?? 0;
+
+  interface DraftChunk {
+    id: string;
+    task: TaskItem;
+    slot: WeekdaySlot;
+    tenths: number;
+    slotOrder: number;
+  }
+  const draftChunks: DraftChunk[] = [];
+
+  tasks.forEach((task) => {
+    if (task.status === 'Backlog') {
       task.loggedSeconds = 0;
       return;
     }
 
-    const totalSeconds = Math.round(task.estimateHours * multiplier * 3600);
-    task.loggedSeconds = totalSeconds;
+    const [minF, maxF] = getTaskFactorBand(task.status);
+    const rawFactor = SEED_TASK_FACTORS[task.id] ?? (minF + maxF) / 2;
+    const clampedFactor = Math.min(maxF, Math.max(minF, rawFactor));
+    const targetTenths = Math.round(task.estimateHours * clampedFactor * 10);
+    if (targetTenths <= 0) return;
 
-    // Distribute across past weekdays
-    let endDateOffset = 0;
-    if (task.completedDate) {
-      const today = new Date(`${todayIso}T00:00:00`);
-      const comp = new Date(`${task.completedDate}T00:00:00`);
-      endDateOffset = Math.round((comp.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
+    const startIso = task.startDate || getIsoDateOffset(-10);
+    const endIso =
+      task.status === 'Done' && task.completedDate
+        ? task.completedDate <= todayIso
+          ? task.completedDate
+          : todayIso
+        : todayIso;
+
+    // Collect eligible weekdays in [startIso, endIso]
+    const eligibleSlots = Array.from(weekdayByDate.values())
+      .filter((s) => s.dateStr >= startIso && s.dateStr <= endIso)
+      .sort((a, b) => a.dateStr.localeCompare(b.dateStr));
+
+    if (eligibleSlots.length === 0) return;
+
+    // Each chunk must be in [0.5h, 3.0h] -> [5, 30] tenths
+    const minChunks = Math.ceil(targetTenths / 30);
+    const maxChunks = Math.max(1, Math.floor(targetTenths / 5));
+    const desiredChunks = Math.round(targetTenths / 21);
+    const k = Math.min(
+      eligibleSlots.length,
+      Math.max(minChunks, Math.min(maxChunks, desiredChunks))
+    );
+
+    // Split targetTenths into k chunks in [5, 30] tenths
+    const baseTenths = Math.floor(targetTenths / k);
+    const remTenths = targetTenths % k;
+    const chunkTenthsList: number[] = Array.from({ length: k }, (_, idx) =>
+      idx < remTenths ? baseTenths + 1 : baseTenths
+    );
+
+    // Add slight natural variation (+0.1h / -0.1h) if chunks are uniform and stay inside [5, 30]
+    if (
+      k >= 2 &&
+      chunkTenthsList[0] + 1 <= 30 &&
+      chunkTenthsList[k - 1] - 1 >= 5 &&
+      chunkTenthsList[0] === chunkTenthsList[k - 1]
+    ) {
+      chunkTenthsList[0] += 1;
+      chunkTenthsList[k - 1] -= 1;
     }
 
-    const totalHours = totalSeconds / 3600;
-    const chunkCount = Math.max(1, Math.min(4, Math.ceil(totalHours / 2.5)));
-    const secondsPerChunk = Math.round(totalSeconds / chunkCount);
+    // Assign each chunk to a distinct weekday in eligibleSlots respecting max 6h/day (60 tenths) per person and balancing daily team totals
+    const usedDates = new Set<string>();
+    chunkTenthsList.forEach((cTenths, chunkIdx) => {
+      const candidates = eligibleSlots
+        .filter((s) => !usedDates.has(s.dateStr))
+        .sort((a, b) => {
+          const aPersonOk = getPersonTenths(task.assigneeId, a.dateStr) + cTenths <= 60 ? 0 : 1;
+          const bPersonOk = getPersonTenths(task.assigneeId, b.dateStr) + cTenths <= 60 ? 0 : 1;
+          if (aPersonOk !== bPersonOk) return aPersonOk - bPersonOk;
 
-    for (let i = 0; i < chunkCount; i++) {
-      const dayOffset = endDateOffset - (i * 2);
-      if (dayOffset > 0) continue; // No future sessions
+          const aTeam = getTeamTenths(a.dateStr);
+          const bTeam = getTeamTenths(b.dateStr);
+          if (aTeam !== bTeam) return aTeam - bTeam;
 
-      const dateStr = getIsoDateOffset(dayOffset);
-      const dObj = new Date(`${dateStr}T00:00:00`);
-      const weekdayIdx = dObj.getDay();
+          return a.dateStr.localeCompare(b.dateStr);
+        });
 
-      sessions.push({
-        id: `fcs-seed-${task.id}-${i}`,
-        taskId: task.id,
-        projectId: task.projectId,
-        memberId: task.assigneeId,
-        weekdayIndex: weekdayIdx,
-        date: dateStr,
-        daysAgo: Math.abs(dayOffset),
-        seconds: secondsPerChunk,
-        hours: secondsPerChunk / 3600,
-        tasksCompletedCount: task.status === 'Done' ? 1 : 0,
-        cycleDays: 2.1,
-        onTimeCount: task.status === 'Done' ? 1 : 0,
-        createdAt: new Date(`${dateStr}T10:00:00`).toISOString(),
+      const chosen = candidates[0] || eligibleSlots[chunkIdx % eligibleSlots.length];
+      usedDates.add(chosen.dateStr);
+
+      personDayTenths.set(
+        getPersonDayKey(task.assigneeId, chosen.dateStr),
+        getPersonTenths(task.assigneeId, chosen.dateStr) + cTenths
+      );
+      teamDayTenths.set(chosen.dateStr, getTeamTenths(chosen.dateStr) + cTenths);
+
+      draftChunks.push({
+        id: `fcs-seed-${chosen.dateStr}-${task.id}-${chunkIdx}`,
+        task,
+        slot: chosen,
+        tenths: cTenths,
+        slotOrder: chunkIdx,
+      });
+    });
+  });
+
+  // Safety scaling pass: if any weekday exceeds 12h (120 tenths), scale the chunks on that weekday
+  for (const [dateStr, totalTenths] of teamDayTenths.entries()) {
+    if (totalTenths > 120) {
+      const scale = 120 / totalTenths;
+      const dayChunks = draftChunks.filter((c) => c.slot.dateStr === dateStr);
+      dayChunks.forEach((c) => {
+        c.tenths = Math.max(5, Math.floor(c.tenths * scale));
       });
     }
-  });
+  }
+
+  // Convert draftChunks into FocusSession records and accumulate task.loggedSeconds
+  const sessions: FocusSession[] = draftChunks
+    .sort((a, b) => b.slot.daysAgo - a.slot.daysAgo || a.id.localeCompare(b.id))
+    .map((chunk, idx) => {
+      const secs = chunk.tenths * 360;
+      const hrs = Number((chunk.tenths / 10).toFixed(1));
+      chunk.task.loggedSeconds = (chunk.task.loggedSeconds || 0) + secs;
+
+      const createdAtMs = Math.min(
+        nowMs - (idx + 1) * 1000,
+        chunk.slot.baseTimeMs + chunk.slotOrder * 1200000
+      );
+
+      return {
+        id: chunk.id,
+        taskId: chunk.task.id,
+        projectId: chunk.task.projectId,
+        memberId: chunk.task.assigneeId,
+        weekdayIndex: chunk.slot.weekdayIdx,
+        date: chunk.slot.dateStr,
+        daysAgo: chunk.slot.daysAgo,
+        seconds: secs,
+        hours: hrs,
+        createdAt: new Date(createdAtMs).toISOString(),
+      };
+    });
 
   return dedupeById(sessions);
 }
@@ -1288,6 +1535,7 @@ export function validateWorkspace(
   focusSessions: FocusSession[]
 ): WorkspaceValidationReport {
   const today = getTodayIsoDate();
+  const nowMs = Date.now();
   const checks: ValidationCheckResult[] = [];
 
   // Check 1: All IDs resolve and are unique
@@ -1320,7 +1568,7 @@ export function validateWorkspace(
   // Check 2: Statuses and progress match tasks (skipping statusOverride)
   let check2Passed = true;
   for (const p of projects) {
-    if (p.statusOverride) continue; // The data check skips overridden projects
+    if (p.statusOverride) continue;
     const calcProgress = getProjectProgress(p, tasks);
     if (p.progress !== calcProgress) {
       check2Passed = false;
@@ -1335,32 +1583,43 @@ export function validateWorkspace(
       : 'Mismatch between project status/progress and tasks.',
   });
 
-  // Check 3: No sessions on future days or for unstarted tasks
-  const futureSessions = focusSessions.some((s) => s.date > today);
+  // Check 3: No weekend or future sessions, and no sessions for unstarted tasks
+  const futureSessions = focusSessions.some(
+    (s) => s.date > today || (s.createdAt ? new Date(s.createdAt).getTime() > nowMs : false)
+  );
+  const weekendSessions = focusSessions.some((s) => {
+    const parts = s.date.split('-').map(Number);
+    const dayOfWeek =
+      parts.length === 3 ? new Date(parts[0], parts[1] - 1, parts[2], 12, 0, 0).getDay() : s.weekdayIndex;
+    return dayOfWeek === 0 || dayOfWeek === 6 || s.weekdayIndex === 0 || s.weekdayIndex === 6;
+  });
   const unstartedSessions = focusSessions.some((s) => {
     const task = tasks.find((t) => t.id === s.taskId);
     return !task || task.status === 'Backlog';
   });
-  const check3Passed = !futureSessions && !unstartedSessions;
+  const check3Passed = !futureSessions && !weekendSessions && !unstartedSessions;
   checks.push({
     id: 'sessions-valid',
-    label: 'No sessions on future days or for unstarted tasks',
+    label: 'No weekend or future sessions, and no unstarted task sessions',
     passed: check3Passed,
     details: check3Passed
-      ? 'All focus sessions logged on past or current dates for active tasks.'
-      : 'Future or unstarted task focus sessions found.',
+      ? 'All focus sessions logged on past/current weekdays only for active tasks.'
+      : 'Weekend, future, or unstarted task focus sessions found.',
   });
 
-  // Check 4: Done tasks have completion dates in the past
+  // Check 4: Done tasks have completion dates in the past and every task has a startDate
   const doneTasks = tasks.filter((t) => t.status === 'Done');
-  const check4Passed = doneTasks.every((t) => Boolean(t.completedDate) && t.completedDate! <= today);
+  const everyTaskHasStartDate = tasks.every((t) => Boolean(t.startDate));
+  const check4Passed =
+    everyTaskHasStartDate &&
+    doneTasks.every((t) => Boolean(t.completedDate) && t.completedDate! <= today);
   checks.push({
     id: 'done-completion-dates',
-    label: 'Done tasks have completion dates in the past',
+    label: 'Every task has a start date and Done tasks have completion dates in the past',
     passed: check4Passed,
     details: check4Passed
-      ? `All ${doneTasks.length} completed tasks have valid completion dates in the past.`
-      : 'Completed task missing completion date or date is in future.',
+      ? `All ${tasks.length} tasks have start dates and all ${doneTasks.length} completed tasks have valid completion dates in the past.`
+      : 'Missing startDate or invalid completion date found.',
   });
 
   // Check 5: Assignees exist
@@ -1445,6 +1704,142 @@ export function validateWorkspace(
       : 'Mismatch between filter chip counts and status row counts.',
   });
 
+  // Check 10: Analytics KPI task count equals count of store tasks completed in range, and contributor counts sum to it
+  const rangeDays30 = 30;
+  const tasksIn30D = tasks.filter((t) => isTaskCompletedInRange(t, 0, rangeDays30));
+  const kpiTaskCount30D = tasksIn30D.length;
+  const contributorCounts30D = team.map(
+    (m) => tasksIn30D.filter((t) => t.assigneeId === m.id).length
+  );
+  const contributorSum30D = contributorCounts30D.reduce((a, b) => a + b, 0);
+  const check10Passed = kpiTaskCount30D === tasksIn30D.length && contributorSum30D === kpiTaskCount30D;
+  checks.push({
+    id: 'analytics-kpi-contributor-tasks',
+    label: 'KPI task count equals store tasks completed in range and contributor counts sum to it',
+    passed: check10Passed,
+    details: check10Passed
+      ? `30D KPI tasks (${kpiTaskCount30D}) equals store tasks completed in range (${tasksIn30D.length}); contributor counts sum to ${contributorSum30D}.`
+      : `Mismatch: KPI (${kpiTaskCount30D}) vs contributor sum (${contributorSum30D}).`,
+  });
+
+  // Check 11: Donut slices sum to total hours (and 100%)
+  const sessionsIn30D = focusSessions.filter((s) => {
+    const dAgo = typeof s.daysAgo === 'number' ? s.daysAgo : computeDaysAgoFromIso(s.date);
+    return dAgo >= 0 && dAgo < rangeDays30;
+  });
+  const totalSeconds30D = sessionsIn30D.reduce(
+    (acc, s) => acc + (typeof s.seconds === 'number' ? Math.round(s.seconds) : Math.round((s.hours || 0) * 3600)),
+    0
+  );
+  const totalHours30D = Number((totalSeconds30D / 3600).toFixed(1));
+  const sliceSecondsList = projects
+    .map((p) =>
+      sessionsIn30D
+        .filter((s) => s.projectId === p.id)
+        .reduce(
+          (acc, s) => acc + (typeof s.seconds === 'number' ? Math.round(s.seconds) : Math.round((s.hours || 0) * 3600)),
+          0
+        )
+    )
+    .filter((secs) => secs > 0);
+  const sliceSecondsSum = sliceSecondsList.reduce((a, b) => a + b, 0);
+  const sliceHoursSum = Number(
+    sliceSecondsList.reduce((acc, secs) => acc + Number((secs / 3600).toFixed(1)), 0).toFixed(1)
+  );
+  const check11Passed =
+    sliceSecondsSum === totalSeconds30D && Math.abs(sliceHoursSum - totalHours30D) < 0.05;
+  checks.push({
+    id: 'donut-slices-sum-hours',
+    label: 'Donut slices sum to total focus hours',
+    passed: check11Passed,
+    details: check11Passed
+      ? `Donut slices sum to ${sliceHoursSum}h (${sliceSecondsSum}s), matching total ${totalHours30D}h.`
+      : `Donut slices (${sliceHoursSum}h) do not match total hours (${totalHours30D}h).`,
+  });
+
+  // Check 12: Each task's logged hours falls inside its factor band and no task exceeds 1.2x estimate
+  const taskBandViolations: string[] = [];
+  let maxFactorObserved = 0;
+  tasks.forEach((t) => {
+    const taskSessionSeconds = focusSessions
+      .filter((s) => s.taskId === t.id)
+      .reduce(
+        (acc, s) =>
+          acc +
+          (typeof s.seconds === 'number'
+            ? Math.round(s.seconds)
+            : Math.round((s.hours || 0) * 3600)),
+        0
+      );
+    const loggedSeconds =
+      typeof t.loggedSeconds === 'number' ? t.loggedSeconds : taskSessionSeconds;
+    const loggedHours = loggedSeconds / 3600;
+    const [minF, maxF] = getTaskFactorBand(t.status);
+    const factor = t.estimateHours > 0 ? loggedHours / t.estimateHours : 0;
+    if (factor > maxFactorObserved) maxFactorObserved = factor;
+
+    const eps = 1e-4;
+    const inBand =
+      t.status === 'Backlog'
+        ? loggedSeconds === 0
+        : factor + eps >= minF && factor - eps <= maxF;
+    const underCap = factor - eps <= 1.2;
+
+    if (!inBand || !underCap || Math.abs(loggedSeconds - taskSessionSeconds) > 1) {
+      taskBandViolations.push(
+        `${t.id} (${t.status}): ${loggedHours.toFixed(2)}h / ${t.estimateHours}h = ${factor.toFixed(3)} (expected ${minF}..${maxF})`
+      );
+    }
+  });
+  const check12Passed = taskBandViolations.length === 0;
+  checks.push({
+    id: 'task-factor-bands',
+    label: 'Each task logged hours falls inside its factor band and <= 1.2x estimate',
+    passed: check12Passed,
+    details: check12Passed
+      ? `All ${tasks.length} tasks fall strictly within their status factor bands (max observed ${(maxFactorObserved * 100).toFixed(1)}% of estimate, <= 120%).`
+      : `Violations: ${taskBandViolations.join('; ')}`,
+  });
+
+  // Check 13: Weekly Output (Dashboard) for the current week equals the sum of Analytics 7D
+  const sessions7D = focusSessions.filter((s) => {
+    const dAgo = typeof s.daysAgo === 'number' ? s.daysAgo : computeDaysAgoFromIso(s.date);
+    return dAgo >= 0 && dAgo < 7;
+  });
+  const analytics7DSeconds = sessions7D.reduce(
+    (acc, s) =>
+      acc +
+      (typeof s.seconds === 'number'
+        ? Math.round(s.seconds)
+        : Math.round((s.hours || 0) * 3600)),
+    0
+  );
+  const dashboardWeeklySeconds = [0, 1, 2, 3, 4, 5, 6].reduce((sum, dayIdx) => {
+    const colSecs = focusSessions
+      .filter((s) => {
+        const dAgo = typeof s.daysAgo === 'number' ? s.daysAgo : computeDaysAgoFromIso(s.date);
+        return dAgo >= 0 && dAgo < 7 && s.weekdayIndex === dayIdx;
+      })
+      .reduce(
+        (acc, s) =>
+          acc +
+          (typeof s.seconds === 'number'
+            ? Math.round(s.seconds)
+            : Math.round((s.hours || 0) * 3600)),
+        0
+      );
+    return sum + colSecs;
+  }, 0);
+  const check13Passed = dashboardWeeklySeconds === analytics7DSeconds;
+  checks.push({
+    id: 'weekly-output-equals-analytics-7d',
+    label: 'Weekly Output (Dashboard) for the current week equals the sum of Analytics 7D',
+    passed: check13Passed,
+    details: check13Passed
+      ? `Dashboard Weekly Output (${(dashboardWeeklySeconds / 3600).toFixed(1)}h / ${dashboardWeeklySeconds}s) equals Analytics 7D (${(analytics7DSeconds / 3600).toFixed(1)}h / ${analytics7DSeconds}s).`
+      : `Mismatch: Dashboard (${dashboardWeeklySeconds}s) vs Analytics 7D (${analytics7DSeconds}s).`,
+  });
+
   const overallPassed = checks.every((c) => c.passed);
   const report: WorkspaceValidationReport = {
     timestamp: new Date().toISOString(),
@@ -1488,7 +1883,10 @@ function loadPersistedTasks(): TaskItem[] {
     const raw = window.localStorage.getItem(TASKS_STORAGE_KEY);
     if (raw !== null) {
       const parsed = JSON.parse(raw);
-      if (Array.isArray(parsed) && parsed.some((t) => t.id === 'tsk-h-1')) {
+      if (
+        Array.isArray(parsed) &&
+        parsed.some((t) => t.id === 'tsk-h-1' && Boolean(t.startDate))
+      ) {
         return dedupeById<TaskItem>(parsed);
       }
     }
@@ -1564,7 +1962,30 @@ function loadPersistedFocusSessions(tasks: TaskItem[], projects: Project[]): Foc
     if (raw !== null) {
       const parsed = JSON.parse(raw);
       if (Array.isArray(parsed) && parsed.length > 0) {
-        return dedupeById<FocusSession>(parsed);
+        const hasWeekendOrInvalid = parsed.some((s: FocusSession) => {
+          const parts = (s.date || '').split('-').map(Number);
+          const day =
+            parts.length === 3
+              ? new Date(parts[0], parts[1] - 1, parts[2], 12, 0, 0).getDay()
+              : s.weekdayIndex;
+          return day === 0 || day === 6 || s.weekdayIndex === 0 || s.weekdayIndex === 6;
+        });
+        if (!hasWeekendOrInvalid) {
+          // Sync task.loggedSeconds with persisted sessions
+          tasks.forEach((t) => {
+            t.loggedSeconds = parsed
+              .filter((s: FocusSession) => s.taskId === t.id)
+              .reduce(
+                (acc: number, s: FocusSession) =>
+                  acc +
+                  (typeof s.seconds === 'number'
+                    ? Math.round(s.seconds)
+                    : Math.round((s.hours || 0) * 3600)),
+                0
+              );
+          });
+          return dedupeById<FocusSession>(parsed);
+        }
       }
     }
   } catch {
@@ -2160,10 +2581,12 @@ export const usePlotlineStore = create<PlotlineState>((set, get) => {
         assigneeId: input.assigneeId || snapshot.currentUser.id,
         status,
         priority: input.priority,
+        startDate: input.startDate || getTodayIsoDate(),
         dueDate: input.dueDate,
+        completedDate: status === 'Done' ? getTodayIsoDate() : undefined,
         estimateHours: input.priority === 'High' ? 14 : input.priority === 'Medium' ? 10 : 6,
         loggedSeconds: 0,
-        cycleDays: 2.2,
+        cycleDays: 5,
         onTime: true,
         progress: progressForTaskStatus(status, 15),
         subtasksDone: status === 'Done' ? 4 : 0,
@@ -2522,14 +2945,11 @@ export const usePlotlineStore = create<PlotlineState>((set, get) => {
           taskId: activeTask.id,
           projectId: activeTask.projectId,
           memberId: activeTask.assigneeId || snapshot.currentUser.id,
-          weekdayIndex: todayWeekday,
+          weekdayIndex: todayWeekday === 0 ? 5 : todayWeekday === 6 ? 5 : todayWeekday,
           date: getTodayIsoDate(),
           daysAgo: 0,
           seconds: elapsedSeconds,
           hours: elapsedSeconds / 3600,
-          tasksCompletedCount: 0,
-          cycleDays: 2.0,
-          onTimeCount: 0,
           createdAt: new Date(nowTs).toISOString(),
         };
 

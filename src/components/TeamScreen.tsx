@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+import React, { useMemo, useRef, useState } from 'react';
 import { AnimatePresence, motion, useReducedMotion } from 'motion/react';
 import {
   Mail,
@@ -6,7 +6,6 @@ import {
   MessageSquare,
   User,
   UserPlus,
-  X,
 } from 'lucide-react';
 import {
   Department,
@@ -49,21 +48,6 @@ function presenceTextLabel(presence: PresenceStatus): string {
     case 'offline':
     default:
       return 'Offline';
-  }
-}
-
-function categoryDotColor(category: string): string {
-  switch (category.toLowerCase()) {
-    case 'engineering':
-      return 'var(--accent)';
-    case 'design':
-      return '#5B43B8';
-    case 'marketing':
-      return '#BE3A15';
-    case 'management':
-      return '#2E6B47';
-    default:
-      return '#7A7873';
   }
 }
 
@@ -128,10 +112,6 @@ export default function TeamScreen() {
 
   const [selectedDept, setSelectedDept] = useState<'All' | Department>('All');
   const prefersReducedMotion = useReducedMotion();
-
-  // References for Focus Restoration & Focus Trap
-  const triggerElementRef = useRef<HTMLElement | null>(null);
-  const modalRef = useRef<HTMLDivElement | null>(null);
 
   // Invite Member Modal State
   const [inviteOpen, setInviteOpen] = useState(false);
@@ -202,77 +182,7 @@ export default function TeamScreen() {
     [enrichedMembers, selectedProfileMemberId]
   );
 
-  // Lock body scroll, handle Esc, manage Focus Trapping & Restoration
-  useEffect(() => {
-    if (!activeProfileData) {
-      if (triggerElementRef.current) {
-        triggerElementRef.current.focus();
-        triggerElementRef.current = null;
-      }
-      return;
-    }
-
-    const originalOverflow = document.body.style.overflow;
-    document.body.style.overflow = 'hidden';
-
-    // Focus modal container or first focusable element
-    const timer = setTimeout(() => {
-      const focusables = modalRef.current?.querySelectorAll<HTMLElement>(
-        'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])'
-      );
-      if (focusables && focusables.length > 0) {
-        focusables[0].focus();
-      } else {
-        modalRef.current?.focus();
-      }
-    }, 40);
-
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') {
-        setSelectedProfileMemberId(null);
-        return;
-      }
-
-      if (e.key === 'Tab' && modalRef.current) {
-        const focusables = Array.from(
-          modalRef.current.querySelectorAll<HTMLElement>(
-            'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])'
-          )
-        ).filter((el) => !el.hasAttribute('disabled') && el.offsetParent !== null);
-
-        if (focusables.length === 0) return;
-
-        const first = focusables[0];
-        const last = focusables[focusables.length - 1];
-
-        if (e.shiftKey) {
-          if (document.activeElement === first) {
-            e.preventDefault();
-            last.focus();
-          }
-        } else {
-          if (document.activeElement === last) {
-            e.preventDefault();
-            first.focus();
-          }
-        }
-      }
-    };
-
-    window.addEventListener('keydown', handleKeyDown);
-
-    return () => {
-      document.body.style.overflow = originalOverflow;
-      clearTimeout(timer);
-      window.removeEventListener('keydown', handleKeyDown);
-    };
-  }, [activeProfileData, setSelectedProfileMemberId]);
-
-  const handleOpenProfile = (
-    memberId: string,
-    e: React.MouseEvent<HTMLButtonElement>
-  ) => {
-    triggerElementRef.current = e.currentTarget;
+  const handleOpenProfile = (memberId: string) => {
     setSelectedProfileMemberId(memberId);
   };
 
@@ -301,16 +211,7 @@ export default function TeamScreen() {
   };
 
   return (
-    <div
-      style={{
-        transform: activeProfileData ? 'scale(0.98)' : 'scale(1)',
-        transition: prefersReducedMotion
-          ? 'none'
-          : 'transform 280ms cubic-bezier(0.16, 1, 0.3, 1)',
-        transformOrigin: 'center center',
-      }}
-      className="max-w-[1360px] mx-auto space-y-5 pb-6 min-w-0"
-    >
+    <div className="max-w-[1360px] mx-auto space-y-5 pb-6 min-w-0">
       {/* Header Row: Title, Subtitle, "N online now", "Invite member" button */}
       <div
         style={{ '--stagger-index': 0 } as React.CSSProperties}
@@ -339,7 +240,7 @@ export default function TeamScreen() {
             setTimeout(() => inviteNameRef.current?.focus(), 40);
           }}
           style={{ backgroundColor: 'var(--accent)' }}
-          className="inline-flex items-center gap-1.5 px-4 py-2 rounded-full text-xs sm:text-sm font-semibold text-white hover:opacity-95 transition-opacity cursor-pointer shrink-0 self-start sm:self-auto shadow-2xs"
+          className="inline-flex items-center gap-1.5 px-4 py-2 min-h-[44px] sm:min-h-0 rounded-full text-xs sm:text-sm font-semibold text-white hover:opacity-95 transition-opacity cursor-pointer shrink-0 self-start sm:self-auto shadow-2xs"
         >
           <UserPlus className="w-4 h-4" />
           <span>Invite member</span>
@@ -366,7 +267,7 @@ export default function TeamScreen() {
                   ? { backgroundColor: 'var(--accent)', color: '#ffffff' }
                   : undefined
               }
-              className={`px-3.5 py-1.5 rounded-[var(--radius-sm)] text-xs font-semibold transition-colors cursor-pointer whitespace-nowrap ${
+              className={`px-3.5 py-1.5 min-h-[44px] sm:min-h-0 rounded-[var(--radius-sm)] text-xs font-semibold transition-colors cursor-pointer whitespace-nowrap ${
                 isSelected
                   ? ''
                   : 'text-[var(--ink-secondary)] hover:text-[var(--ink-primary)] hover:bg-[var(--surface-sunken)]'
@@ -378,7 +279,7 @@ export default function TeamScreen() {
         })}
       </div>
 
-      {/* Team Cards Grid with Spring Layout Reflow or Empty State */}
+      {/* Team Cards Grid: Single-column on <640px, 2 cols on 640-1023px, 3 cols on 1024px+ */}
       {filteredMembers.length === 0 ? (
         <div
           data-testid="team-empty-state"
@@ -398,7 +299,7 @@ export default function TeamScreen() {
               <button
                 type="button"
                 onClick={() => setSelectedDept('All')}
-                className="px-3.5 py-1.5 rounded-full text-xs font-semibold bg-[var(--surface-sunken)] text-[var(--ink-primary)] border border-[var(--border-strong)] hover:bg-[var(--border-hairline)] cursor-pointer"
+                className="px-3.5 py-1.5 min-h-[44px] sm:min-h-0 rounded-full text-xs font-semibold bg-[var(--surface-sunken)] text-[var(--ink-primary)] border border-[var(--border-strong)] hover:bg-[var(--border-hairline)] cursor-pointer"
               >
                 Show all departments
               </button>
@@ -407,7 +308,7 @@ export default function TeamScreen() {
               type="button"
               onClick={() => setInviteOpen(true)}
               style={{ backgroundColor: 'var(--accent)' }}
-              className="px-3.5 py-1.5 rounded-full text-xs font-semibold text-white hover:opacity-95 cursor-pointer"
+              className="px-3.5 py-1.5 min-h-[44px] sm:min-h-0 rounded-full text-xs font-semibold text-white hover:opacity-95 cursor-pointer"
             >
               + Invite member
             </button>
@@ -416,7 +317,8 @@ export default function TeamScreen() {
       ) : (
         <motion.div
           layout={!prefersReducedMotion}
-          className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4"
+          data-testid="team-cards-grid"
+          className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4"
         >
           <AnimatePresence mode="popLayout">
             {filteredMembers.map(
@@ -437,7 +339,7 @@ export default function TeamScreen() {
                         }
                   }
                   style={{ '--stagger-index': idx + 2 } as React.CSSProperties}
-                  className="plotline-enter bg-[var(--surface-elevated)] border border-[var(--border-hairline)] rounded-[var(--radius-lg)] p-5 flex flex-col justify-between gap-4"
+                  className="plotline-enter bg-[var(--surface-elevated)] border border-[var(--border-hairline)] rounded-[var(--radius-lg)] p-4 sm:p-5 flex flex-col justify-between gap-4 min-w-0"
                 >
                   {/* Top: Initials Avatar with Presence Dot + Name, Role, Department Chip */}
                   <div className="flex items-start justify-between gap-3">
@@ -526,7 +428,7 @@ export default function TeamScreen() {
                           `${member.email} · ${member.timezone}`
                         )
                       }
-                      className="flex-1 py-2 px-2.5 rounded-[var(--radius-sm)] border border-[var(--border-strong)] bg-[var(--surface-elevated)] hover:bg-[var(--surface-sunken)] text-xs font-semibold text-[var(--ink-primary)] inline-flex items-center justify-center gap-1.5 transition-colors cursor-pointer"
+                      className="flex-1 min-h-[44px] sm:min-h-0 py-2 px-2.5 rounded-[var(--radius-sm)] border border-[var(--border-strong)] bg-[var(--surface-elevated)] hover:bg-[var(--surface-sunken)] text-xs font-semibold text-[var(--ink-primary)] inline-flex items-center justify-center gap-1.5 transition-colors cursor-pointer"
                     >
                       <MessageSquare className="w-3.5 h-3.5 text-[var(--ink-secondary)]" />
                       <span>Message</span>
@@ -534,13 +436,13 @@ export default function TeamScreen() {
 
                     <button
                       type="button"
-                      onClick={(e) => handleOpenProfile(member.id, e)}
+                      onClick={() => handleOpenProfile(member.id)}
                       style={{
                         backgroundColor: 'var(--accent-soft)',
                         color: 'var(--accent)',
                         borderColor: 'var(--accent-border)',
                       }}
-                      className="flex-1 py-2 px-2.5 rounded-[var(--radius-sm)] border text-xs font-semibold inline-flex items-center justify-center gap-1.5 hover:opacity-90 transition-opacity cursor-pointer"
+                      className="flex-1 min-h-[44px] sm:min-h-0 py-2 px-2.5 rounded-[var(--radius-sm)] border text-xs font-semibold inline-flex items-center justify-center gap-1.5 hover:opacity-90 transition-opacity cursor-pointer"
                     >
                       <User className="w-3.5 h-3.5" />
                       <span>Profile</span>
@@ -600,7 +502,7 @@ export default function TeamScreen() {
                     )
                   }
                   style={{ backgroundColor: 'var(--accent)' }}
-                  className="flex-1 sm:flex-initial py-2 px-4 rounded-full text-xs font-semibold text-white hover:opacity-95 inline-flex items-center justify-center gap-1.5 transition-opacity cursor-pointer shadow-2xs"
+                  className="flex-1 sm:flex-initial min-h-[44px] sm:min-h-0 py-2 px-4 rounded-full text-xs font-semibold text-white hover:opacity-95 inline-flex items-center justify-center gap-1.5 transition-opacity cursor-pointer shadow-2xs"
                 >
                   <MessageSquare className="w-3.5 h-3.5" />
                   <span>Message</span>
@@ -611,7 +513,7 @@ export default function TeamScreen() {
                   onClick={() => {
                     window.location.href = `mailto:${activeProfileData.member.email}`;
                   }}
-                  className="flex-1 sm:flex-initial py-2 px-4 rounded-full border border-[var(--border-strong)] bg-[var(--surface-elevated)] hover:bg-[var(--surface-sunken)] text-xs font-semibold text-[var(--ink-primary)] inline-flex items-center justify-center gap-1.5 transition-colors cursor-pointer"
+                  className="flex-1 sm:flex-initial min-h-[44px] sm:min-h-0 py-2 px-4 rounded-full border border-[var(--border-strong)] bg-[var(--surface-elevated)] hover:bg-[var(--surface-sunken)] text-xs font-semibold text-[var(--ink-primary)] inline-flex items-center justify-center gap-1.5 transition-colors cursor-pointer"
                 >
                   <Mail className="w-3.5 h-3.5 text-[var(--ink-secondary)]" />
                   <span>Email</span>
@@ -627,37 +529,37 @@ export default function TeamScreen() {
         }
       >
         {activeProfileData && (
-          <div className="flex flex-col h-full">
+          <div className="flex flex-col">
             {/* Stats: Three identical tiles using dashboard stat-card style at compact size */}
-            <div className="grid grid-cols-3 gap-2.5 sm:gap-3 px-6 pt-4 pb-3 shrink-0">
-              <div className="bg-[var(--surface-elevated)] border border-[var(--border-hairline)] rounded-[var(--radius-lg)] p-3 text-center shadow-2xs flex flex-col items-center justify-center h-[80px]">
-                <span className="text-2xl font-semibold font-display-num text-[var(--ink-primary)] leading-none">
+            <div className="grid grid-cols-3 gap-2 sm:gap-3 px-4 sm:px-6 pt-4 pb-3 shrink-0">
+              <div className="bg-[var(--surface-elevated)] border border-[var(--border-hairline)] rounded-[var(--radius-lg)] p-2.5 sm:p-3 text-center shadow-2xs flex flex-col items-center justify-center h-[80px]">
+                <span className="text-xl sm:text-2xl font-semibold font-display-num text-[var(--ink-primary)] leading-none">
                   {activeProfileData.openCount}
                 </span>
-                <span className="text-xs font-medium text-[var(--ink-secondary)] mt-1.5">
+                <span className="text-[11px] sm:text-xs font-medium text-[var(--ink-secondary)] mt-1.5">
                   Open tasks
                 </span>
               </div>
 
-              <div className="bg-[var(--surface-elevated)] border border-[var(--border-hairline)] rounded-[var(--radius-lg)] p-3 text-center shadow-2xs flex flex-col items-center justify-center h-[80px]">
-                <span className="text-2xl font-semibold font-display-num text-[var(--ink-primary)] leading-none">
+              <div className="bg-[var(--surface-elevated)] border border-[var(--border-hairline)] rounded-[var(--radius-lg)] p-2.5 sm:p-3 text-center shadow-2xs flex flex-col items-center justify-center h-[80px]">
+                <span className="text-xl sm:text-2xl font-semibold font-display-num text-[var(--ink-primary)] leading-none">
                   {activeProfileData.completedCount}
                 </span>
-                <span className="text-xs font-medium text-[var(--ink-secondary)] mt-1.5">
+                <span className="text-[11px] sm:text-xs font-medium text-[var(--ink-secondary)] mt-1.5">
                   Completed
                 </span>
               </div>
 
-              <div className="bg-[var(--surface-elevated)] border border-[var(--border-hairline)] rounded-[var(--radius-lg)] p-3 text-center shadow-2xs flex flex-col items-center justify-center h-[80px]">
+              <div className="bg-[var(--surface-elevated)] border border-[var(--border-hairline)] rounded-[var(--radius-lg)] p-2.5 sm:p-3 text-center shadow-2xs flex flex-col items-center justify-center h-[80px]">
                 <UtilizationRing40 pct={activeProfileData.workloadPct} />
-                <span className="text-xs font-medium text-[var(--ink-secondary)] mt-1">
+                <span className="text-[11px] sm:text-xs font-medium text-[var(--ink-secondary)] mt-1">
                   Utilization
                 </span>
               </div>
             </div>
 
-            {/* Task rows: reuse Tasks board card chip styles with padding-top and fade mask */}
-            <div className="px-6 pt-2 pb-6 flex-1 overflow-y-auto min-h-0 [mask-image:linear-gradient(to_bottom,transparent,black_16px,black_calc(100%-16px),transparent)]">
+            {/* Task rows */}
+            <div className="px-4 sm:px-6 pt-2 pb-6">
               <div className="flex items-center justify-between pb-2">
                 <h3 className="text-xs sm:text-sm font-semibold text-[var(--ink-primary)]">
                   Assigned Tasks ({activeProfileData.memberTasks.length})
@@ -692,7 +594,7 @@ export default function TeamScreen() {
                             onChange={(e) =>
                               moveTask(t.id, e.target.value as TaskItem['status'])
                             }
-                            className="px-2 py-1 rounded-[var(--radius-xs)] border border-[var(--border-strong)] bg-[var(--surface-elevated)] text-[11px] font-medium text-[var(--ink-primary)] shrink-0 cursor-pointer"
+                            className="min-h-[36px] sm:min-h-0 px-2 py-1 rounded-[var(--radius-xs)] border border-[var(--border-strong)] bg-[var(--surface-elevated)] text-[11px] font-medium text-[var(--ink-primary)] shrink-0 cursor-pointer"
                           >
                             <option value="Backlog">To do</option>
                             <option value="In Progress">In progress</option>
@@ -743,7 +645,7 @@ export default function TeamScreen() {
             <button
               type="button"
               onClick={() => setInviteOpen(false)}
-              className="px-4 py-2 rounded-full text-xs font-medium text-[var(--ink-secondary)] hover:text-[var(--ink-primary)] hover:bg-[var(--surface-sunken)] cursor-pointer"
+              className="px-4 py-2 min-h-[44px] sm:min-h-0 rounded-full text-xs font-medium text-[var(--ink-secondary)] hover:text-[var(--ink-primary)] hover:bg-[var(--surface-sunken)] cursor-pointer"
             >
               Cancel
             </button>
@@ -751,7 +653,7 @@ export default function TeamScreen() {
               type="submit"
               form="invite-member-form"
               style={{ backgroundColor: 'var(--accent)' }}
-              className="px-4 py-2 rounded-full text-xs font-semibold text-white hover:opacity-95 cursor-pointer"
+              className="px-4 py-2 min-h-[44px] sm:min-h-0 rounded-full text-xs font-semibold text-white hover:opacity-95 cursor-pointer"
             >
               Send invite
             </button>
@@ -761,7 +663,7 @@ export default function TeamScreen() {
         <form
           id="invite-member-form"
           onSubmit={handleInviteSubmit}
-          className="p-6 space-y-3.5"
+          className="p-4 sm:p-6 space-y-3.5"
           noValidate
         >
           <div>
@@ -782,7 +684,7 @@ export default function TeamScreen() {
                 if (inviteError) setInviteError('');
               }}
               placeholder="e.g. Astrid Lindholm"
-              className="w-full h-10 px-3 rounded-[var(--radius-sm)] bg-[var(--surface-sunken)] border border-[var(--border-strong)] text-sm text-[var(--ink-primary)] focus:outline-2 focus:outline-[var(--accent)]"
+              className="w-full h-11 sm:h-10 px-3 rounded-[var(--radius-sm)] bg-[var(--surface-sunken)] border border-[var(--border-strong)] text-sm text-[var(--ink-primary)] focus:outline-2 focus:outline-[var(--accent)]"
             />
           </div>
 
@@ -803,11 +705,11 @@ export default function TeamScreen() {
                 if (inviteError) setInviteError('');
               }}
               placeholder="e.g. Senior Hydrographic Analyst"
-              className="w-full h-10 px-3 rounded-[var(--radius-sm)] bg-[var(--surface-sunken)] border border-[var(--border-strong)] text-sm text-[var(--ink-primary)] focus:outline-2 focus:outline-[var(--accent)]"
+              className="w-full h-11 sm:h-10 px-3 rounded-[var(--radius-sm)] bg-[var(--surface-sunken)] border border-[var(--border-strong)] text-sm text-[var(--ink-primary)] focus:outline-2 focus:outline-[var(--accent)]"
             />
           </div>
 
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div>
               <label
                 htmlFor="invite-dept"
@@ -819,7 +721,7 @@ export default function TeamScreen() {
                 id="invite-dept"
                 value={inviteDept}
                 onChange={(e) => setInviteDept(e.target.value as Department)}
-                className="w-full h-10 px-2.5 rounded-[var(--radius-sm)] bg-[var(--surface-sunken)] border border-[var(--border-strong)] text-xs sm:text-sm text-[var(--ink-primary)] focus:outline-2 focus:outline-[var(--accent)]"
+                className="w-full h-11 sm:h-10 px-2.5 rounded-[var(--radius-sm)] bg-[var(--surface-sunken)] border border-[var(--border-strong)] text-xs sm:text-sm text-[var(--ink-primary)] focus:outline-2 focus:outline-[var(--accent)]"
               >
                 <option value="Engineering">Engineering</option>
                 <option value="Design">Design</option>
@@ -841,7 +743,7 @@ export default function TeamScreen() {
                 value={inviteLocation}
                 onChange={(e) => setInviteLocation(e.target.value)}
                 placeholder="e.g. Oslo, NO"
-                className="w-full h-10 px-3 rounded-[var(--radius-sm)] bg-[var(--surface-sunken)] border border-[var(--border-strong)] text-xs sm:text-sm text-[var(--ink-primary)] focus:outline-2 focus:outline-[var(--accent)]"
+                className="w-full h-11 sm:h-10 px-3 rounded-[var(--radius-sm)] bg-[var(--surface-sunken)] border border-[var(--border-strong)] text-xs sm:text-sm text-[var(--ink-primary)] focus:outline-2 focus:outline-[var(--accent)]"
               />
             </div>
           </div>

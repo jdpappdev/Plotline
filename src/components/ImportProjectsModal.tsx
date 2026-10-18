@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { AlertCircle, CheckCircle2, Download, FileText, Upload } from 'lucide-react';
+import { AlertCircle, CheckCircle2, Download, Upload } from 'lucide-react';
 import { Dialog } from '../ui/Dialog';
 import { usePlotlineStore } from '../store';
 
@@ -67,7 +67,7 @@ export default function ImportProjectsModal() {
             setParseError('JSON file must contain an array of project objects.');
             return;
           }
-          const parsed = json.map((item: any, idx: number) => {
+          const parsed = json.map((item: any) => {
             const name = String(item.name || item.title || '').trim();
             const client = String(item.client || '').trim();
             const rawDate = String(item.due_date || item.targetDate || item.dueDate || '').trim();
@@ -110,7 +110,9 @@ export default function ImportProjectsModal() {
           const header = lines[0].split(',').map((h) => h.trim().toLowerCase());
           const nameIdx = header.findIndex((h) => h === 'name' || h === 'title');
           const clientIdx = header.findIndex((h) => h === 'client');
-          const dateIdx = header.findIndex((h) => h === 'due_date' || h === 'targetdate' || h === 'duedate');
+          const dateIdx = header.findIndex(
+            (h) => h === 'due_date' || h === 'targetdate' || h === 'duedate'
+          );
           const statusIdx = header.findIndex((h) => h === 'status');
 
           if (nameIdx === -1) {
@@ -153,7 +155,7 @@ export default function ImportProjectsModal() {
 
           setRows(parsed);
         }
-      } catch (err) {
+      } catch {
         setParseError('Failed to parse file. Please check file format.');
       }
     };
@@ -186,10 +188,34 @@ export default function ImportProjectsModal() {
     <Dialog
       isOpen={importModalOpen}
       onClose={() => setImportModalOpen(false)}
+      eyebrow="Portfolio Batch"
       title="Import Projects"
       size="lg"
+      footer={
+        <div className="flex items-center justify-between w-full gap-2">
+          <button
+            type="button"
+            onClick={() => setImportModalOpen(false)}
+            className="min-h-[44px] px-4 py-2 rounded-full text-xs font-semibold bg-[var(--surface-sunken)] text-[var(--ink-primary)] hover:bg-[var(--border-subtle)] transition-colors cursor-pointer"
+          >
+            Cancel
+          </button>
+
+          {rows.length > 0 && (
+            <button
+              type="button"
+              disabled={validCount === 0}
+              onClick={handleImport}
+              style={{ backgroundColor: 'var(--accent)' }}
+              className="min-h-[44px] px-5 py-2 rounded-full text-xs font-semibold text-white hover:opacity-90 disabled:opacity-40 transition-opacity cursor-pointer"
+            >
+              Import {validCount} valid {validCount === 1 ? 'row' : 'rows'}
+            </button>
+          )}
+        </div>
+      }
     >
-      <div className="space-y-5">
+      <div className="p-5 sm:p-6 space-y-5">
         {/* Top Controls: Template & File Input */}
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-[var(--surface-sunken)] p-3.5 rounded-[var(--radius-md)] border border-[var(--border-hairline)]">
           <div>
@@ -204,7 +230,7 @@ export default function ImportProjectsModal() {
           <button
             type="button"
             onClick={handleDownloadTemplate}
-            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold bg-[var(--surface-elevated)] border border-[var(--border-strong)] text-[var(--ink-primary)] hover:bg-[var(--border-hairline)] cursor-pointer transition-colors shrink-0"
+            className="inline-flex items-center justify-center gap-1.5 min-h-[44px] sm:min-h-[36px] px-3.5 py-1.5 rounded-full text-xs font-semibold bg-[var(--surface-elevated)] border border-[var(--border-strong)] text-[var(--ink-primary)] hover:bg-[var(--border-hairline)] cursor-pointer transition-colors shrink-0"
           >
             <Download className="w-3.5 h-3.5 text-[var(--accent)]" />
             <span>Download template</span>
@@ -214,7 +240,7 @@ export default function ImportProjectsModal() {
         {/* Upload Drop Area */}
         <label className="flex flex-col items-center justify-center p-6 border-2 border-dashed border-[var(--border-strong)] hover:border-[var(--accent)] rounded-[var(--radius-lg)] bg-[var(--surface-elevated)] cursor-pointer transition-colors group">
           <Upload className="w-8 h-8 text-[var(--ink-muted)] group-hover:text-[var(--accent)] transition-colors mb-2" />
-          <span className="text-xs font-semibold text-[var(--ink-primary)]">
+          <span className="text-xs font-semibold text-[var(--ink-primary)] text-center">
             {fileName ? `Selected: ${fileName}` : 'Click to select CSV or JSON file'}
           </span>
           <span className="text-[11px] text-[var(--ink-secondary)] mt-0.5">
@@ -245,7 +271,7 @@ export default function ImportProjectsModal() {
               </span>
             </div>
 
-            <div className="max-h-60 overflow-y-auto border border-[var(--border-hairline)] rounded-[var(--radius-md)]">
+            <div className="max-h-60 overflow-x-auto overflow-y-auto border border-[var(--border-hairline)] rounded-[var(--radius-md)]">
               <table className="w-full text-left text-xs">
                 <thead className="bg-[var(--surface-sunken)] border-b border-[var(--border-hairline)] text-[var(--ink-secondary)] sticky top-0">
                   <tr>
@@ -265,13 +291,15 @@ export default function ImportProjectsModal() {
                       <td className="p-2 text-[var(--ink-secondary)]">{r.client}</td>
                       <td className="p-2 font-mono text-[var(--ink-secondary)]">{r.targetDate || '—'}</td>
                       <td className="p-2">
-                        <span className={`px-2 py-0.5 rounded-full text-[10px] font-semibold ${
-                          r.status === 'Ended'
-                            ? 'bg-[#E8F4EC] text-[#216E3E]'
-                            : r.status === 'Running'
-                            ? 'bg-[#FEF5E6] text-[#9B5B0B]'
-                            : 'bg-[#EEEBF9] text-[#5B43B8]'
-                        }`}>
+                        <span
+                          className={`px-2 py-0.5 rounded-full text-[10px] font-semibold ${
+                            r.status === 'Ended'
+                              ? 'bg-[#E8F4EC] text-[#216E3E]'
+                              : r.status === 'Running'
+                              ? 'bg-[#FEF5E6] text-[#9B5B0B]'
+                              : 'bg-[#EEEBF9] text-[#5B43B8]'
+                          }`}
+                        >
                           {r.status}
                         </span>
                       </td>
@@ -282,7 +310,10 @@ export default function ImportProjectsModal() {
                             <span>Valid</span>
                           </span>
                         ) : (
-                          <span className="inline-flex items-center gap-1 text-red-600 text-[11px] font-medium" title={r.error}>
+                          <span
+                            className="inline-flex items-center gap-1 text-red-600 text-[11px] font-medium"
+                            title={r.error}
+                          >
                             <AlertCircle className="w-3.5 h-3.5" />
                             <span className="truncate max-w-[120px]">{r.error}</span>
                           </span>
@@ -295,29 +326,6 @@ export default function ImportProjectsModal() {
             </div>
           </div>
         )}
-
-        {/* Modal Footer */}
-        <div className="flex items-center justify-between pt-3 border-t border-[var(--border-hairline)]">
-          <button
-            type="button"
-            onClick={() => setImportModalOpen(false)}
-            className="px-4 py-2 rounded-lg text-xs font-semibold bg-[var(--surface-sunken)] text-[var(--ink-primary)] hover:bg-[var(--border-subtle)] transition-colors cursor-pointer"
-          >
-            Cancel
-          </button>
-
-          {rows.length > 0 && (
-            <button
-              type="button"
-              disabled={validCount === 0}
-              onClick={handleImport}
-              style={{ backgroundColor: 'var(--accent)' }}
-              className="px-4 py-2 rounded-lg text-xs font-semibold text-white hover:opacity-90 disabled:opacity-40 transition-opacity cursor-pointer"
-            >
-              Import {validCount} valid {validCount === 1 ? 'row' : 'rows'}
-            </button>
-          )}
-        </div>
       </div>
     </Dialog>
   );

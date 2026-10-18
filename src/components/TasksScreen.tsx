@@ -39,6 +39,7 @@ import {
 import { ContourGlyph } from '../utils/contourGlyph';
 import { MotionCard, PLOTLINE_DURATION, PLOTLINE_EASE } from '../motion/primitives';
 import { DeleteButton } from './DeleteButton';
+import { AnchoredPopover } from '../ui/Popover';
 
 type FilterCriterion = 'my' | 'high' | 'week';
 
@@ -58,7 +59,7 @@ const STAGE_IDS: TaskItem['status'][] = STAGE_COLUMNS.map((col) => col.id);
 
 const stageKeyboardCoordinateGetter: KeyboardCoordinateGetter = (
   event,
-  { active, context, currentCoordinates }
+  { context, currentCoordinates }
 ) => {
   const { code } = event;
   if (
@@ -178,18 +179,7 @@ function TaskCardContent({
 }: TaskCardViewProps) {
   const { deleteTask } = usePlotlineStore();
   const [menuOpen, setMenuOpen] = useState(false);
-  const menuRef = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    if (!menuOpen) return;
-    const handleOutside = (e: MouseEvent) => {
-      if (menuRef.current && !menuRef.current.contains(e.target as Node)) {
-        setMenuOpen(false);
-      }
-    };
-    document.addEventListener('mousedown', handleOutside);
-    return () => document.removeEventListener('mousedown', handleOutside);
-  }, [menuOpen]);
+  const menuTriggerRef = useRef<HTMLButtonElement>(null);
 
   const prioStyle = priorityChipStyle(task.priority);
   const primaryMember = teamMap.get(task.assigneeId);
@@ -241,8 +231,9 @@ function TaskCardContent({
         </div>
 
         {/* "…" Move To Menu */}
-        <div className="relative shrink-0" ref={menuRef}>
+        <div className="relative shrink-0">
           <button
+            ref={menuTriggerRef}
             type="button"
             onPointerDown={(e) => e.stopPropagation()}
             onMouseDown={(e) => e.stopPropagation()}
@@ -254,71 +245,83 @@ function TaskCardContent({
             }}
             aria-label={`Task actions for ${task.title}`}
             aria-expanded={menuOpen}
-            className="w-6 h-6 rounded-[var(--radius-xs)] flex items-center justify-center text-[var(--ink-muted)] hover:text-[var(--ink-primary)] hover:bg-[var(--surface-sunken)] cursor-pointer"
+            aria-haspopup="menu"
+            className="w-11 h-11 min-w-[44px] min-h-[44px] -m-2 sm:m-0 sm:w-7 sm:h-7 sm:min-w-0 sm:min-h-0 rounded-[var(--radius-xs)] flex items-center justify-center text-[var(--ink-muted)] hover:text-[var(--ink-primary)] hover:bg-[var(--surface-sunken)] cursor-pointer"
           >
             <MoreHorizontal className="w-4 h-4" />
           </button>
 
-          {menuOpen && onMoveTask && (
-            <div
-              onPointerDown={(e) => e.stopPropagation()}
-              onMouseDown={(e) => e.stopPropagation()}
-              onTouchStart={(e) => e.stopPropagation()}
-              onKeyDown={(e) => e.stopPropagation()}
-              className="absolute right-0 top-7 w-44 bg-[var(--surface-elevated)] border border-[var(--border-strong)] rounded-[var(--radius-md)] shadow-md p-1.5 z-40 text-xs"
+          {onMoveTask && (
+            <AnchoredPopover
+              isOpen={menuOpen}
+              onClose={() => setMenuOpen(false)}
+              triggerRef={menuTriggerRef}
+              placement="bottom-end"
+              ariaLabel={`Actions for ${task.title}`}
+              sheetTitle={task.title}
+              role="menu"
+              className="w-48 bg-[var(--surface-elevated)] border border-[var(--border-strong)] rounded-[var(--radius-md)] shadow-lg p-1.5 text-xs"
             >
-              <span className="block px-2 py-1 text-[10px] font-semibold text-[var(--ink-muted)] uppercase">
-                Move to…
-              </span>
-              {STAGE_COLUMNS.map((col) => {
-                const isCurrent = task.status === col.id;
-                return (
-                  <button
-                    key={col.id}
-                    type="button"
-                    disabled={isCurrent}
-                    onClick={() => {
-                      onMoveTask(task.id, col.id);
-                      setMenuOpen(false);
-                    }}
-                    className={`w-full text-left px-2 py-1.5 rounded-[var(--radius-xs)] flex items-center justify-between transition-colors ${
-                      isCurrent
-                        ? 'text-[var(--ink-muted)] bg-[var(--surface-sunken)] cursor-default font-medium'
-                        : 'text-[var(--ink-primary)] hover:bg-[var(--accent-soft)] cursor-pointer'
-                    }`}
-                  >
-                    <span>{col.title}</span>
-                    {isCurrent && <span className="text-[10px]">Current</span>}
-                  </button>
-                );
-              })}
-              {onSelectFocusTask && (
-                <div className="mt-1 pt-1 border-t border-[var(--border-hairline)] space-y-0.5">
-                  <button
-                    type="button"
-                    onClick={() => {
-                      onSelectFocusTask(task.id);
-                      setMenuOpen(false);
-                    }}
-                    className="w-full text-left px-2 py-1.5 rounded-[var(--radius-xs)] text-[var(--ink-primary)] hover:bg-[var(--accent-soft)] cursor-pointer flex items-center gap-1.5 font-medium"
-                  >
-                    <Timer className="w-3.5 h-3.5" style={{ color: 'var(--accent)' }} />
-                    <span>Set as Focus task</span>
-                  </button>
-
-                  <div className="flex items-center justify-between px-2 py-1 rounded-[var(--radius-xs)] hover:bg-[var(--surface-sunken)]">
-                    <span className="text-xs text-[var(--ink-secondary)]">Delete task</span>
-                    <DeleteButton
-                      name={task.code}
-                      onDelete={() => {
-                        deleteTask(task.id);
+              <div
+                onPointerDown={(e) => e.stopPropagation()}
+                onMouseDown={(e) => e.stopPropagation()}
+                onTouchStart={(e) => e.stopPropagation()}
+              >
+                <span className="block px-2 py-1 text-[10px] font-semibold text-[var(--ink-muted)] uppercase">
+                  Move to…
+                </span>
+                {STAGE_COLUMNS.map((col) => {
+                  const isCurrent = task.status === col.id;
+                  return (
+                    <button
+                      key={col.id}
+                      type="button"
+                      role="menuitem"
+                      disabled={isCurrent}
+                      onClick={() => {
+                        onMoveTask(task.id, col.id);
                         setMenuOpen(false);
                       }}
-                    />
+                      className={`w-full min-h-[44px] sm:min-h-0 text-left px-2.5 py-2 sm:py-1.5 rounded-[var(--radius-xs)] flex items-center justify-between transition-colors ${
+                        isCurrent
+                          ? 'text-[var(--ink-muted)] bg-[var(--surface-sunken)] cursor-default font-medium'
+                          : 'text-[var(--ink-primary)] hover:bg-[var(--accent-soft)] cursor-pointer'
+                      }`}
+                    >
+                      <span>{col.title}</span>
+                      {isCurrent && <span className="text-[10px]">Current</span>}
+                    </button>
+                  );
+                })}
+                {onSelectFocusTask && (
+                  <div className="mt-1 pt-1 border-t border-[var(--border-hairline)] space-y-0.5">
+                    <button
+                      type="button"
+                      role="menuitem"
+                      onClick={() => {
+                        onSelectFocusTask(task.id);
+                        setMenuOpen(false);
+                      }}
+                      className="w-full min-h-[44px] sm:min-h-0 text-left px-2.5 py-2 sm:py-1.5 rounded-[var(--radius-xs)] text-[var(--ink-primary)] hover:bg-[var(--accent-soft)] cursor-pointer flex items-center gap-1.5 font-medium"
+                    >
+                      <Timer className="w-3.5 h-3.5" style={{ color: 'var(--accent)' }} />
+                      <span>Set as Focus task</span>
+                    </button>
+
+                    <div className="flex items-center justify-between px-2.5 py-1 rounded-[var(--radius-xs)] hover:bg-[var(--surface-sunken)]">
+                      <span className="text-xs text-[var(--ink-secondary)]">Delete task</span>
+                      <DeleteButton
+                        name={task.code}
+                        onDelete={() => {
+                          deleteTask(task.id);
+                          setMenuOpen(false);
+                        }}
+                      />
+                    </div>
                   </div>
-                </div>
-              )}
-            </div>
+                )}
+              </div>
+            </AnchoredPopover>
           )}
         </div>
       </div>
@@ -400,6 +403,7 @@ interface DraggableTaskCardProps {
   teamMap: Map<string, TeamMember>;
   isRunningFocus: boolean;
   isHighlighted?: boolean;
+  dragDisabled?: boolean;
   onMoveTask: (taskId: string, newStatus: TaskItem['status']) => void;
   onSelectFocusTask: (taskId: string) => void;
 }
@@ -409,12 +413,14 @@ function DraggableTaskCard({
   teamMap,
   isRunningFocus,
   isHighlighted = false,
+  dragDisabled = false,
   onMoveTask,
   onSelectFocusTask,
 }: DraggableTaskCardProps) {
   const { attributes, listeners, setNodeRef, transform, isDragging } = useDraggable({
     id: task.id,
     data: { task },
+    disabled: dragDisabled,
   });
 
   const style: React.CSSProperties = {
@@ -427,15 +433,17 @@ function DraggableTaskCard({
       id={`task-card-${task.id}`}
       ref={setNodeRef}
       style={style}
-      {...listeners}
-      {...attributes}
-      className={`touch-manipulation cursor-grab active:cursor-grabbing focus-visible:outline-2 focus-visible:outline-[var(--accent)] rounded-[var(--radius-md)] ${
+      {...(dragDisabled ? {} : listeners)}
+      {...(dragDisabled ? {} : attributes)}
+      className={`touch-manipulation ${
+        dragDisabled ? '' : 'cursor-grab active:cursor-grabbing'
+      } focus-visible:outline-2 focus-visible:outline-[var(--accent)] rounded-[var(--radius-md)] ${
         isDragging ? 'opacity-35' : ''
       } ${isHighlighted ? 'ring-2 ring-[var(--accent)] bg-[var(--accent-soft)] transition-all duration-300' : ''}`}
     >
       <MotionCard
         whileHover={
-          isDragging
+          isDragging || dragDisabled
             ? undefined
             : { y: -2, boxShadow: '0 10px 24px rgba(22, 22, 21, 0.08)' }
         }
@@ -461,19 +469,9 @@ interface DroppableStageColumnProps {
   timerRunning: boolean;
   timerTaskId: string;
   activeDragTaskId: string | null;
-  onMoveTask: (taskId: string, newStatus: TaskItem['status']) => void;
-  onSelectFocusTask: (taskId: string) => void;
-}
-
-interface DroppableStageColumnProps {
-  column: StageColumn;
-  staggerIndex: number;
-  tasks: TaskItem[];
-  teamMap: Map<string, TeamMember>;
-  timerRunning: boolean;
-  timerTaskId: string;
-  activeDragTaskId: string | null;
   highlightedTaskId?: string | null;
+  isActiveMobileColumn: boolean;
+  isMobileViewport: boolean;
   onMoveTask: (taskId: string, newStatus: TaskItem['status']) => void;
   onSelectFocusTask: (taskId: string) => void;
 }
@@ -487,6 +485,8 @@ function DroppableStageColumn({
   timerTaskId,
   activeDragTaskId,
   highlightedTaskId,
+  isActiveMobileColumn,
+  isMobileViewport,
   onMoveTask,
   onSelectFocusTask,
 }: DroppableStageColumnProps) {
@@ -510,7 +510,9 @@ function DroppableStageColumn({
             : {}),
         } as React.CSSProperties
       }
-      className="plotline-enter bg-[var(--surface-sunken)]/70 border border-[var(--border-hairline)] rounded-[var(--radius-lg)] flex flex-col min-h-[160px] lg:min-h-[420px] overflow-y-auto overflow-x-hidden min-w-0 transition-colors duration-160 ease-plotline"
+      className={`plotline-enter bg-[var(--surface-sunken)]/70 border border-[var(--border-hairline)] rounded-[var(--radius-lg)] flex-col min-h-[160px] lg:min-h-[420px] overflow-y-auto overflow-x-hidden min-w-0 transition-colors duration-160 ease-plotline ${
+        isActiveMobileColumn ? 'flex' : 'hidden sm:flex'
+      }`}
     >
       <div
         ref={setNodeRef}
@@ -533,7 +535,7 @@ function DroppableStageColumn({
             <div className="flex-1 min-h-[120px] rounded-[var(--radius-md)] border border-dashed border-[var(--border-strong)] flex flex-col items-center justify-center p-4 text-center gap-2">
               <ContourGlyph seed={`empty-col-${column.id}`} size={44} />
               <span className="text-xs text-[var(--ink-muted)]">
-                Drop a task card here
+                {isMobileViewport ? 'No tasks in this stage' : 'Drop a task card here'}
               </span>
             </div>
           ) : (
@@ -544,6 +546,7 @@ function DroppableStageColumn({
                 teamMap={teamMap}
                 isRunningFocus={timerRunning && task.id === timerTaskId}
                 isHighlighted={task.id === highlightedTaskId}
+                dragDisabled={isMobileViewport}
                 onMoveTask={onMoveTask}
                 onSelectFocusTask={onSelectFocusTask}
               />
@@ -575,6 +578,19 @@ export default function TasksScreen() {
   const [activeFilters, setActiveFilters] = useState<FilterCriterion[]>([]);
   const [activeDragTaskId, setActiveDragTaskId] = useState<string | null>(null);
   const [highlightedTaskId, setHighlightedTaskId] = useState<string | null>(null);
+  const [activeMobileStage, setActiveMobileStage] = useState<TaskItem['status']>('Backlog');
+  const [isMobileViewport, setIsMobileViewport] = useState<boolean>(() =>
+    typeof window !== 'undefined' ? window.innerWidth < 640 : false
+  );
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const handleResize = () => {
+      setIsMobileViewport(window.innerWidth < 640);
+    };
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, []);
 
   useEffect(() => {
     if (typeof window === 'undefined') return;
@@ -584,6 +600,10 @@ export default function TasksScreen() {
       const params = new URLSearchParams(hash.slice(queryIndex));
       const targetId = params.get('taskId') || params.get('highlight');
       if (targetId) {
+        const foundTask = tasks.find((t) => t.id === targetId);
+        if (foundTask) {
+          setActiveMobileStage(foundTask.status);
+        }
         setHighlightedTaskId(targetId);
         setTimeout(() => {
           const el = document.getElementById(`task-card-${targetId}`);
@@ -597,7 +617,7 @@ export default function TasksScreen() {
         return () => clearTimeout(timer);
       }
     }
-  }, []);
+  }, [tasks]);
 
   const sensors = useSensors(
     useSensor(MouseSensor, {
@@ -611,7 +631,7 @@ export default function TasksScreen() {
     })
   );
 
-  // Prevent native touch page scrolling once the long-press drag activates
+  // Prevent native touch page scrolling once the long-press drag activates on >=640px
   useEffect(() => {
     if (!activeDragTaskId) return;
     const handleTouchMove = (e: TouchEvent) => {
@@ -724,7 +744,7 @@ export default function TasksScreen() {
     : null;
 
   return (
-    <div className="max-w-[1360px] mx-auto space-y-5 pb-6 min-w-0">
+    <div className="max-w-[1360px] mx-auto space-y-4 sm:space-y-5 pb-6 min-w-0">
       {/* Header Row */}
       <div
         style={{ '--stagger-index': 0 } as React.CSSProperties}
@@ -743,7 +763,7 @@ export default function TasksScreen() {
           type="button"
           onClick={() => setNewTaskModalOpen(true)}
           style={{ backgroundColor: 'var(--accent)' }}
-          className="inline-flex items-center gap-1.5 px-4 py-2 rounded-full text-xs sm:text-sm font-semibold text-white hover:opacity-95 transition-opacity cursor-pointer shrink-0 self-start sm:self-auto shadow-2xs"
+          className="inline-flex items-center gap-1.5 px-4 py-2 min-h-[44px] sm:min-h-0 rounded-full text-xs sm:text-sm font-semibold text-white hover:opacity-95 transition-opacity cursor-pointer shrink-0 self-start sm:self-auto shadow-2xs"
         >
           <Plus className="w-4 h-4" />
           <span>New task</span>
@@ -769,7 +789,7 @@ export default function TasksScreen() {
                 ? { backgroundColor: 'var(--accent)', color: '#ffffff' }
                 : undefined
             }
-            className={`px-3 py-1.5 rounded-[var(--radius-sm)] text-xs font-semibold transition-colors cursor-pointer whitespace-nowrap ${
+            className={`px-3 py-1.5 min-h-[44px] sm:min-h-0 rounded-[var(--radius-sm)] text-xs font-semibold transition-colors cursor-pointer whitespace-nowrap ${
               activeFilters.length === 0
                 ? ''
                 : 'text-[var(--ink-secondary)] hover:text-[var(--ink-primary)] hover:bg-[var(--surface-sunken)]'
@@ -787,7 +807,7 @@ export default function TasksScreen() {
                 ? { backgroundColor: 'var(--accent)', color: '#ffffff' }
                 : undefined
             }
-            className={`px-3 py-1.5 rounded-[var(--radius-sm)] text-xs font-semibold transition-colors cursor-pointer whitespace-nowrap ${
+            className={`px-3 py-1.5 min-h-[44px] sm:min-h-0 rounded-[var(--radius-sm)] text-xs font-semibold transition-colors cursor-pointer whitespace-nowrap ${
               activeFilters.includes('my')
                 ? ''
                 : 'text-[var(--ink-secondary)] hover:text-[var(--ink-primary)] hover:bg-[var(--surface-sunken)]'
@@ -805,7 +825,7 @@ export default function TasksScreen() {
                 ? { backgroundColor: 'var(--accent)', color: '#ffffff' }
                 : undefined
             }
-            className={`px-3 py-1.5 rounded-[var(--radius-sm)] text-xs font-semibold transition-colors cursor-pointer whitespace-nowrap ${
+            className={`px-3 py-1.5 min-h-[44px] sm:min-h-0 rounded-[var(--radius-sm)] text-xs font-semibold transition-colors cursor-pointer whitespace-nowrap ${
               activeFilters.includes('high')
                 ? ''
                 : 'text-[var(--ink-secondary)] hover:text-[var(--ink-primary)] hover:bg-[var(--surface-sunken)]'
@@ -823,7 +843,7 @@ export default function TasksScreen() {
                 ? { backgroundColor: 'var(--accent)', color: '#ffffff' }
                 : undefined
             }
-            className={`px-3 py-1.5 rounded-[var(--radius-sm)] text-xs font-semibold transition-colors cursor-pointer whitespace-nowrap ${
+            className={`px-3 py-1.5 min-h-[44px] sm:min-h-0 rounded-[var(--radius-sm)] text-xs font-semibold transition-colors cursor-pointer whitespace-nowrap ${
               activeFilters.includes('week')
                 ? ''
                 : 'text-[var(--ink-secondary)] hover:text-[var(--ink-primary)] hover:bg-[var(--surface-sunken)]'
@@ -839,6 +859,49 @@ export default function TasksScreen() {
         >
           {filteredTasks.length} {filteredTasks.length === 1 ? 'task' : 'tasks'} shown
         </span>
+      </div>
+
+      {/* Mobile Stage Segmented Control (<640px) */}
+      <div
+        role="tablist"
+        aria-label="Task stages"
+        data-testid="mobile-stage-segmented-control"
+        className="sm:hidden grid grid-cols-4 gap-1 bg-[var(--surface-elevated)] border border-[var(--border-hairline)] rounded-[var(--radius-lg)] p-1"
+      >
+        {STAGE_COLUMNS.map((col) => {
+          const count = filteredTasks.filter((t) => t.status === col.id).length;
+          const isSelected = activeMobileStage === col.id;
+          return (
+            <button
+              key={col.id}
+              type="button"
+              role="tab"
+              aria-selected={isSelected}
+              onClick={() => setActiveMobileStage(col.id)}
+              style={
+                isSelected
+                  ? { backgroundColor: 'var(--accent)', color: '#ffffff' }
+                  : undefined
+              }
+              className={`min-h-[44px] px-1.5 py-1.5 rounded-[var(--radius-md)] text-[11px] font-semibold flex flex-col items-center justify-center gap-0.5 transition-colors cursor-pointer min-w-0 ${
+                isSelected
+                  ? 'shadow-2xs'
+                  : 'text-[var(--ink-secondary)] hover:text-[var(--ink-primary)] hover:bg-[var(--surface-sunken)]'
+              }`}
+            >
+              <span className="truncate max-w-full leading-tight">{col.title}</span>
+              <span
+                className={`text-[10px] font-ui-tabular px-1.5 py-0.2 rounded-full leading-tight ${
+                  isSelected
+                    ? 'bg-white/20 text-white'
+                    : 'bg-[var(--surface-sunken)] text-[var(--ink-muted)]'
+                }`}
+              >
+                {count}
+              </span>
+            </button>
+          );
+        })}
       </div>
 
       {filteredTasks.length === 0 && (
@@ -864,7 +927,7 @@ export default function TasksScreen() {
               <button
                 type="button"
                 onClick={() => setActiveFilters([])}
-                className="px-3.5 py-1.5 rounded-full text-xs font-semibold bg-[var(--surface-sunken)] text-[var(--ink-primary)] border border-[var(--border-strong)] hover:bg-[var(--border-hairline)] cursor-pointer"
+                className="px-3.5 py-1.5 min-h-[44px] sm:min-h-0 rounded-full text-xs font-semibold bg-[var(--surface-sunken)] text-[var(--ink-primary)] border border-[var(--border-strong)] hover:bg-[var(--border-hairline)] cursor-pointer"
               >
                 Reset filters
               </button>
@@ -873,7 +936,7 @@ export default function TasksScreen() {
               type="button"
               onClick={() => setNewTaskModalOpen(true)}
               style={{ backgroundColor: 'var(--accent)' }}
-              className="px-3.5 py-1.5 rounded-full text-xs font-semibold text-white hover:opacity-95 cursor-pointer"
+              className="px-3.5 py-1.5 min-h-[44px] sm:min-h-0 rounded-full text-xs font-semibold text-white hover:opacity-95 cursor-pointer"
             >
               + New task
             </button>
@@ -899,7 +962,7 @@ export default function TasksScreen() {
         onDragCancel={handleDragCancel}
         onDragEnd={handleDragEnd}
       >
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3.5 min-w-0">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3.5 min-w-0">
           {STAGE_COLUMNS.map((column, colIdx) => {
             const colTasks = filteredTasks.filter((t) => t.status === column.id);
             return (
@@ -913,6 +976,8 @@ export default function TasksScreen() {
                 timerTaskId={timerTaskId}
                 activeDragTaskId={activeDragTaskId}
                 highlightedTaskId={highlightedTaskId}
+                isActiveMobileColumn={activeMobileStage === column.id}
+                isMobileViewport={isMobileViewport}
                 onMoveTask={moveTask}
                 onSelectFocusTask={handleSelectFocusTask}
               />

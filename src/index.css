@@ -85,6 +85,13 @@
   --radius-md: 8px;
   --radius-lg: 14px;
 
+  /* 8. Z-Index Scale */
+  --z-content: 0;
+  --z-sticky-header: 20;
+  --z-popover: 50;
+  --z-dialog: 60;
+  --z-toast: 70;
+
   transition:
     --accent 250ms var(--ease-plotline),
     --accent-deep 250ms var(--ease-plotline),
@@ -161,14 +168,22 @@ html,
 body,
 #root {
   height: 100dvh;
+  max-height: 100dvh;
+  width: 100%;
   margin: 0;
   padding: 0;
-  overflow: hidden;
   background-color: var(--surface-canvas);
   color: var(--ink-primary);
   font-family: var(--font-ui);
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+}
+
+.touch-scroll-y {
+  min-height: 0;
+  overflow-y: auto;
+  overflow-x: hidden;
+  -webkit-overflow-scrolling: touch;
 }
 
 /* Date & Time form inputs styling */
@@ -207,7 +222,13 @@ input[type="time"]::-webkit-calendar-picker-indicator:hover {
 /* Responsive dashboard cards size to their content without collapsing grid children. */
 .dashboard-grid > * {
   min-width: 0;
-  min-height: 132px;
+  min-height: 116px;
+}
+
+@media (min-width: 640px) {
+  .dashboard-grid > * {
+    min-height: 132px;
+  }
 }
 
 .dashboard-rings-card {
@@ -280,7 +301,7 @@ input[type="time"]::-webkit-calendar-picker-indicator:hover {
   animation-name: plotlineCardEnter;
   animation-duration: 300ms;
   animation-timing-function: var(--ease-plotline);
-  animation-fill-mode: both;
+  animation-fill-mode: backwards;
   animation-delay: calc(var(--stagger-index, 0) * 40ms);
 }
 

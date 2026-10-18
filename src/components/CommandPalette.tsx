@@ -1,9 +1,11 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import {
   BarChart3,
   Calendar,
   CheckSquare,
   CornerDownLeft,
+  FolderKanban,
   HelpCircle,
   LayoutDashboard,
   Palette,
@@ -66,14 +68,25 @@ export default function CommandPalette({ onNavigate }: CommandPaletteProps) {
   const dialogRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const listRef = useRef<HTMLDivElement>(null);
+  const previousFocusRef = useRef<HTMLElement | null>(null);
 
   useEffect(() => {
     if (commandPaletteOpen) {
+      if (document.activeElement instanceof HTMLElement) {
+        previousFocusRef.current = document.activeElement;
+      }
       setQuery('');
       setActiveIndex(0);
-      setTimeout(() => {
+      const timer = setTimeout(() => {
         inputRef.current?.focus();
       }, 20);
+      return () => clearTimeout(timer);
+    } else if (previousFocusRef.current) {
+      const el = previousFocusRef.current;
+      previousFocusRef.current = null;
+      if (document.body.contains(el)) {
+        el.focus();
+      }
     }
   }, [commandPaletteOpen]);
 
@@ -158,6 +171,11 @@ export default function CommandPalette({ onNavigate }: CommandPaletteProps) {
         id: 'Dashboard',
         subtitle: 'Portfolio overview, weekly output, project rings, and focus timer',
         icon: <LayoutDashboard className="w-4 h-4" />,
+      },
+      {
+        id: 'Projects',
+        subtitle: 'Portfolio streams, status filters, and deliverable progress',
+        icon: <FolderKanban className="w-4 h-4" />,
       },
       {
         id: 'Tasks',
@@ -360,7 +378,7 @@ export default function CommandPalette({ onNavigate }: CommandPaletteProps) {
     }
   };
 
-  if (!commandPaletteOpen) return null;
+  if (!commandPaletteOpen || typeof document === 'undefined') return null;
 
   const activeItem = filteredItems[activeIndex];
   const groupsOrder: Array<CommandPaletteItem['group']> = [
@@ -371,21 +389,22 @@ export default function CommandPalette({ onNavigate }: CommandPaletteProps) {
     'People',
   ];
 
-  return (
+  return createPortal(
     <div
       role="dialog"
       aria-modal="true"
       aria-label="Command Palette"
       ref={dialogRef}
       onKeyDown={handleKeyDown}
-      className="fixed inset-0 z-50 flex items-start justify-center pt-[10vh] p-4 bg-black/45"
+      style={{ zIndex: 'var(--z-popover)' }}
+      className="fixed inset-0 flex items-stretch sm:items-start justify-center p-0 sm:pt-[10vh] sm:p-4 bg-black/45"
       onClick={(e) => {
         if (e.target === e.currentTarget) setCommandPaletteOpen(false);
       }}
     >
-      <div className="w-full max-w-xl bg-[var(--surface-elevated)] border border-[var(--border-strong)] rounded-[var(--radius-lg)] shadow-2xl overflow-hidden flex flex-col max-h-[76vh]">
+      <div className="w-full h-[100dvh] sm:h-auto sm:max-w-xl bg-[var(--surface-elevated)] sm:border border-[var(--border-strong)] rounded-none sm:rounded-[var(--radius-lg)] shadow-2xl overflow-hidden flex flex-col max-h-[100dvh] sm:max-h-[76vh] pt-[env(safe-area-inset-top)] pb-[env(safe-area-inset-bottom)]">
         {/* Search Input Header */}
-        <div className="flex items-center px-4 h-13 border-b border-[var(--border-hairline)] gap-3 shrink-0">
+        <div className="flex items-center px-4 h-14 sm:h-13 border-b border-[var(--border-hairline)] gap-3 shrink-0">
           <Search className="w-4 h-4 shrink-0" style={{ color: 'var(--accent)' }} />
           <input
             ref={inputRef}
@@ -398,8 +417,8 @@ export default function CommandPalette({ onNavigate }: CommandPaletteProps) {
             aria-label="Search commands, pages, projects, tasks, and people"
             value={query}
             onChange={(e) => setQuery(e.target.value)}
-            placeholder="Type a command or search pages, projects, tasks, people..."
-            className="flex-1 bg-transparent text-sm text-[var(--ink-primary)] placeholder:text-[var(--ink-muted)] focus:outline-none"
+            placeholder="Search commands, projects, tasks, people..."
+            className="flex-1 bg-transparent text-sm text-[var(--ink-primary)] placeholder:text-[var(--ink-muted)] focus:outline-none min-w-0"
           />
           {query && (
             <button
@@ -409,18 +428,19 @@ export default function CommandPalette({ onNavigate }: CommandPaletteProps) {
                 inputRef.current?.focus();
               }}
               aria-label="Clear command search"
-              className="p-1 rounded-[var(--radius-xs)] text-[var(--ink-muted)] hover:text-[var(--ink-primary)] cursor-pointer"
+              className="w-11 h-11 min-w-[44px] min-h-[44px] flex items-center justify-center rounded-[var(--radius-xs)] text-[var(--ink-muted)] hover:text-[var(--ink-primary)] cursor-pointer shrink-0"
             >
-              <X className="w-3.5 h-3.5" />
+              <X className="w-4 h-4" />
             </button>
           )}
           <button
             type="button"
             onClick={() => setCommandPaletteOpen(false)}
             aria-label="Close command palette"
-            className="px-2 py-0.5 rounded-[var(--radius-xs)] bg-[var(--surface-sunken)] border border-[var(--border-hairline)] text-[11px] font-medium text-[var(--ink-secondary)] hover:text-[var(--ink-primary)] cursor-pointer"
+            className="min-h-[44px] min-w-[44px] px-3 py-1 rounded-[var(--radius-sm)] bg-[var(--surface-sunken)] border border-[var(--border-hairline)] text-xs font-semibold text-[var(--ink-secondary)] hover:text-[var(--ink-primary)] cursor-pointer flex items-center justify-center shrink-0"
           >
-            Esc
+            <span className="sm:hidden">Close</span>
+            <span className="hidden sm:inline">Esc</span>
           </button>
         </div>
 
@@ -430,7 +450,7 @@ export default function CommandPalette({ onNavigate }: CommandPaletteProps) {
           role="listbox"
           aria-label="Command palette results"
           ref={listRef}
-          className="flex-1 overflow-y-auto p-2 space-y-3"
+          className="flex-1 overflow-y-auto min-h-0 [-webkit-overflow-scrolling:touch] p-2 space-y-3"
         >
           {filteredItems.length === 0 ? (
             <div className="py-10 flex flex-col items-center justify-center text-center gap-2">
@@ -465,7 +485,7 @@ export default function CommandPalette({ onNavigate }: CommandPaletteProps) {
                         aria-selected={isSelected}
                         onMouseEnter={() => setActiveIndex(idx)}
                         onClick={() => item.onSelect()}
-                        className={`px-3 py-2 rounded-[var(--radius-md)] flex items-center justify-between gap-3 cursor-pointer transition-colors ${
+                        className={`px-3 py-2.5 min-h-[44px] rounded-[var(--radius-md)] flex items-center justify-between gap-3 cursor-pointer transition-colors ${
                           isSelected
                             ? 'bg-[var(--accent-soft)] text-[var(--ink-primary)]'
                             : 'text-[var(--ink-primary)] hover:bg-[var(--surface-sunken)]'
@@ -522,13 +542,14 @@ export default function CommandPalette({ onNavigate }: CommandPaletteProps) {
         {/* Footer Keyboard Hints */}
         <div className="px-4 py-2 bg-[var(--surface-sunken)] border-t border-[var(--border-hairline)] flex items-center justify-between text-[11px] text-[var(--ink-muted)] shrink-0">
           <div className="flex items-center gap-3">
-            <span>↑↓ Navigate</span>
+            <span className="hidden sm:inline">↑↓ Navigate</span>
             <span>↵ Select</span>
             <span>Esc Close</span>
           </div>
           <span>{filteredItems.length} commands & items</span>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body
   );
 }

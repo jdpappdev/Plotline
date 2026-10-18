@@ -1,11 +1,10 @@
 import React, { Component, type ErrorInfo, useEffect, useState } from 'react';
+import { createPortal } from 'react-dom';
 import {
   ChevronDown,
-  Compass,
   HelpCircle,
   Keyboard,
   Play,
-  Sparkles,
   X,
 } from 'lucide-react';
 import { RouteId, usePlotlineStore } from '../store';
@@ -58,11 +57,11 @@ export interface TourStepConfig {
 export const TOUR_STEPS: TourStepConfig[] = [
   {
     step: 1,
-    targetSelector: '[data-tour="sidebar"]',
+    targetSelector: '[data-tour="sidebar"], [data-tour="mobile-tabbar"]',
     route: 'Dashboard',
-    title: '1. Collapsing Navigation Sidebar',
+    title: '1. Responsive Navigation',
     description:
-      'Switch between Dashboard, Tasks, Calendar, Analytics, Team, Settings, and Help, or collapse the rail for maximum drafting space.',
+      'Switch between Dashboard, Tasks, Calendar, Analytics, Team, Settings, and Help via the sidebar rail or mobile bottom tab bar.',
   },
   {
     step: 2,
@@ -70,7 +69,7 @@ export const TOUR_STEPS: TourStepConfig[] = [
     route: 'Dashboard',
     title: '2. Workspace Search & ⌘K Command Palette',
     description:
-      'Filter projects, tasks, and specialists live, or press ⌘K / Ctrl+K to run instant actions from anywhere.',
+      'Filter projects, tasks, and specialists live, or press ⌘K / tap Search to run instant actions from anywhere.',
   },
   {
     step: 3,
@@ -108,7 +107,14 @@ class TourErrorBoundary extends Component<React.PropsWithChildren, { hasError: b
 
 function findTourTarget(selector: string): Element | null {
   try {
-    return document.querySelector(selector);
+    const candidates = Array.from(document.querySelectorAll(selector));
+    for (const el of candidates) {
+      const r = el.getBoundingClientRect();
+      if (r.width > 0 && r.height > 0) {
+        return el;
+      }
+    }
+    return candidates[0] || null;
   } catch {
     return null;
   }
@@ -133,7 +139,7 @@ function TourOverlayContent({ onNavigate }: { onNavigate: (route: RouteId) => vo
     let observer: MutationObserver | null = null;
 
     const finishIfFound = () => {
-      if (cancelled) return;
+      if (cancelled) return false;
       const element = findTourTarget(currentConfig.targetSelector);
       if (!element) return false;
       const reduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
@@ -176,17 +182,18 @@ function TourOverlayContent({ onNavigate }: { onNavigate: (route: RouteId) => vo
     };
   }, [tourStep]);
 
-  if (!currentConfig) return null;
+  if (!currentConfig || typeof document === 'undefined') return null;
 
   const isLastStep = currentConfig.step === TOUR_STEPS.length;
 
-  return (
+  return createPortal(
     <div
       role="dialog"
       aria-modal="true"
       aria-label={`Guided tour step ${currentConfig.step} of ${TOUR_STEPS.length}`}
       data-testid="guided-tour-overlay"
-      className="fixed inset-0 z-50 pointer-events-auto"
+      style={{ zIndex: 'var(--z-dialog)' }}
+      className="fixed inset-0 pointer-events-auto"
     >
       {/* Backdrop */}
       <div
@@ -201,18 +208,18 @@ function TourOverlayContent({ onNavigate }: { onNavigate: (route: RouteId) => vo
           style={{
             top: Math.max(4, rect.top - 6),
             left: Math.max(4, rect.left - 6),
-            width: rect.width + 12,
+            width: Math.min(window.innerWidth - 8, rect.width + 12),
             height: rect.height + 12,
             borderColor: 'var(--accent)',
             boxShadow: '0 0 0 4px var(--accent-soft), 0 12px 32px rgba(0,0,0,0.28)',
           }}
-          className="fixed z-50 rounded-[var(--radius-lg)] border-2 pointer-events-none transition-all duration-250 ease-plotline"
+          className="fixed rounded-[var(--radius-lg)] border-2 pointer-events-none transition-all duration-250 ease-plotline"
         />
       )}
 
       {/* Floating Tour Step Card */}
-      <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 w-full max-w-md px-4">
-        <div className="bg-[var(--surface-elevated)] border-2 border-[var(--accent)] rounded-[var(--radius-lg)] shadow-2xl p-5 space-y-3">
+      <div className="fixed bottom-20 sm:bottom-6 left-1/2 -translate-x-1/2 w-full max-w-md px-4">
+        <div className="bg-[var(--surface-elevated)] border-2 border-[var(--accent)] rounded-[var(--radius-lg)] shadow-2xl p-4 sm:p-5 space-y-3">
           <div className="flex items-center justify-between gap-2">
             <span
               className="px-2.5 py-0.5 rounded-full text-[11px] font-semibold"
@@ -227,7 +234,7 @@ function TourOverlayContent({ onNavigate }: { onNavigate: (route: RouteId) => vo
               type="button"
               onClick={() => setTourStep(null)}
               aria-label="Close guided tour"
-              className="p-1 rounded-[var(--radius-xs)] text-[var(--ink-muted)] hover:text-[var(--ink-primary)] cursor-pointer"
+              className="w-11 h-11 min-w-[44px] min-h-[44px] sm:w-8 sm:h-8 sm:min-w-0 sm:min-h-0 -m-2 sm:m-0 rounded-[var(--radius-xs)] flex items-center justify-center text-[var(--ink-muted)] hover:text-[var(--ink-primary)] cursor-pointer"
             >
               <X className="w-4 h-4" />
             </button>
@@ -257,7 +264,7 @@ function TourOverlayContent({ onNavigate }: { onNavigate: (route: RouteId) => vo
                         ? 'var(--accent)'
                         : 'var(--border-strong)',
                   }}
-                  className="w-2 h-2 rounded-full transition-colors cursor-pointer"
+                  className="w-3 h-3 sm:w-2 sm:h-2 rounded-full transition-colors cursor-pointer"
                 />
               ))}
             </div>
@@ -267,7 +274,7 @@ function TourOverlayContent({ onNavigate }: { onNavigate: (route: RouteId) => vo
                 <button
                   type="button"
                   onClick={() => setTourStep(currentConfig.step - 1)}
-                  className="px-3 py-1.5 rounded-full text-xs font-medium text-[var(--ink-secondary)] hover:text-[var(--ink-primary)] hover:bg-[var(--surface-sunken)] cursor-pointer"
+                  className="px-3 py-1.5 min-h-[40px] sm:min-h-0 rounded-full text-xs font-medium text-[var(--ink-secondary)] hover:text-[var(--ink-primary)] hover:bg-[var(--surface-sunken)] cursor-pointer"
                 >
                   Previous
                 </button>
@@ -278,7 +285,7 @@ function TourOverlayContent({ onNavigate }: { onNavigate: (route: RouteId) => vo
                   isLastStep ? setTourStep(null) : setTourStep(currentConfig.step + 1)
                 }
                 style={{ backgroundColor: 'var(--accent)' }}
-                className="px-4 py-1.5 rounded-full text-xs font-semibold text-white hover:opacity-95 cursor-pointer"
+                className="px-4 py-1.5 min-h-[40px] sm:min-h-0 rounded-full text-xs font-semibold text-white hover:opacity-95 cursor-pointer"
               >
                 {isLastStep ? 'Finish tour' : 'Next step'}
               </button>
@@ -286,7 +293,8 @@ function TourOverlayContent({ onNavigate }: { onNavigate: (route: RouteId) => vo
           </div>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body
   );
 }
 
@@ -322,7 +330,7 @@ export default function HelpScreen() {
           type="button"
           onClick={() => setTourStep(1)}
           style={{ backgroundColor: 'var(--accent)' }}
-          className="inline-flex items-center gap-2 px-4 py-2 rounded-full text-xs sm:text-sm font-semibold text-white hover:opacity-95 transition-opacity cursor-pointer shrink-0 self-start sm:self-auto shadow-2xs"
+          className="inline-flex items-center gap-2 px-4 py-2 min-h-[44px] sm:min-h-0 rounded-full text-xs sm:text-sm font-semibold text-white hover:opacity-95 transition-opacity cursor-pointer shrink-0 self-start sm:self-auto shadow-2xs"
         >
           <Play className="w-3.5 h-3.5 fill-current" />
           <span>Replay tour</span>
@@ -335,7 +343,7 @@ export default function HelpScreen() {
         <section
           aria-labelledby="help-shortcuts-heading"
           style={{ '--stagger-index': 1 } as React.CSSProperties}
-          className="plotline-enter lg:col-span-5 bg-[var(--surface-elevated)] border border-[var(--border-hairline)] rounded-[var(--radius-lg)] p-5 space-y-4"
+          className="plotline-enter lg:col-span-5 bg-[var(--surface-elevated)] border border-[var(--border-hairline)] rounded-[var(--radius-lg)] p-4 sm:p-5 space-y-4"
         >
           <div className="flex items-center justify-between border-b border-[var(--border-hairline)] pb-3">
             <div className="flex items-center gap-2">
@@ -376,7 +384,7 @@ export default function HelpScreen() {
         <section
           aria-labelledby="help-faq-heading"
           style={{ '--stagger-index': 2 } as React.CSSProperties}
-          className="plotline-enter lg:col-span-7 bg-[var(--surface-elevated)] border border-[var(--border-hairline)] rounded-[var(--radius-lg)] p-5 space-y-4"
+          className="plotline-enter lg:col-span-7 bg-[var(--surface-elevated)] border border-[var(--border-hairline)] rounded-[var(--radius-lg)] p-4 sm:p-5 space-y-4"
         >
           <div className="flex items-center justify-between border-b border-[var(--border-hairline)] pb-3">
             <div className="flex items-center gap-2">
@@ -395,12 +403,12 @@ export default function HelpScreen() {
             {FAQ_ITEMS.map((faq) => {
               const isOpen = openFaqId === faq.id;
               return (
-                <div key={faq.id} className="py-3">
+                <div key={faq.id} className="py-2">
                   <button
                     type="button"
                     aria-expanded={isOpen}
                     onClick={() => setOpenFaqId(isOpen ? null : faq.id)}
-                    className="w-full text-left flex items-center justify-between gap-3 py-1 cursor-pointer"
+                    className="w-full min-h-[44px] text-left flex items-center justify-between gap-3 py-1.5 cursor-pointer"
                   >
                     <span className="text-xs sm:text-sm font-semibold text-[var(--ink-primary)]">
                       {faq.question}
@@ -412,7 +420,7 @@ export default function HelpScreen() {
                     />
                   </button>
                   {isOpen && (
-                    <p className="mt-2 text-xs sm:text-sm text-[var(--ink-secondary)] leading-relaxed pr-4">
+                    <p className="mt-1 pb-2 text-xs sm:text-sm text-[var(--ink-secondary)] leading-relaxed pr-4">
                       {faq.answer}
                     </p>
                   )}

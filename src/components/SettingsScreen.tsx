@@ -109,11 +109,11 @@ export default function SettingsScreen() {
 
       {/* Main Grid: Left Sub-Nav (3 cols) + Right Content Panel (9 cols) */}
       <div className="grid grid-cols-1 md:grid-cols-12 gap-5 items-start">
-        {/* Left Sub-Nav */}
+        {/* Left Sub-Nav (2x2 grid on <640px, vertical stack on md+) */}
         <nav
           aria-label="Settings sections"
           style={{ '--stagger-index': 1 } as React.CSSProperties}
-          className="plotline-enter md:col-span-3 bg-[var(--surface-elevated)] border border-[var(--border-hairline)] rounded-[var(--radius-lg)] p-2 space-y-1"
+          className="plotline-enter md:col-span-3 bg-[var(--surface-elevated)] border border-[var(--border-hairline)] rounded-[var(--radius-lg)] p-2 grid grid-cols-2 sm:grid-cols-4 md:grid-cols-1 gap-1"
         >
           {(
             [
@@ -131,7 +131,7 @@ export default function SettingsScreen() {
                 type="button"
                 onClick={() => setActiveTab(item.id)}
                 aria-current={isActive ? 'page' : undefined}
-                className={`w-full flex items-center gap-2.5 px-3 py-2.5 rounded-[var(--radius-md)] text-xs sm:text-sm font-medium transition-colors cursor-pointer ${
+                className={`w-full min-h-[44px] flex items-center gap-2 px-3 py-2.5 rounded-[var(--radius-md)] text-xs sm:text-sm font-medium transition-colors cursor-pointer min-w-0 ${
                   isActive
                     ? 'bg-[var(--accent-soft)] text-[var(--ink-primary)] font-semibold'
                     : 'text-[var(--ink-secondary)] hover:text-[var(--ink-primary)] hover:bg-[var(--surface-sunken)]'
@@ -141,7 +141,7 @@ export default function SettingsScreen() {
                   className="w-4 h-4 shrink-0"
                   style={{ color: isActive ? 'var(--accent)' : 'currentColor' }}
                 />
-                <span>{item.label}</span>
+                <span className="truncate">{item.label}</span>
               </button>
             );
           })}
@@ -150,14 +150,14 @@ export default function SettingsScreen() {
         {/* Right Content Area */}
         <div
           style={{ '--stagger-index': 2 } as React.CSSProperties}
-          className="plotline-enter md:col-span-9 space-y-5"
+          className="plotline-enter md:col-span-9 space-y-5 min-w-0"
         >
           {activeTab === 'Profile' && (
             <section
               aria-labelledby="settings-profile-heading"
-              className="bg-[var(--surface-elevated)] border border-[var(--border-hairline)] rounded-[var(--radius-lg)] p-6 space-y-5"
+              className="bg-[var(--surface-elevated)] border border-[var(--border-hairline)] rounded-[var(--radius-lg)] p-4 sm:p-6 space-y-5"
             >
-              <div className="flex items-center justify-between border-b border-[var(--border-hairline)] pb-4">
+              <div className="flex items-center justify-between border-b border-[var(--border-hairline)] pb-4 gap-3">
                 <div>
                   <h2
                     id="settings-profile-heading"
@@ -171,7 +171,7 @@ export default function SettingsScreen() {
                 </div>
 
                 {/* Live Initials Avatar */}
-                <div className="flex items-center gap-3">
+                <div className="flex items-center gap-3 shrink-0">
                   <span
                     data-testid="settings-profile-avatar"
                     style={{ backgroundColor: 'var(--accent)' }}
@@ -197,7 +197,7 @@ export default function SettingsScreen() {
                       required
                       value={name}
                       onChange={(e) => setName(e.target.value)}
-                      className="w-full h-10 px-3 rounded-[var(--radius-sm)] bg-[var(--surface-sunken)] border border-[var(--border-strong)] text-sm text-[var(--ink-primary)] focus:outline-2 focus:outline-[var(--accent)] focus:bg-[var(--surface-elevated)]"
+                      className="w-full h-11 sm:h-10 px-3 rounded-[var(--radius-sm)] bg-[var(--surface-sunken)] border border-[var(--border-strong)] text-sm text-[var(--ink-primary)] focus:outline-2 focus:outline-[var(--accent)] focus:bg-[var(--surface-elevated)]"
                     />
                   </div>
 
@@ -214,7 +214,7 @@ export default function SettingsScreen() {
                       required
                       value={role}
                       onChange={(e) => setRole(e.target.value)}
-                      className="w-full h-10 px-3 rounded-[var(--radius-sm)] bg-[var(--surface-sunken)] border border-[var(--border-strong)] text-sm text-[var(--ink-primary)] focus:outline-2 focus:outline-[var(--accent)] focus:bg-[var(--surface-elevated)]"
+                      className="w-full h-11 sm:h-10 px-3 rounded-[var(--radius-sm)] bg-[var(--surface-sunken)] border border-[var(--border-strong)] text-sm text-[var(--ink-primary)] focus:outline-2 focus:outline-[var(--accent)] focus:bg-[var(--surface-elevated)]"
                     />
                   </div>
                 </div>
@@ -232,7 +232,7 @@ export default function SettingsScreen() {
                     required
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
-                    className="w-full h-10 px-3 rounded-[var(--radius-sm)] bg-[var(--surface-sunken)] border border-[var(--border-strong)] text-sm text-[var(--ink-primary)] focus:outline-2 focus:outline-[var(--accent)] focus:bg-[var(--surface-elevated)]"
+                    className="w-full h-11 sm:h-10 px-3 rounded-[var(--radius-sm)] bg-[var(--surface-sunken)] border border-[var(--border-strong)] text-sm text-[var(--ink-primary)] focus:outline-2 focus:outline-[var(--accent)] focus:bg-[var(--surface-elevated)]"
                   />
                 </div>
 
@@ -240,7 +240,7 @@ export default function SettingsScreen() {
                   <button
                     type="submit"
                     style={{ backgroundColor: 'var(--accent)' }}
-                    className="inline-flex items-center gap-1.5 px-5 py-2 rounded-full text-xs sm:text-sm font-semibold text-white hover:opacity-95 transition-opacity cursor-pointer"
+                    className="inline-flex items-center gap-1.5 px-5 py-2 min-h-[44px] sm:min-h-0 rounded-full text-xs sm:text-sm font-semibold text-white hover:opacity-95 transition-opacity cursor-pointer"
                   >
                     <Check className="w-4 h-4" />
                     <span>Save</span>
@@ -253,7 +253,7 @@ export default function SettingsScreen() {
           {activeTab === 'Notifications' && (
             <section
               aria-labelledby="settings-notifications-heading"
-              className="bg-[var(--surface-elevated)] border border-[var(--border-hairline)] rounded-[var(--radius-lg)] p-6 space-y-4"
+              className="bg-[var(--surface-elevated)] border border-[var(--border-hairline)] rounded-[var(--radius-lg)] p-4 sm:p-6 space-y-4"
             >
               <div className="border-b border-[var(--border-hairline)] pb-4">
                 <h2
@@ -290,18 +290,22 @@ export default function SettingsScreen() {
                         aria-checked={enabled}
                         aria-label={item.label}
                         onClick={() => toggleNotification(item.key)}
-                        style={{
-                          backgroundColor: enabled
-                            ? 'var(--accent)'
-                            : 'var(--border-strong)',
-                        }}
-                        className="relative w-11 h-6 rounded-full transition-colors cursor-pointer shrink-0 p-0.5"
+                        className="relative w-12 min-h-[44px] flex items-center justify-center shrink-0 cursor-pointer"
                       >
                         <span
-                          className={`block w-5 h-5 rounded-full bg-white shadow-xs transition-transform ${
-                            enabled ? 'translate-x-5' : 'translate-x-0'
-                          }`}
-                        />
+                          style={{
+                            backgroundColor: enabled
+                              ? 'var(--accent)'
+                              : 'var(--border-strong)',
+                          }}
+                          className="w-11 h-6 rounded-full transition-colors p-0.5 block"
+                        >
+                          <span
+                            className={`block w-5 h-5 rounded-full bg-white shadow-xs transition-transform ${
+                              enabled ? 'translate-x-5' : 'translate-x-0'
+                            }`}
+                          />
+                        </span>
                       </button>
                     </div>
                   );
@@ -314,7 +318,7 @@ export default function SettingsScreen() {
             <section
               aria-labelledby="settings-appearance-heading"
               data-tour="accent"
-              className="bg-[var(--surface-elevated)] border border-[var(--border-hairline)] rounded-[var(--radius-lg)] p-6 space-y-6"
+              className="bg-[var(--surface-elevated)] border border-[var(--border-hairline)] rounded-[var(--radius-lg)] p-4 sm:p-6 space-y-6"
             >
               <div className="border-b border-[var(--border-hairline)] pb-4">
                 <h2
@@ -347,7 +351,7 @@ export default function SettingsScreen() {
                         type="button"
                         onClick={() => setAccent(key, true)}
                         aria-pressed={isSelected}
-                        className={`p-3.5 rounded-[var(--radius-md)] border text-left transition-colors duration-160 ease-plotline cursor-pointer flex items-start justify-between gap-3 ${
+                        className={`p-3.5 min-h-[56px] rounded-[var(--radius-md)] border text-left transition-colors duration-160 ease-plotline cursor-pointer flex items-start justify-between gap-3 ${
                           isSelected
                             ? 'bg-[var(--accent-soft)] border-[var(--accent)]'
                             : 'bg-[var(--surface-canvas)] border-[var(--border-hairline)] hover:border-[var(--border-strong)]'
@@ -393,7 +397,7 @@ export default function SettingsScreen() {
                 <div
                   role="group"
                   aria-label="Week start day"
-                  className="inline-flex items-center bg-[var(--surface-sunken)] border border-[var(--border-hairline)] rounded-full p-1 gap-1 shrink-0"
+                  className="inline-flex items-center bg-[var(--surface-sunken)] border border-[var(--border-hairline)] rounded-full p-1 gap-1 shrink-0 self-start sm:self-auto"
                 >
                   {(['monday', 'sunday'] as WeekStart[]).map((day) => {
                     const active = weekStart === day;
@@ -408,7 +412,7 @@ export default function SettingsScreen() {
                             ? { backgroundColor: 'var(--accent)', color: '#ffffff' }
                             : undefined
                         }
-                        className={`px-3.5 py-1.5 rounded-full text-xs font-semibold capitalize transition-colors cursor-pointer ${
+                        className={`px-3.5 py-1.5 min-h-[40px] sm:min-h-0 rounded-full text-xs font-semibold capitalize transition-colors cursor-pointer ${
                           active
                             ? ''
                             : 'text-[var(--ink-secondary)] hover:text-[var(--ink-primary)]'
@@ -426,7 +430,7 @@ export default function SettingsScreen() {
           {activeTab === 'Data' && (
             <section
               aria-labelledby="settings-data-heading"
-              className="bg-[var(--surface-elevated)] border border-[var(--border-hairline)] rounded-[var(--radius-lg)] p-6 space-y-6"
+              className="bg-[var(--surface-elevated)] border border-[var(--border-hairline)] rounded-[var(--radius-lg)] p-4 sm:p-6 space-y-6"
             >
               <div className="border-b border-[var(--border-hairline)] pb-4">
                 <h2
@@ -455,7 +459,7 @@ export default function SettingsScreen() {
                     type="button"
                     onClick={handleRunCheck}
                     style={{ backgroundColor: 'var(--accent)' }}
-                    className="inline-flex items-center gap-1.5 px-4 py-2 rounded-full text-xs font-semibold text-white hover:opacity-95 transition-opacity cursor-pointer shadow-2xs"
+                    className="inline-flex items-center gap-1.5 px-4 py-2 min-h-[44px] sm:min-h-0 rounded-full text-xs font-semibold text-white hover:opacity-95 transition-opacity cursor-pointer shadow-2xs"
                   >
                     <ShieldCheck className="w-3.5 h-3.5" />
                     <span>Run data check</span>
@@ -478,7 +482,7 @@ export default function SettingsScreen() {
                       resetDemoData();
                       setValidationReport(null);
                     }}
-                    className="inline-flex items-center gap-1.5 px-4 py-2 rounded-full text-xs font-semibold bg-[#FBECEE] text-[#C9352B] border border-[#F5C2C7] hover:bg-[#F8D7DA] transition-colors cursor-pointer"
+                    className="inline-flex items-center gap-1.5 px-4 py-2 min-h-[44px] sm:min-h-0 rounded-full text-xs font-semibold bg-[#FBECEE] text-[#C9352B] border border-[#F5C2C7] hover:bg-[#F8D7DA] transition-colors cursor-pointer"
                   >
                     <RotateCcw className="w-3.5 h-3.5" />
                     <span>Reset demo data</span>
