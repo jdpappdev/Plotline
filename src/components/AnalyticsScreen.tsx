@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import {
   ArrowDownRight,
   ArrowUpRight,
@@ -92,6 +92,14 @@ function SvgSparkline({ values, id }: SparklineProps) {
   );
 }
 
+function getHeatmapBg(hours: number): string {
+  if (hours <= 0) return 'var(--surface-sunken)';
+  if (hours < 2.5) return 'color-mix(in oklab, var(--accent) 25%, var(--surface-sunken))';
+  if (hours < 5.0) return 'color-mix(in oklab, var(--accent) 50%, var(--surface-sunken))';
+  if (hours < 7.5) return 'color-mix(in oklab, var(--accent) 75%, var(--surface-sunken))';
+  return 'var(--accent)';
+}
+
 export default function AnalyticsScreen() {
   const {
     projects,
@@ -101,8 +109,14 @@ export default function AnalyticsScreen() {
     pushToast,
   } = usePlotlineStore();
 
+  const [mounted, setMounted] = useState(false);
   const [range, setRange] = useState<RangeKey>('30D');
   const [hoveredPointIdx, setHoveredPointIdx] = useState<number | null>(null);
+
+  useEffect(() => {
+    const id = requestAnimationFrame(() => setMounted(true));
+    return () => cancelAnimationFrame(id);
+  }, []);
 
   const rangeDays = range === '7D' ? 7 : range === '30D' ? 30 : 90;
 
@@ -326,19 +340,21 @@ export default function AnalyticsScreen() {
       );
     }
 
-    // Donut: Time by project (sum seconds first, then format)
-    const projectTotals = uniqueProjects.map((proj, idx) => {
-      const projSessions = currentSessions.filter((s) => s.projectId === proj.id);
-      const secs = projSessions.reduce((a, b) => a + b.resolvedSeconds, 0);
-      const hrs = Number((secs / 3600).toFixed(1));
-      return {
-        project: proj,
-        seconds: secs,
-        hours: hrs,
-        formattedDuration: formatDuration(secs),
-        tint: ACCENT_TINTS[idx % ACCENT_TINTS.length],
-      };
-    });
+    // Donut: Time by project (sum seconds first, then format) - hide 0-hour project rows
+    const projectTotals = uniqueProjects
+      .map((proj, idx) => {
+        const projSessions = currentSessions.filter((s) => s.projectId === proj.id);
+        const secs = projSessions.reduce((a, b) => a + b.resolvedSeconds, 0);
+        const hrs = Number((secs / 3600).toFixed(1));
+        return {
+          project: proj,
+          seconds: secs,
+          hours: hrs,
+          formattedDuration: formatDuration(secs),
+          tint: ACCENT_TINTS[idx % ACCENT_TINTS.length],
+        };
+      })
+      .filter((item) => item.seconds > 0);
     const totalProjectSeconds = Math.max(
       1,
       projectTotals.reduce((a, b) => a + b.seconds, 0)
@@ -546,7 +562,12 @@ export default function AnalyticsScreen() {
     });
   }, [analyticsData.chartPoints, maxChartVal, plotH, plotW]);
 
-  const currentLinePoints = chartCoords.map((p) => `${p.x},${p.yCurr}`).join(' ');
+  const solidChartCoords = chartCoords.slice(0, Math.max(1, chartCoords.length - 1));
+  const currentLineSolidPoints = solidChartCoords.map((p) => `${p.x},${p.yCurr}`).join(' ');
+  const currentLineTodayDashedPoints =
+    chartCoords.length >= 2
+      ? chartCoords.slice(-2).map((p) => `${p.x},${p.yCurr}`).join(' ')
+      : '';
   const prevLinePoints = chartCoords.map((p) => `${p.x},${p.yPrev}`).join(' ');
   const avgLinePoints = chartCoords.map((p) => `${p.x},${p.yAvg}`).join(' ');
   const currentAreaPath =
@@ -563,6 +584,24 @@ export default function AnalyticsScreen() {
   const donutRadius = 54;
   const donutCircumference = 2 * Math.PI * donutRadius;
   let cumulativeDonutPct = 0;
+
+  if (!mounted) {
+    return (
+      <div className="max-w-[1360px] mx-auto space-y-4 pb-6 min-w-0 animate-pulse">
+        <div className="h-10 bg-[var(--surface-elevated)] border border-[var(--border-hairline)] rounded-[var(--radius-lg)] w-full" />
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3.5">
+          <div className="h-28 bg-[var(--surface-elevated)] border border-[var(--border-hairline)] rounded-[var(--radius-lg)]" />
+          <div className="h-28 bg-[var(--surface-elevated)] border border-[var(--border-hairline)] rounded-[var(--radius-lg)]" />
+          <div className="h-28 bg-[var(--surface-elevated)] border border-[var(--border-hairline)] rounded-[var(--radius-lg)]" />
+          <div className="h-28 bg-[var(--surface-elevated)] border border-[var(--border-hairline)] rounded-[var(--radius-lg)]" />
+        </div>
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-3.5">
+          <div className="lg:col-span-7 h-64 bg-[var(--surface-elevated)] border border-[var(--border-hairline)] rounded-[var(--radius-lg)]" />
+          <div className="lg:col-span-5 h-64 bg-[var(--surface-elevated)] border border-[var(--border-hairline)] rounded-[var(--radius-lg)]" />
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="max-w-[1360px] mx-auto space-y-4 pb-6 min-w-0">
@@ -873,6 +912,7 @@ export default function AnalyticsScreen() {
               >
                 <span className="font-semibold text-[var(--ink-primary)]">
                   {hoveredPoint.label}
+                  {hoveredPoint.daysAgo === 0 ? ' (today so far)' : ''}
                 </span>
                 <span style={{ color: 'var(--accent)' }} className="font-semibold">
                   Current: {hoveredPoint.formattedDuration}
@@ -956,8 +996,21 @@ export default function AnalyticsScreen() {
                 strokeWidth="2.25"
                 strokeLinecap="round"
                 strokeLinejoin="round"
-                points={currentLinePoints}
+                points={currentLineSolidPoints}
               />
+
+              {/* Incomplete Current Day Dashed Segment */}
+              {currentLineTodayDashedPoints && (
+                <polyline
+                  fill="none"
+                  stroke="var(--accent)"
+                  strokeWidth="2.25"
+                  strokeDasharray="4 4"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  points={currentLineTodayDashedPoints}
+                />
+              )}
 
               {/* Crosshair & Active Point */}
               {hoveredPoint && (
@@ -1154,16 +1207,14 @@ export default function AnalyticsScreen() {
 
           <div className="grid grid-cols-7 sm:grid-cols-10 gap-1.5 py-2">
             {analyticsData.dailyCurrent.slice(-30).map((day) => {
-              const intensity = Math.min(1, Math.max(0.14, day.hours / 7.5));
               return (
                 <div
                   key={day.date}
                   title={`${day.label}: ${day.formattedDuration} (${day.tasks} tasks)`}
                   style={{
-                    backgroundColor: 'var(--accent)',
-                    opacity: Number(intensity.toFixed(2)),
+                    backgroundColor: getHeatmapBg(day.hours),
                   }}
-                  className="h-7 rounded-[var(--radius-xs)] transition-opacity hover:scale-105"
+                  className="h-7 rounded-[var(--radius-xs)] transition-transform hover:scale-105"
                 />
               );
             })}
@@ -1172,11 +1223,12 @@ export default function AnalyticsScreen() {
           <div className="flex items-center justify-between text-[11px] text-[var(--ink-muted)] pt-1 border-t border-[var(--border-hairline)]">
             <span>Lower cadence</span>
             <div className="flex items-center gap-1">
-              {[0.2, 0.4, 0.65, 0.85, 1].map((op) => (
+              {[0, 2, 4, 6, 8].map((h) => (
                 <span
-                  key={op}
+                  key={h}
                   className="w-3 h-3 rounded-[2px]"
-                  style={{ backgroundColor: 'var(--accent)', opacity: op }}
+                  style={{ backgroundColor: getHeatmapBg(h) }}
+                  title={`${h}h`}
                 />
               ))}
             </div>

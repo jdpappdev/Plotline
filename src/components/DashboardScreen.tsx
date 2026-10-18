@@ -14,6 +14,8 @@ import {
 import {
   formatDuration,
   formatLoggedDuration,
+  getProjectStatus,
+  pluralize,
   Project,
   TaskItem,
   TeamMember,
@@ -138,6 +140,8 @@ export default function DashboardScreen() {
     toggleTimer,
     resetTimer,
     setTimerTask,
+    openProjectDialog,
+    setImportModalOpen,
     deleteProject,
   } = usePlotlineStore();
 
@@ -252,16 +256,20 @@ export default function DashboardScreen() {
 
   // --- Store-Derived Metrics ---
   // Row 1: Four equal stat cards (3 cols each): Total, Ended, Running, Pending
-  const totalCount = uniqueProjects.length + uniqueTasks.length;
-  const endedCount =
-    uniqueProjects.filter((p) => p.status === 'Completed').length +
-    uniqueTasks.filter((t) => t.status === 'Done').length;
-  const runningCount =
-    uniqueProjects.filter((p) => p.status === 'On Track' || p.status === 'At Risk').length +
-    uniqueTasks.filter((t) => t.status === 'In Progress' || t.status === 'In Review').length;
-  const pendingCount =
-    uniqueProjects.filter((p) => p.status === 'Planning').length +
-    uniqueTasks.filter((t) => t.status === 'Backlog').length;
+  const totalCount = uniqueProjects.length;
+  const { endedCount, runningCount, pendingCount } = useMemo(() => {
+    let ended = 0;
+    let running = 0;
+    let pending = 0;
+    uniqueProjects.forEach((p) => {
+      const st = getProjectStatus(p, tasks);
+      if (st === 'Ended') ended++;
+      else if (st === 'Pending') pending++;
+      else running++;
+    });
+    return { endedCount: ended, runningCount: running, pendingCount: pending };
+  }, [uniqueProjects, tasks]);
+  const openTasksCount = uniqueTasks.filter((t) => t.status !== 'Done').length;
 
   // Row 2 Col 1-6: Weekly output — 7 slim columns (~28px wide, 8px radius), segmented by project with 2px gaps
   const todayWeekdayIndex = new Date().getDay();
@@ -412,7 +420,7 @@ export default function DashboardScreen() {
 
           <button
             type="button"
-            onClick={() => importSampleBatch()}
+            onClick={() => setImportModalOpen(true)}
             className="inline-flex items-center gap-1.5 px-4 py-2 rounded-full text-xs sm:text-sm font-semibold bg-[var(--surface-elevated)] text-[var(--ink-primary)] border border-[var(--border-strong)] hover:bg-[var(--surface-sunken)] transition-colors whitespace-nowrap shrink-0 cursor-pointer"
           >
             <Download className="w-3.5 h-3.5 text-[var(--ink-secondary)]" />
@@ -421,49 +429,55 @@ export default function DashboardScreen() {
         </div>
       </div>
 
-      {/* Responsive Grid:
-          - >=1024px (lg): 12 columns, locked 3 rows so 1440x900 fits with no scroll
-          - 640px–1023px (sm): 2 columns
-          - <640px: 1 column */}
+      {/* Responsive Grid */}
       <div className="dashboard-grid flex-1 min-h-0 min-w-0 grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-12 gap-3.5 [grid-auto-rows:auto]">
         {/* ==================== ROW 1: FOUR EQUAL STAT CARDS (3 COLS EACH) ==================== */}
-        {/* Card 1: Total (Uses --surface-accent, white text >=4.5:1) */}
-        <div
+        {/* Card 1: Total */}
+        <button
+          type="button"
+          onClick={() => {
+            setActiveRoute('Projects');
+            if (typeof window !== 'undefined') window.history.pushState(null, '', '#/projects');
+          }}
+          aria-label={`View ${pluralize(totalCount, 'project')}`}
           style={{
             '--stagger-index': 1,
             background: 'var(--surface-accent)',
           } as React.CSSProperties}
-          className="plotline-enter sm:col-span-1 xl:col-span-3 rounded-[var(--radius-lg)] p-4 text-white flex flex-col justify-between shadow-[inset_0_0_0_1px_rgba(255,255,255,0.10)]"
+          className="plotline-enter group text-left sm:col-span-1 xl:col-span-3 rounded-[var(--radius-lg)] p-4 text-white flex flex-col justify-between shadow-[inset_0_0_0_1px_rgba(255,255,255,0.10)] focus:outline-none focus-visible:ring-2 focus-visible:ring-white cursor-pointer hover:opacity-98 transition-all"
         >
           <div className="flex items-center justify-between gap-2">
             <span className="text-sm font-semibold text-white">Total</span>
-            <button
-              type="button"
-              onClick={() => setNewProjectModalOpen(true)}
-              aria-label="Add project"
+            <span
               style={{ color: 'var(--accent-deep)' }}
-              className="w-7 h-7 rounded-full bg-white flex items-center justify-center shrink-0 hover:scale-105 transition-transform cursor-pointer"
+              className="w-7 h-7 rounded-full bg-white flex items-center justify-center shrink-0 group-hover:-translate-y-0.5 group-hover:translate-x-0.5 transition-transform"
             >
               <ArrowUpRight className="w-4 h-4" />
-            </button>
+            </span>
           </div>
           <CountUpNumeral
             value={totalCount}
             className="text-4xl font-semibold leading-none tracking-tight text-white"
           />
           <p className="text-xs text-white/90 max-h-[2.5rem] overflow-hidden leading-snug">
-            {uniqueProjects.length} active streams and {tasks.length} deliverables
+            {pluralize(totalCount, 'project')} · {pluralize(openTasksCount, 'open task')}
           </p>
-        </div>
+        </button>
 
         {/* Card 2: Ended */}
-        <div
+        <button
+          type="button"
+          onClick={() => {
+            setActiveRoute('Projects');
+            if (typeof window !== 'undefined') window.history.pushState(null, '', '#/projects?status=ended');
+          }}
+          aria-label={`View ${pluralize(endedCount, 'ended project')}`}
           style={{ '--stagger-index': 2 } as React.CSSProperties}
-          className="plotline-enter sm:col-span-1 xl:col-span-3 bg-[var(--surface-elevated)] border border-[var(--border-hairline)] rounded-[var(--radius-lg)] p-4 flex flex-col justify-between"
+          className="plotline-enter group text-left sm:col-span-1 xl:col-span-3 bg-[var(--surface-elevated)] border border-[var(--border-hairline)] rounded-[var(--radius-lg)] p-4 flex flex-col justify-between focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)] cursor-pointer hover:border-[var(--border-strong)] transition-all"
         >
           <div className="flex items-center justify-between gap-2">
             <span className="text-sm font-semibold text-[var(--ink-primary)]">Ended</span>
-            <span className="w-7 h-7 rounded-full border border-[var(--border-strong)] text-[var(--ink-primary)] flex items-center justify-center shrink-0">
+            <span className="w-7 h-7 rounded-full border border-[var(--border-strong)] text-[var(--ink-primary)] flex items-center justify-center shrink-0 group-hover:-translate-y-0.5 group-hover:translate-x-0.5 transition-transform">
               <ArrowUpRight className="w-4 h-4" />
             </span>
           </div>
@@ -472,18 +486,24 @@ export default function DashboardScreen() {
             className="text-4xl font-semibold leading-none tracking-tight text-[var(--ink-primary)]"
           />
           <p className="text-xs text-[var(--ink-secondary)] max-h-[2.5rem] overflow-hidden leading-snug">
-            Verified and signed off this cycle
+            {pluralize(endedCount, 'project')} · {pluralize(openTasksCount, 'open task')}
           </p>
-        </div>
+        </button>
 
         {/* Card 3: Running */}
-        <div
+        <button
+          type="button"
+          onClick={() => {
+            setActiveRoute('Projects');
+            if (typeof window !== 'undefined') window.history.pushState(null, '', '#/projects?status=running');
+          }}
+          aria-label={`View ${pluralize(runningCount, 'running project')}`}
           style={{ '--stagger-index': 3 } as React.CSSProperties}
-          className="plotline-enter sm:col-span-1 xl:col-span-3 bg-[var(--surface-elevated)] border border-[var(--border-hairline)] rounded-[var(--radius-lg)] p-4 flex flex-col justify-between"
+          className="plotline-enter group text-left sm:col-span-1 xl:col-span-3 bg-[var(--surface-elevated)] border border-[var(--border-hairline)] rounded-[var(--radius-lg)] p-4 flex flex-col justify-between focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)] cursor-pointer hover:border-[var(--border-strong)] transition-all"
         >
           <div className="flex items-center justify-between gap-2">
             <span className="text-sm font-semibold text-[var(--ink-primary)]">Running</span>
-            <span className="w-7 h-7 rounded-full border border-[var(--border-strong)] text-[var(--ink-primary)] flex items-center justify-center shrink-0">
+            <span className="w-7 h-7 rounded-full border border-[var(--border-strong)] text-[var(--ink-primary)] flex items-center justify-center shrink-0 group-hover:-translate-y-0.5 group-hover:translate-x-0.5 transition-transform">
               <ArrowUpRight className="w-4 h-4" />
             </span>
           </div>
@@ -492,18 +512,24 @@ export default function DashboardScreen() {
             className="text-4xl font-semibold leading-none tracking-tight text-[var(--ink-primary)]"
           />
           <p className="text-xs text-[var(--ink-secondary)] max-h-[2.5rem] overflow-hidden leading-snug">
-            Active field execution across {uniqueProjects.length} streams
+            {pluralize(runningCount, 'project')} · {pluralize(openTasksCount, 'open task')}
           </p>
-        </div>
+        </button>
 
         {/* Card 4: Pending */}
-        <div
+        <button
+          type="button"
+          onClick={() => {
+            setActiveRoute('Projects');
+            if (typeof window !== 'undefined') window.history.pushState(null, '', '#/projects?status=pending');
+          }}
+          aria-label={`View ${pluralize(pendingCount, 'pending project')}`}
           style={{ '--stagger-index': 4 } as React.CSSProperties}
-          className="plotline-enter sm:col-span-1 xl:col-span-3 bg-[var(--surface-elevated)] border border-[var(--border-hairline)] rounded-[var(--radius-lg)] p-4 flex flex-col justify-between"
+          className="plotline-enter group text-left sm:col-span-1 xl:col-span-3 bg-[var(--surface-elevated)] border border-[var(--border-hairline)] rounded-[var(--radius-lg)] p-4 flex flex-col justify-between focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)] cursor-pointer hover:border-[var(--border-strong)] transition-all"
         >
           <div className="flex items-center justify-between gap-2">
             <span className="text-sm font-semibold text-[var(--ink-primary)]">Pending</span>
-            <span className="w-7 h-7 rounded-full border border-[var(--border-strong)] text-[var(--ink-primary)] flex items-center justify-center shrink-0">
+            <span className="w-7 h-7 rounded-full border border-[var(--border-strong)] text-[var(--ink-primary)] flex items-center justify-center shrink-0 group-hover:-translate-y-0.5 group-hover:translate-x-0.5 transition-transform">
               <ArrowUpRight className="w-4 h-4" />
             </span>
           </div>
@@ -512,9 +538,9 @@ export default function DashboardScreen() {
             className="text-4xl font-semibold leading-none tracking-tight text-[var(--ink-primary)]"
           />
           <p className="text-xs text-[var(--ink-secondary)] max-h-[2.5rem] overflow-hidden leading-snug">
-            Scheduled in planning and intake queue
+            {pluralize(pendingCount, 'project')} · {pluralize(openTasksCount, 'open task')}
           </p>
-        </div>
+        </button>
 
         {/* ==================== ROW 2: WEEKLY OUTPUT (6) + NEXT UP (3) + PROJECTS (3) ==================== */}
         {/* Weekly Output (6 cols): 7 slim columns (~28px wide, 8px radius), segmented by project with 2px gaps */}
@@ -672,7 +698,7 @@ export default function DashboardScreen() {
           </div>
         </section>
 
-        {/* Next up (3 cols — renamed from Reminders; Start meeting button uses --accent) */}
+        {/* Next up (3 cols) */}
         <section
           aria-labelledby="next-up-heading"
           style={{ '--stagger-index': 6 } as React.CSSProperties}
@@ -687,7 +713,13 @@ export default function DashboardScreen() {
 
           {nextEvent ? (
             <>
-              <div className="my-auto space-y-1">
+              <div
+                onClick={() => {
+                  setActiveRoute('Calendar');
+                  if (typeof window !== 'undefined') window.history.pushState(null, '', '#calendar');
+                }}
+                className="my-auto space-y-1 cursor-pointer hover:opacity-90 transition-opacity"
+              >
                 <h3
                   className="text-base sm:text-lg font-semibold leading-snug line-clamp-2"
                   style={{ color: 'var(--accent)' }}
@@ -706,12 +738,12 @@ export default function DashboardScreen() {
                 type="button"
                 onClick={() => toggleEventCheckIn(nextEvent.id)}
                 style={{
-                  backgroundColor: 'var(--accent)',
+                  backgroundColor: isMeetingStarted ? '#216E3E' : 'var(--accent)',
                 }}
                 className="w-full py-2.5 px-4 rounded-full text-xs sm:text-sm font-semibold text-white flex items-center justify-center gap-2 hover:opacity-95 transition-opacity cursor-pointer shrink-0 shadow-[inset_0_0_0_1px_rgba(255,255,255,0.10)]"
               >
                 <Video className="w-4 h-4 shrink-0" />
-                <span>{isMeetingStarted ? 'Meeting Active' : 'Start meeting'}</span>
+                <span>{isMeetingStarted ? 'Checked in ✓' : 'Start meeting'}</span>
               </button>
             </>
           ) : (
@@ -724,7 +756,7 @@ export default function DashboardScreen() {
                 type="button"
                 onClick={() => {
                   setActiveRoute('Calendar');
-                  window.history.replaceState(null, '', '#calendar');
+                  if (typeof window !== 'undefined') window.history.pushState(null, '', '#calendar');
                 }}
                 style={{ color: 'var(--accent)' }}
                 className="text-xs font-semibold hover:underline cursor-pointer"
@@ -735,7 +767,7 @@ export default function DashboardScreen() {
           )}
         </section>
 
-        {/* Projects (3 cols — shows 5 rows with 36px deterministic contourGlyph icon tiles and NO inner scroll) */}
+        {/* Projects (3 cols) */}
         <section
           aria-labelledby="projects-card-heading"
           style={{ '--stagger-index': 7 } as React.CSSProperties}
@@ -780,7 +812,8 @@ export default function DashboardScreen() {
                 return (
                   <li
                     key={project.id}
-                    className={`flex items-center justify-between gap-2.5 py-0.5 rounded-[var(--radius-sm)] ${
+                    onClick={() => openProjectDialog(project.id)}
+                    className={`flex items-center justify-between gap-2.5 p-1 rounded-[var(--radius-sm)] cursor-pointer hover:bg-[var(--surface-sunken)] transition-colors ${
                       isNew ? 'plotline-row-new' : ''
                     }`}
                   >
@@ -812,7 +845,7 @@ export default function DashboardScreen() {
         </section>
 
         {/* ==================== ROW 3: IN MOTION (5) + PROJECT RINGS (4) + FOCUS (3) ==================== */}
-        {/* In motion (5 cols — renamed from Team Collaboration; one row per unique member) */}
+        {/* In motion (5 cols) */}
         <section
           aria-labelledby="in-motion-heading"
           style={{ '--stagger-index': 8 } as React.CSSProperties}
@@ -827,11 +860,11 @@ export default function DashboardScreen() {
             </h2>
             <button
               type="button"
-              onClick={() => setNewProjectModalOpen(true)}
+              onClick={() => setNewTaskModalOpen(true)}
               className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full border border-[var(--border-strong)] text-xs font-medium text-[var(--ink-primary)] hover:bg-[var(--surface-sunken)] transition-colors cursor-pointer"
             >
               <Plus className="w-3 h-3" />
-              <span>Add Stream</span>
+              <span>Add task</span>
             </button>
           </div>
 
@@ -859,7 +892,13 @@ export default function DashboardScreen() {
                 return (
                   <div
                     key={member.id}
-                    className="py-1 flex items-center justify-between gap-2.5"
+                    onClick={() => {
+                      setActiveRoute('Tasks');
+                      if (typeof window !== 'undefined') {
+                        window.history.pushState(null, '', `#/tasks?taskId=${task.id}`);
+                      }
+                    }}
+                    className="py-1 px-1 rounded hover:bg-[var(--surface-sunken)] transition-colors cursor-pointer flex items-center justify-between gap-2.5"
                   >
                     <div className="flex items-center gap-2.5 min-w-0">
                       <span
@@ -1015,7 +1054,8 @@ export default function DashboardScreen() {
                   return (
                     <div
                       key={proj.id}
-                      className="flex items-center justify-between gap-2 text-xs"
+                      onClick={() => openProjectDialog(proj.id)}
+                      className="flex items-center justify-between gap-2 text-xs p-1 rounded cursor-pointer hover:bg-[var(--surface-sunken)] transition-colors"
                     >
                       <span className="flex items-center gap-1.5 min-w-0">
                         <span

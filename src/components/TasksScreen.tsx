@@ -399,6 +399,7 @@ interface DraggableTaskCardProps {
   task: TaskItem;
   teamMap: Map<string, TeamMember>;
   isRunningFocus: boolean;
+  isHighlighted?: boolean;
   onMoveTask: (taskId: string, newStatus: TaskItem['status']) => void;
   onSelectFocusTask: (taskId: string) => void;
 }
@@ -407,6 +408,7 @@ function DraggableTaskCard({
   task,
   teamMap,
   isRunningFocus,
+  isHighlighted = false,
   onMoveTask,
   onSelectFocusTask,
 }: DraggableTaskCardProps) {
@@ -415,7 +417,6 @@ function DraggableTaskCard({
     data: { task },
   });
 
-  // Outer element receiving dnd-kit's ref/transform has NO Motion layout, animate, or whileHover.
   const style: React.CSSProperties = {
     transform: CSS.Translate.toString(transform),
     touchAction: 'manipulation',
@@ -423,13 +424,14 @@ function DraggableTaskCard({
 
   return (
     <div
+      id={`task-card-${task.id}`}
       ref={setNodeRef}
       style={style}
       {...listeners}
       {...attributes}
       className={`touch-manipulation cursor-grab active:cursor-grabbing focus-visible:outline-2 focus-visible:outline-[var(--accent)] rounded-[var(--radius-md)] ${
         isDragging ? 'opacity-35' : ''
-      }`}
+      } ${isHighlighted ? 'ring-2 ring-[var(--accent)] bg-[var(--accent-soft)] transition-all duration-300' : ''}`}
     >
       <MotionCard
         whileHover={
@@ -458,6 +460,20 @@ interface DroppableStageColumnProps {
   teamMap: Map<string, TeamMember>;
   timerRunning: boolean;
   timerTaskId: string;
+  activeDragTaskId: string | null;
+  onMoveTask: (taskId: string, newStatus: TaskItem['status']) => void;
+  onSelectFocusTask: (taskId: string) => void;
+}
+
+interface DroppableStageColumnProps {
+  column: StageColumn;
+  staggerIndex: number;
+  tasks: TaskItem[];
+  teamMap: Map<string, TeamMember>;
+  timerRunning: boolean;
+  timerTaskId: string;
+  activeDragTaskId: string | null;
+  highlightedTaskId?: string | null;
   onMoveTask: (taskId: string, newStatus: TaskItem['status']) => void;
   onSelectFocusTask: (taskId: string) => void;
 }
@@ -469,6 +485,8 @@ function DroppableStageColumn({
   teamMap,
   timerRunning,
   timerTaskId,
+  activeDragTaskId,
+  highlightedTaskId,
   onMoveTask,
   onSelectFocusTask,
 }: DroppableStageColumnProps) {
@@ -483,7 +501,7 @@ function DroppableStageColumn({
       style={
         {
           '--stagger-index': staggerIndex,
-          ...(isOver
+          ...(isOver && activeDragTaskId
             ? {
                 outline: '2px solid var(--accent)',
                 outlineOffset: '-2px',
@@ -525,6 +543,7 @@ function DroppableStageColumn({
                 task={task}
                 teamMap={teamMap}
                 isRunningFocus={timerRunning && task.id === timerTaskId}
+                isHighlighted={task.id === highlightedTaskId}
                 onMoveTask={onMoveTask}
                 onSelectFocusTask={onSelectFocusTask}
               />
@@ -555,6 +574,30 @@ export default function TasksScreen() {
   // Combinable filter tabs: All (clears filters) or any combination of My tasks / High priority / Due this week
   const [activeFilters, setActiveFilters] = useState<FilterCriterion[]>([]);
   const [activeDragTaskId, setActiveDragTaskId] = useState<string | null>(null);
+  const [highlightedTaskId, setHighlightedTaskId] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const hash = window.location.hash || '';
+    const queryIndex = hash.indexOf('?');
+    if (queryIndex !== -1) {
+      const params = new URLSearchParams(hash.slice(queryIndex));
+      const targetId = params.get('taskId') || params.get('highlight');
+      if (targetId) {
+        setHighlightedTaskId(targetId);
+        setTimeout(() => {
+          const el = document.getElementById(`task-card-${targetId}`);
+          if (el) {
+            el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+          }
+        }, 120);
+        const timer = setTimeout(() => {
+          setHighlightedTaskId(null);
+        }, 2500);
+        return () => clearTimeout(timer);
+      }
+    }
+  }, []);
 
   const sensors = useSensors(
     useSensor(MouseSensor, {
@@ -649,14 +692,22 @@ export default function TasksScreen() {
     const taskId = String(active.id);
     const overId = String(over.id);
 
+    let targetStage: TaskItem['status'] | null = null;
     if (STAGE_COLUMNS.some((col) => col.id === overId)) {
-      moveTask(taskId, overId as TaskItem['status']);
-      return;
+      targetStage = overId as TaskItem['status'];
+    } else {
+      const overTask = tasks.find((t) => t.id === overId);
+      if (overTask) targetStage = overTask.status;
     }
 
-    const overTask = tasks.find((t) => t.id === overId);
-    if (overTask) {
-      moveTask(taskId, overTask.status);
+    if (targetStage) {
+      moveTask(taskId, targetStage);
+      setTimeout(() => {
+        const cardEl = document.getElementById(`task-card-${taskId}`);
+        if (cardEl) {
+          cardEl.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+        }
+      }, 40);
     }
   };
 
@@ -834,12 +885,11 @@ export default function TasksScreen() {
       <DndContext
         sensors={sensors}
         collisionDetection={collisionDetectionStrategy}
-        autoScroll={{
-          enabled: true,
-          acceleration: 10,
-          interval: 5,
-          threshold: { x: 0.2, y: 0.2 },
-        }}
+        autoScroll={
+          typeof window !== 'undefined' && window.innerWidth >= 1024
+            ? { enabled: true, threshold: { x: 0, y: 0.2 } }
+            : { enabled: true, acceleration: 10, interval: 5, threshold: { x: 0.2, y: 0.2 } }
+        }
         measuring={{
           droppable: {
             strategy: MeasuringStrategy.Always,
@@ -861,6 +911,8 @@ export default function TasksScreen() {
                 teamMap={teamMap}
                 timerRunning={timerRunning}
                 timerTaskId={timerTaskId}
+                activeDragTaskId={activeDragTaskId}
+                highlightedTaskId={highlightedTaskId}
                 onMoveTask={moveTask}
                 onSelectFocusTask={handleSelectFocusTask}
               />

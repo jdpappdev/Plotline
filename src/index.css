@@ -158,15 +158,17 @@ textarea:focus-visible,
 }
 
 html,
-body {
+body,
+#root {
+  height: 100dvh;
   margin: 0;
   padding: 0;
+  overflow: hidden;
   background-color: var(--surface-canvas);
   color: var(--ink-primary);
   font-family: var(--font-ui);
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
-  overflow-x: hidden;
 }
 
 /* Date & Time form inputs styling */

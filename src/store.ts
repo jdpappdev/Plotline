@@ -11,6 +11,7 @@ export type AccentName = 'tide' | 'moss' | 'iris' | 'signal';
 export type WeekStart = 'monday' | 'sunday';
 export type RouteId =
   | 'Dashboard'
+  | 'Projects'
   | 'Tasks'
   | 'Calendar'
   | 'Analytics'
@@ -98,7 +99,8 @@ export interface Project {
   name: string;
   client: string;
   sector: string;
-  status: 'On Track' | 'At Risk' | 'Planning' | 'Completed';
+  status: 'On Track' | 'At Risk' | 'Planning' | 'Completed' | 'Pending' | 'Running' | 'Ended';
+  statusOverride?: 'Pending' | 'Running' | 'Ended';
   leadId: string;
   startDate: string;
   targetDate: string;
@@ -151,7 +153,7 @@ export interface FocusSession {
 export interface CalendarEvent {
   id: string;
   title: string;
-  projectId: string;
+  projectId?: string;
   date: string;
   startTime: string;
   endTime: string;
@@ -233,21 +235,34 @@ export interface UpdateProfileInput {
   email: string;
 }
 
-const ACCENT_STORAGE_KEY = 'plotline-accent-v2';
-const WEEK_START_STORAGE_KEY = 'plotline-week-start';
-const TIMER_SECONDS_STORAGE_KEY = 'plotline-timer-seconds-v2';
-const TIMER_RUNNING_STORAGE_KEY = 'plotline-timer-running-v2';
-const TIMER_TASK_STORAGE_KEY = 'plotline-timer-task-v2';
-const TASKS_STORAGE_KEY = 'plotline-tasks-v3';
-const PROJECTS_STORAGE_KEY = 'plotline-projects-v3';
-const TEAM_STORAGE_KEY = 'plotline-team-v3';
-const EVENTS_STORAGE_KEY = 'plotline-events-v2';
-const FOCUS_SESSIONS_STORAGE_KEY = 'plotline-focus-sessions-v3';
-const NOTIFICATIONS_STORAGE_KEY = 'plotline-notifications-v1';
-const CURRENT_USER_STORAGE_KEY = 'plotline-current-user-v1';
-const SIGNED_OUT_STORAGE_KEY = 'plotline-signed-out-v1';
-const RAIL_COLLAPSED_STORAGE_KEY = 'plotline-rail-collapsed-v1';
-const CHECKED_IN_EVENTS_STORAGE_KEY = 'plotline-checked-in-events-v1';
+export interface ValidationCheckResult {
+  id: string;
+  label: string;
+  passed: boolean;
+  details: string;
+}
+
+export interface WorkspaceValidationReport {
+  timestamp: string;
+  passed: boolean;
+  checks: ValidationCheckResult[];
+}
+
+const ACCENT_STORAGE_KEY = 'plotline-accent-v3';
+const WEEK_START_STORAGE_KEY = 'plotline-week-start-v3';
+const TIMER_SECONDS_STORAGE_KEY = 'plotline-timer-seconds-v3';
+const TIMER_RUNNING_STORAGE_KEY = 'plotline-timer-running-v3';
+const TIMER_TASK_STORAGE_KEY = 'plotline-timer-task-v3';
+const TASKS_STORAGE_KEY = 'plotline-tasks-v4';
+const PROJECTS_STORAGE_KEY = 'plotline-projects-v4';
+const TEAM_STORAGE_KEY = 'plotline-team-v4';
+const EVENTS_STORAGE_KEY = 'plotline-events-v4';
+const FOCUS_SESSIONS_STORAGE_KEY = 'plotline-focus-sessions-v4';
+const NOTIFICATIONS_STORAGE_KEY = 'plotline-notifications-v3';
+const CURRENT_USER_STORAGE_KEY = 'plotline-current-user-v3';
+const SIGNED_OUT_STORAGE_KEY = 'plotline-signed-out-v3';
+const RAIL_COLLAPSED_STORAGE_KEY = 'plotline-rail-collapsed-v3';
+const CHECKED_IN_EVENTS_STORAGE_KEY = 'plotline-checked-in-events-v3';
 
 export function getTodayIsoDate(): string {
   const now = new Date();
@@ -300,6 +315,123 @@ export function computeInitials(name: string): string {
   return clean.slice(0, 2).toUpperCase();
 }
 
+export function pluralize(count: number, singular: string, plural?: string): string {
+  const word = count === 1 ? singular : plural || `${singular}s`;
+  return `${count} ${word}`;
+}
+
+// --- Derivation Helpers (Used Everywhere) ---
+export function getProjectProgress(project: Project, tasks: TaskItem[]): number {
+  const projTasks = tasks.filter((t) => t.projectId === project.id);
+  if (projTasks.length === 0) return 0;
+  const doneCount = projTasks.filter((t) => t.status === 'Done').length;
+  return Math.round((doneCount / projTasks.length) * 100);
+}
+
+export function getProjectStatus(project: Project, tasks: TaskItem[]): 'Ended' | 'Pending' | 'Running' {
+  if (project.statusOverride) {
+    return project.statusOverride;
+  }
+  const projTasks = tasks.filter((t) => t.projectId === project.id);
+  if (projTasks.length === 0) {
+    return 'Pending';
+  }
+  if (projTasks.every((t) => t.status === 'Done')) {
+    return 'Ended';
+  }
+  const hasStartedTask = projTasks.some(
+    (t) => t.status === 'In Progress' || t.status === 'In Review' || t.status === 'Done'
+  );
+  if (!hasStartedTask) {
+    return 'Pending';
+  }
+  return 'Running';
+}
+
+export function getProjectHealth(project: Project, tasks: TaskItem[]): 'At risk' | 'On track' {
+  const today = getTodayIsoDate();
+  const projTasks = tasks.filter((t) => t.projectId === project.id);
+  const hasOverdue = projTasks.some(
+    (t) => t.status !== 'Done' && t.dueDate && t.dueDate < today
+  );
+  return hasOverdue ? 'At risk' : 'On track';
+}
+
+export function getMemberWorkload(memberId: string, tasks: TaskItem[]): number {
+  const openTasks = tasks.filter(
+    (t) => (t.assigneeId === memberId || t.coAssigneeId === memberId) && t.status !== 'Done'
+  );
+  const openHours = openTasks.reduce((sum, t) => sum + (t.estimateHours || 0), 0);
+  return Math.round((openHours / 60) * 100);
+}
+
+export function getMemberTaskCounts(
+  memberId: string,
+  tasks: TaskItem[]
+): { openCount: number; completedCount: number } {
+  const openCount = tasks.filter(
+    (t) => (t.assigneeId === memberId || t.coAssigneeId === memberId) && t.status !== 'Done'
+  ).length;
+  const completedCount = tasks.filter(
+    (t) => (t.assigneeId === memberId || t.coAssigneeId === memberId) && t.status === 'Done'
+  ).length;
+  return { openCount, completedCount };
+}
+
+export function getDoneTasksGrouped(tasks: TaskItem[]): { recentDone: TaskItem[]; earlierDone: TaskItem[] } {
+  const doneTasks = tasks.filter((t) => t.status === 'Done');
+  const cutoffDate = getIsoDateOffset(-14);
+  const recentDone = doneTasks.filter((t) => (t.completedDate || t.dueDate) >= cutoffDate);
+  const earlierDone = doneTasks.filter((t) => (t.completedDate || t.dueDate) < cutoffDate);
+  return { recentDone, earlierDone };
+}
+
+export function getNextUpEvent(events: CalendarEvent[], projects: Project[]): CalendarEvent | null {
+  const now = new Date();
+  const todayIso = getTodayIsoDate();
+  const currentHHMM = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
+
+  // Combine explicit events + auto-created deadline events
+  const deadlineEvents: CalendarEvent[] = projects.map((p) => ({
+    id: `evt-dl-${p.id}`,
+    title: `Deadline: ${p.name}`,
+    category: 'Deadline',
+    projectId: p.id,
+    date: p.targetDate,
+    startTime: '17:00',
+    endTime: '18:00',
+    attendeeIds: [p.leadId],
+    location: 'Project Milestone',
+  }));
+
+  const allEvents = [...events, ...deadlineEvents];
+
+  const upcoming = allEvents.filter((e) => {
+    if (e.date > todayIso) return true;
+    if (e.date === todayIso && e.startTime >= currentHHMM) return true;
+    return false;
+  });
+
+  upcoming.sort((a, b) => {
+    if (a.date !== b.date) return a.date.localeCompare(b.date);
+    return a.startTime.localeCompare(b.startTime);
+  });
+
+  return upcoming[0] || allEvents[0] || null;
+}
+
+export function getRingsProjects(
+  projects: Project[],
+  tasks: TaskItem[]
+): Array<{ project: Project; progress: number }> {
+  const unfinished = projects.filter((p) => getProjectStatus(p, tasks) !== 'Ended');
+  unfinished.sort((a, b) => a.targetDate.localeCompare(b.targetDate));
+  return unfinished.slice(0, 4).map((p) => ({
+    project: p,
+    progress: getProjectProgress(p, tasks),
+  }));
+}
+
 export function normalizeAccent(value: string | null | undefined): AccentName {
   if (!value) return 'tide';
   const lower = value.toLowerCase().trim();
@@ -327,6 +459,1133 @@ export function applyAccentCssVariables(accent: AccentName): void {
   root.setAttribute('data-accent', theme.id);
 }
 
+// --- Benchmark Seed Dataset Generation ---
+export const SEED_TEAM: TeamMember[] = [
+  {
+    id: 'usr-soren',
+    name: 'Soren Lindqvist',
+    role: 'Technical Director',
+    discipline: 'Engineering',
+    department: 'Engineering',
+    presence: 'online',
+    statusLabel: 'Active in Systems Lab',
+    location: 'Stockholm, SE',
+    timezone: 'CET (UTC+1)',
+    initials: 'SL',
+    capacityHours: 60,
+    allocatedHours: 10,
+    email: 'soren@plotline.studio',
+  },
+  {
+    id: 'usr-mireia',
+    name: 'Mireia Vance',
+    role: 'Design Director',
+    discipline: 'Design',
+    department: 'Design',
+    presence: 'online',
+    statusLabel: 'Reviewing Mobile Specs',
+    location: 'Barcelona, ES',
+    timezone: 'CET (UTC+1)',
+    initials: 'MV',
+    capacityHours: 60,
+    allocatedHours: 12,
+    email: 'mireia@plotline.studio',
+  },
+  {
+    id: 'usr-tarek',
+    name: 'Tarek Al-Mansoor',
+    role: 'Senior Frontend Engineer',
+    discipline: 'Engineering',
+    department: 'Engineering',
+    presence: 'online',
+    statusLabel: 'Building Map Components',
+    location: 'Zurich, CH',
+    timezone: 'CET (UTC+1)',
+    initials: 'TA',
+    capacityHours: 60,
+    allocatedHours: 46,
+    email: 'tarek@plotline.studio',
+  },
+  {
+    id: 'usr-kaelen',
+    name: 'Kaelen Okafor',
+    role: 'Delivery Producer',
+    discipline: 'Management',
+    department: 'Management',
+    presence: 'online',
+    statusLabel: 'Sprint Planning',
+    location: 'London, UK',
+    timezone: 'GMT (UTC+0)',
+    initials: 'KO',
+    capacityHours: 60,
+    allocatedHours: 6,
+    email: 'kaelen@plotline.studio',
+  },
+  {
+    id: 'usr-nadia',
+    name: 'Nadia Kovalenko',
+    role: 'Product Designer',
+    discipline: 'Design',
+    department: 'Design',
+    presence: 'online',
+    statusLabel: 'Prototyping Habits Flow',
+    location: 'Tallinn, EE',
+    timezone: 'EET (UTC+2)',
+    initials: 'NK',
+    capacityHours: 60,
+    allocatedHours: 22,
+    email: 'nadia@plotline.studio',
+  },
+  {
+    id: 'usr-juno',
+    name: 'Juno Takahashi',
+    role: 'Brand & Marketing Lead',
+    discipline: 'Marketing',
+    department: 'Marketing',
+    presence: 'away',
+    statusLabel: 'Drafting Launch Copy',
+    location: 'Kyoto, JP',
+    timezone: 'JST (UTC+9)',
+    initials: 'JT',
+    capacityHours: 60,
+    allocatedHours: 15,
+    email: 'juno@plotline.studio',
+  },
+  {
+    id: 'usr-jade',
+    name: 'Jade Polo',
+    role: 'Backend Engineer',
+    discipline: 'Engineering',
+    department: 'Engineering',
+    presence: 'offline',
+    statusLabel: 'API Integration',
+    location: 'Lisbon, PT',
+    timezone: 'WET (UTC+0)',
+    initials: 'JP',
+    capacityHours: 60,
+    allocatedHours: 20,
+    email: 'jade@plotline.studio',
+  },
+];
+
+export function createSeedProjects(): Project[] {
+  return [
+    {
+      id: 'prj-harbor',
+      code: 'PLT-101',
+      name: 'Harbor Mobile Banking Redesign',
+      client: 'Harbor & Vale Credit Union',
+      sector: 'Financial Technology',
+      status: 'On Track',
+      leadId: 'usr-mireia',
+      startDate: getIsoDateOffset(-30),
+      targetDate: getIsoDateOffset(21),
+      progress: 57,
+      budgetAllocated: 185000,
+      budgetSpent: 105000,
+      summary: 'Mobile banking application redesign and design system consolidation.',
+    },
+    {
+      id: 'prj-fernlight',
+      code: 'PLT-102',
+      name: 'Fernlight Wellness App',
+      client: 'Fernlight Health',
+      sector: 'Healthcare & Wellness',
+      status: 'At Risk',
+      leadId: 'usr-nadia',
+      startDate: getIsoDateOffset(-15),
+      targetDate: getIsoDateOffset(35),
+      progress: 40,
+      budgetAllocated: 140000,
+      budgetSpent: 56000,
+      summary: 'Personal habit tracking, wellness diagnostic flows, and companion app.',
+    },
+    {
+      id: 'prj-orchard',
+      code: 'PLT-103',
+      name: 'Orchard Logistics Dashboard',
+      client: 'Orchard Freight',
+      sector: 'Supply Chain & Freight',
+      status: 'On Track',
+      leadId: 'usr-soren',
+      startDate: getIsoDateOffset(-25),
+      targetDate: getIsoDateOffset(12),
+      progress: 40,
+      budgetAllocated: 210000,
+      budgetSpent: 84000,
+      summary: 'Real-time fleet shipment tracking, telemetry map, and route optimization.',
+    },
+    {
+      id: 'prj-atlas',
+      code: 'PLT-104',
+      name: 'Atlas Travel Booking Flow',
+      client: 'Atlas Journeys',
+      sector: 'Travel & Transportation',
+      status: 'On Track',
+      leadId: 'usr-soren',
+      startDate: getIsoDateOffset(-22),
+      targetDate: getIsoDateOffset(9),
+      progress: 75,
+      budgetAllocated: 160000,
+      budgetSpent: 120000,
+      summary: 'Streamlined itinerary booking, seat reservation grid, and checkout.',
+    },
+    {
+      id: 'prj-lumen',
+      code: 'PLT-105',
+      name: 'Lumen Museum Website',
+      client: 'Lumen Museum of Design',
+      sector: 'Arts & Culture',
+      status: 'Completed',
+      leadId: 'usr-kaelen',
+      startDate: getIsoDateOffset(-35),
+      targetDate: getIsoDateOffset(-7),
+      progress: 100,
+      budgetAllocated: 95000,
+      budgetSpent: 95000,
+      summary: 'Accessible digital gallery, exhibition archive, and ticketing platform.',
+    },
+    {
+      id: 'prj-northwind',
+      code: 'PLT-106',
+      name: 'Northwind Brand Refresh',
+      client: 'Northwind Coffee Roasters',
+      sector: 'Consumer Goods & Retail',
+      status: 'Planning',
+      leadId: 'usr-mireia',
+      startDate: getIsoDateOffset(8),
+      targetDate: getIsoDateOffset(60),
+      progress: 0,
+      budgetAllocated: 110000,
+      budgetSpent: 0,
+      summary: 'Brand identity positioning, packaging system, and digital presence.',
+    },
+  ];
+}
+
+export function createSeedTasks(): TaskItem[] {
+  return [
+    // 1. Harbor (4 Done, 1 In Progress, 1 In Review, 1 To do)
+    {
+      id: 'tsk-h-1',
+      code: 'PLT-101-A',
+      title: 'Audit current app and competitor flows',
+      category: 'Interface',
+      projectId: 'prj-harbor',
+      assigneeId: 'usr-mireia',
+      status: 'Done',
+      priority: 'Medium',
+      dueDate: getIsoDateOffset(-28),
+      completedDate: getIsoDateOffset(-28),
+      estimateHours: 10,
+      progress: 100,
+      subtasksDone: 3,
+      subtasksTotal: 3,
+    },
+    {
+      id: 'tsk-h-2',
+      code: 'PLT-101-B',
+      title: 'Define design principles and tone',
+      category: 'Interface',
+      projectId: 'prj-harbor',
+      assigneeId: 'usr-mireia',
+      status: 'Done',
+      priority: 'Medium',
+      dueDate: getIsoDateOffset(-24),
+      completedDate: getIsoDateOffset(-24),
+      estimateHours: 6,
+      progress: 100,
+      subtasksDone: 2,
+      subtasksTotal: 2,
+    },
+    {
+      id: 'tsk-h-3',
+      code: 'PLT-101-C',
+      title: 'Build design system foundations',
+      category: 'Interface',
+      projectId: 'prj-harbor',
+      assigneeId: 'usr-nadia',
+      status: 'Done',
+      priority: 'High',
+      dueDate: getIsoDateOffset(-17),
+      completedDate: getIsoDateOffset(-17),
+      estimateHours: 16,
+      progress: 100,
+      subtasksDone: 4,
+      subtasksTotal: 4,
+    },
+    {
+      id: 'tsk-h-4',
+      code: 'PLT-101-D',
+      title: 'Prototype account overview screens',
+      category: 'Interface',
+      projectId: 'prj-harbor',
+      assigneeId: 'usr-nadia',
+      status: 'Done',
+      priority: 'High',
+      dueDate: getIsoDateOffset(-10),
+      completedDate: getIsoDateOffset(-10),
+      estimateHours: 14,
+      progress: 100,
+      subtasksDone: 4,
+      subtasksTotal: 4,
+    },
+    {
+      id: 'tsk-h-5',
+      code: 'PLT-101-E',
+      title: 'Implement account overview in React Native',
+      category: 'Engineering',
+      projectId: 'prj-harbor',
+      assigneeId: 'usr-tarek',
+      status: 'In Progress',
+      priority: 'High',
+      dueDate: getIsoDateOffset(6),
+      estimateHours: 18,
+      progress: 55,
+      subtasksDone: 2,
+      subtasksTotal: 4,
+    },
+    {
+      id: 'tsk-h-6',
+      code: 'PLT-101-F',
+      title: 'Usability test round 2 with 8 participants',
+      category: 'Interface',
+      projectId: 'prj-harbor',
+      assigneeId: 'usr-nadia',
+      status: 'In Review',
+      priority: 'Medium',
+      dueDate: getIsoDateOffset(2),
+      estimateHours: 8,
+      progress: 80,
+      subtasksDone: 3,
+      subtasksTotal: 4,
+    },
+    {
+      id: 'tsk-h-7',
+      code: 'PLT-101-G',
+      title: 'Accessibility pass on onboarding',
+      category: 'Engineering',
+      projectId: 'prj-harbor',
+      assigneeId: 'usr-tarek',
+      status: 'Backlog',
+      priority: 'Low',
+      dueDate: getIsoDateOffset(12),
+      estimateHours: 6,
+      progress: 15,
+      subtasksDone: 0,
+      subtasksTotal: 3,
+    },
+
+    // 2. Fernlight (2 Done, 2 In Progress, 1 To do)
+    {
+      id: 'tsk-f-1',
+      code: 'PLT-102-A',
+      title: 'Map user journeys from 12 interviews',
+      category: 'Interface',
+      projectId: 'prj-fernlight',
+      assigneeId: 'usr-nadia',
+      status: 'Done',
+      priority: 'High',
+      dueDate: getIsoDateOffset(-11),
+      completedDate: getIsoDateOffset(-11),
+      estimateHours: 12,
+      progress: 100,
+      subtasksDone: 3,
+      subtasksTotal: 3,
+    },
+    {
+      id: 'tsk-f-2',
+      code: 'PLT-102-B',
+      title: 'Brand moodboard and tone of voice',
+      category: 'Outreach',
+      projectId: 'prj-fernlight',
+      assigneeId: 'usr-juno',
+      status: 'Done',
+      priority: 'Medium',
+      dueDate: getIsoDateOffset(-8),
+      completedDate: getIsoDateOffset(-8),
+      estimateHours: 8,
+      progress: 100,
+      subtasksDone: 2,
+      subtasksTotal: 2,
+    },
+    {
+      id: 'tsk-f-3',
+      code: 'PLT-102-C',
+      title: 'Design onboarding and habit setup flow',
+      category: 'Interface',
+      projectId: 'prj-fernlight',
+      assigneeId: 'usr-nadia',
+      status: 'In Progress',
+      priority: 'High',
+      dueDate: getIsoDateOffset(-1), // overdue!
+      estimateHours: 14,
+      progress: 50,
+      subtasksDone: 2,
+      subtasksTotal: 4,
+    },
+    {
+      id: 'tsk-f-4',
+      code: 'PLT-102-D',
+      title: 'Build habit tracking API',
+      category: 'Telemetry',
+      projectId: 'prj-fernlight',
+      assigneeId: 'usr-jade',
+      status: 'In Progress',
+      priority: 'High',
+      dueDate: getIsoDateOffset(14),
+      estimateHours: 20,
+      progress: 45,
+      subtasksDone: 2,
+      subtasksTotal: 5,
+    },
+    {
+      id: 'tsk-f-5',
+      code: 'PLT-102-E',
+      title: 'Write App Store launch copy',
+      category: 'Outreach',
+      projectId: 'prj-fernlight',
+      assigneeId: 'usr-juno',
+      status: 'Backlog',
+      priority: 'Low',
+      dueDate: getIsoDateOffset(28),
+      estimateHours: 5,
+      progress: 10,
+      subtasksDone: 0,
+      subtasksTotal: 2,
+    },
+
+    // 3. Orchard (2 Done, 1 In Progress, 1 In Review, 1 To do)
+    {
+      id: 'tsk-o-1',
+      code: 'PLT-103-A',
+      title: 'Requirements workshop with ops team',
+      category: 'Field Ops',
+      projectId: 'prj-orchard',
+      assigneeId: 'usr-kaelen',
+      status: 'Done',
+      priority: 'Medium',
+      dueDate: getIsoDateOffset(-21),
+      completedDate: getIsoDateOffset(-21),
+      estimateHours: 6,
+      progress: 100,
+      subtasksDone: 2,
+      subtasksTotal: 2,
+    },
+    {
+      id: 'tsk-o-2',
+      code: 'PLT-103-B',
+      title: 'Data model for shipments and routes',
+      category: 'Architecture',
+      projectId: 'prj-orchard',
+      assigneeId: 'usr-jade',
+      status: 'Done',
+      priority: 'High',
+      dueDate: getIsoDateOffset(-13),
+      completedDate: getIsoDateOffset(-13),
+      estimateHours: 12,
+      progress: 100,
+      subtasksDone: 3,
+      subtasksTotal: 3,
+    },
+    {
+      id: 'tsk-o-3',
+      code: 'PLT-103-C',
+      title: 'Build live shipment map component',
+      category: 'Cartography',
+      projectId: 'prj-orchard',
+      assigneeId: 'usr-tarek',
+      status: 'In Progress',
+      priority: 'High',
+      dueDate: getIsoDateOffset(7),
+      estimateHours: 22,
+      progress: 60,
+      subtasksDone: 3,
+      subtasksTotal: 5,
+    },
+    {
+      id: 'tsk-o-4',
+      code: 'PLT-103-D',
+      title: 'Review route optimisation results with client',
+      category: 'Architecture',
+      projectId: 'prj-orchard',
+      assigneeId: 'usr-soren',
+      status: 'In Review',
+      priority: 'Medium',
+      dueDate: getIsoDateOffset(1),
+      estimateHours: 6,
+      progress: 85,
+      subtasksDone: 2,
+      subtasksTotal: 3,
+    },
+    {
+      id: 'tsk-o-5',
+      code: 'PLT-103-E',
+      title: 'Write delivery and QA plan for dashboard filters',
+      category: 'Field Ops',
+      projectId: 'prj-orchard',
+      assigneeId: 'usr-kaelen',
+      status: 'Backlog',
+      priority: 'Low',
+      dueDate: getIsoDateOffset(9),
+      estimateHours: 6,
+      progress: 15,
+      subtasksDone: 0,
+      subtasksTotal: 2,
+    },
+
+    // 4. Atlas (3 Done, 1 In Review)
+    {
+      id: 'tsk-a-1',
+      code: 'PLT-104-A',
+      title: 'Redesign search and filter experience',
+      category: 'Interface',
+      projectId: 'prj-atlas',
+      assigneeId: 'usr-nadia',
+      status: 'Done',
+      priority: 'High',
+      dueDate: getIsoDateOffset(-20),
+      completedDate: getIsoDateOffset(-20),
+      estimateHours: 14,
+      progress: 100,
+      subtasksDone: 4,
+      subtasksTotal: 4,
+    },
+    {
+      id: 'tsk-a-2',
+      code: 'PLT-104-B',
+      title: 'Integrate payments sandbox',
+      category: 'Telemetry',
+      projectId: 'prj-atlas',
+      assigneeId: 'usr-jade',
+      status: 'Done',
+      priority: 'High',
+      dueDate: getIsoDateOffset(-15),
+      completedDate: getIsoDateOffset(-15),
+      estimateHours: 12,
+      progress: 100,
+      subtasksDone: 3,
+      subtasksTotal: 3,
+    },
+    {
+      id: 'tsk-a-3',
+      code: 'PLT-104-C',
+      title: 'Build seat and extras selection',
+      category: 'Interface',
+      projectId: 'prj-atlas',
+      assigneeId: 'usr-tarek',
+      status: 'Done',
+      priority: 'High',
+      dueDate: getIsoDateOffset(-6),
+      completedDate: getIsoDateOffset(-6),
+      estimateHours: 16,
+      progress: 100,
+      subtasksDone: 4,
+      subtasksTotal: 4,
+    },
+    {
+      id: 'tsk-a-4',
+      code: 'PLT-104-D',
+      title: 'Performance and accessibility review',
+      category: 'Architecture',
+      projectId: 'prj-atlas',
+      assigneeId: 'usr-soren',
+      status: 'In Review',
+      priority: 'Medium',
+      dueDate: getIsoDateOffset(3),
+      estimateHours: 4,
+      progress: 80,
+      subtasksDone: 2,
+      subtasksTotal: 3,
+    },
+
+    // 5. Lumen (4 Done)
+    {
+      id: 'tsk-l-1',
+      code: 'PLT-105-A',
+      title: 'Content migration of 120 exhibition pages',
+      category: 'Outreach',
+      projectId: 'prj-lumen',
+      assigneeId: 'usr-juno',
+      status: 'Done',
+      priority: 'Medium',
+      dueDate: getIsoDateOffset(-30),
+      completedDate: getIsoDateOffset(-30),
+      estimateHours: 16,
+      progress: 100,
+      subtasksDone: 4,
+      subtasksTotal: 4,
+    },
+    {
+      id: 'tsk-l-2',
+      code: 'PLT-105-B',
+      title: 'Build accessible gallery component',
+      category: 'Interface',
+      projectId: 'prj-lumen',
+      assigneeId: 'usr-tarek',
+      status: 'Done',
+      priority: 'High',
+      dueDate: getIsoDateOffset(-22),
+      completedDate: getIsoDateOffset(-22),
+      estimateHours: 14,
+      progress: 100,
+      subtasksDone: 3,
+      subtasksTotal: 3,
+    },
+    {
+      id: 'tsk-l-3',
+      code: 'PLT-105-C',
+      title: 'Launch checklist and DNS cutover',
+      category: 'Telemetry',
+      projectId: 'prj-lumen',
+      assigneeId: 'usr-jade',
+      status: 'Done',
+      priority: 'High',
+      dueDate: getIsoDateOffset(-11),
+      completedDate: getIsoDateOffset(-11),
+      estimateHours: 4,
+      progress: 100,
+      subtasksDone: 2,
+      subtasksTotal: 2,
+    },
+    {
+      id: 'tsk-l-4',
+      code: 'PLT-105-D',
+      title: 'Client handover and training session',
+      category: 'Field Ops',
+      projectId: 'prj-lumen',
+      assigneeId: 'usr-kaelen',
+      status: 'Done',
+      priority: 'Medium',
+      dueDate: getIsoDateOffset(-9),
+      completedDate: getIsoDateOffset(-9),
+      estimateHours: 3,
+      progress: 100,
+      subtasksDone: 1,
+      subtasksTotal: 1,
+    },
+
+    // 6. Northwind (2 To do)
+    {
+      id: 'tsk-n-1',
+      code: 'PLT-106-A',
+      title: 'Brand audit and stakeholder interviews',
+      category: 'Outreach',
+      projectId: 'prj-northwind',
+      assigneeId: 'usr-juno',
+      status: 'Backlog',
+      priority: 'Medium',
+      dueDate: getIsoDateOffset(16),
+      estimateHours: 10,
+      progress: 10,
+      subtasksDone: 0,
+      subtasksTotal: 2,
+    },
+    {
+      id: 'tsk-n-2',
+      code: 'PLT-106-B',
+      title: 'Draft naming and positioning options',
+      category: 'Interface',
+      projectId: 'prj-northwind',
+      assigneeId: 'usr-mireia',
+      status: 'Backlog',
+      priority: 'High',
+      dueDate: getIsoDateOffset(24),
+      estimateHours: 12,
+      progress: 15,
+      subtasksDone: 0,
+      subtasksTotal: 3,
+    },
+  ];
+}
+
+export function createSeedFocusSessions(tasks: TaskItem[], projects: Project[]): FocusSession[] {
+  const sessions: FocusSession[] = [];
+  const todayIso = getTodayIsoDate();
+
+  tasks.forEach((task) => {
+    let multiplier = 0;
+    if (task.status === 'Done') {
+      multiplier = 0.95;
+    } else if (task.status === 'In Review') {
+      multiplier = 0.85;
+    } else if (task.status === 'In Progress') {
+      multiplier = 0.50;
+    }
+
+    if (multiplier === 0) {
+      task.loggedSeconds = 0;
+      return;
+    }
+
+    const totalSeconds = Math.round(task.estimateHours * multiplier * 3600);
+    task.loggedSeconds = totalSeconds;
+
+    // Distribute across past weekdays
+    let endDateOffset = 0;
+    if (task.completedDate) {
+      const today = new Date(`${todayIso}T00:00:00`);
+      const comp = new Date(`${task.completedDate}T00:00:00`);
+      endDateOffset = Math.round((comp.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
+    }
+
+    const totalHours = totalSeconds / 3600;
+    const chunkCount = Math.max(1, Math.min(4, Math.ceil(totalHours / 2.5)));
+    const secondsPerChunk = Math.round(totalSeconds / chunkCount);
+
+    for (let i = 0; i < chunkCount; i++) {
+      const dayOffset = endDateOffset - (i * 2);
+      if (dayOffset > 0) continue; // No future sessions
+
+      const dateStr = getIsoDateOffset(dayOffset);
+      const dObj = new Date(`${dateStr}T00:00:00`);
+      const weekdayIdx = dObj.getDay();
+
+      sessions.push({
+        id: `fcs-seed-${task.id}-${i}`,
+        taskId: task.id,
+        projectId: task.projectId,
+        memberId: task.assigneeId,
+        weekdayIndex: weekdayIdx,
+        date: dateStr,
+        daysAgo: Math.abs(dayOffset),
+        seconds: secondsPerChunk,
+        hours: secondsPerChunk / 3600,
+        tasksCompletedCount: task.status === 'Done' ? 1 : 0,
+        cycleDays: 2.1,
+        onTimeCount: task.status === 'Done' ? 1 : 0,
+        createdAt: new Date(`${dateStr}T10:00:00`).toISOString(),
+      });
+    }
+  });
+
+  return dedupeById(sessions);
+}
+
+export function createSeedEvents(projects: Project[]): CalendarEvent[] {
+  const manualEvents: CalendarEvent[] = [
+    {
+      id: 'evt-1',
+      title: 'Harbor design critique',
+      category: 'Review',
+      projectId: 'prj-harbor',
+      date: getIsoDateOffset(0),
+      startTime: '15:00',
+      endTime: '16:00',
+      attendeeIds: ['usr-mireia', 'usr-nadia', 'usr-tarek'],
+      location: 'Design Studio B',
+    },
+    {
+      id: 'evt-2',
+      title: 'Orchard route review with client',
+      category: 'Review',
+      projectId: 'prj-orchard',
+      date: getIsoDateOffset(1),
+      startTime: '14:00',
+      endTime: '15:00',
+      attendeeIds: ['usr-soren', 'usr-kaelen', 'usr-tarek', 'usr-jade'],
+      location: 'Client Sync Portal',
+    },
+    {
+      id: 'evt-3',
+      title: 'Harbor usability findings readout',
+      category: 'Review',
+      projectId: 'prj-harbor',
+      date: getIsoDateOffset(2),
+      startTime: '11:00',
+      endTime: '12:00',
+      attendeeIds: ['usr-mireia', 'usr-nadia', 'usr-kaelen'],
+      location: 'Conference Room 01',
+    },
+    {
+      id: 'evt-4',
+      title: 'Fernlight sprint review',
+      category: 'Review',
+      projectId: 'prj-fernlight',
+      date: getIsoDateOffset(5),
+      startTime: '15:00',
+      endTime: '16:00',
+      attendeeIds: ['usr-nadia', 'usr-jade', 'usr-juno'],
+      location: 'Virtual Lab',
+    },
+    {
+      id: 'evt-5',
+      title: 'Atlas launch readiness review',
+      category: 'Review',
+      projectId: 'prj-atlas',
+      date: getIsoDateOffset(7),
+      startTime: '10:00',
+      endTime: '11:00',
+      attendeeIds: ['usr-soren', 'usr-tarek', 'usr-jade', 'usr-kaelen'],
+      location: 'Architecture Deck',
+    },
+    {
+      id: 'evt-6',
+      title: 'Northwind kickoff workshop',
+      category: 'Meeting',
+      projectId: 'prj-northwind',
+      date: getIsoDateOffset(8),
+      startTime: '13:00',
+      endTime: '15:00',
+      attendeeIds: ['usr-mireia', 'usr-juno', 'usr-kaelen'],
+      location: 'Brand Studio',
+    },
+    {
+      id: 'evt-7',
+      title: 'Lumen project retrospective',
+      category: 'Review',
+      projectId: 'prj-lumen',
+      date: getIsoDateOffset(-6),
+      startTime: '14:00',
+      endTime: '15:00',
+      attendeeIds: ['usr-juno', 'usr-tarek', 'usr-jade', 'usr-kaelen'],
+      location: 'Studio Commons',
+    },
+    {
+      id: 'evt-8',
+      title: 'studio lunch & learn',
+      category: 'Social',
+      date: getIsoDateOffset(6),
+      startTime: '12:30',
+      endTime: '13:30',
+      attendeeIds: ['usr-soren', 'usr-mireia', 'usr-tarek', 'usr-kaelen', 'usr-nadia', 'usr-juno', 'usr-jade'],
+      location: 'Main Lounge',
+    },
+    {
+      id: 'evt-9',
+      title: 'daily standup',
+      category: 'Team',
+      date: getIsoDateOffset(0),
+      startTime: '09:30',
+      endTime: '09:45',
+      attendeeIds: ['usr-soren', 'usr-mireia', 'usr-tarek', 'usr-kaelen', 'usr-nadia', 'usr-juno', 'usr-jade'],
+      location: 'Standup Circle',
+    },
+  ];
+
+  // Auto-create Deadline events from project due dates
+  const deadlineEvents: CalendarEvent[] = projects.map((p) => ({
+    id: `evt-dl-${p.id}`,
+    title: `Deadline: ${p.name}`,
+    category: 'Deadline',
+    projectId: p.id,
+    date: p.targetDate,
+    startTime: '17:00',
+    endTime: '18:00',
+    attendeeIds: [p.leadId],
+    location: 'Project Milestone',
+  }));
+
+  return [...manualEvents, ...deadlineEvents];
+}
+
+// --- Workspace Data Validation Function ---
+export function validateWorkspace(
+  projects: Project[],
+  tasks: TaskItem[],
+  team: TeamMember[],
+  events: CalendarEvent[],
+  focusSessions: FocusSession[]
+): WorkspaceValidationReport {
+  const today = getTodayIsoDate();
+  const checks: ValidationCheckResult[] = [];
+
+  // Check 1: All IDs resolve and are unique
+  const projIds = new Set(projects.map((p) => p.id));
+  const taskIds = new Set(tasks.map((t) => t.id));
+  const teamIds = new Set(team.map((m) => m.id));
+  const eventIds = new Set(events.map((e) => e.id));
+  const sessionIds = new Set(focusSessions.map((s) => s.id));
+
+  const projUnique = projIds.size === projects.length;
+  const taskUnique = taskIds.size === tasks.length;
+  const teamUnique = teamIds.size === team.length;
+  const eventUnique = eventIds.size === events.length;
+  const sessionUnique = sessionIds.size === focusSessions.length;
+
+  const tasksProjectValid = tasks.every((t) => projIds.has(t.projectId));
+  const focusTaskValid = focusSessions.every((s) => taskIds.has(s.taskId) && projIds.has(s.projectId));
+
+  const check1Passed =
+    projUnique && taskUnique && teamUnique && eventUnique && sessionUnique && tasksProjectValid && focusTaskValid;
+  checks.push({
+    id: 'ids-unique',
+    label: 'All IDs resolve and are unique',
+    passed: check1Passed,
+    details: check1Passed
+      ? `Projects (${projects.length}), Tasks (${tasks.length}), Team (${team.length}), Events (${events.length}), Sessions (${focusSessions.length}) unique and valid.`
+      : 'Duplicate or unresolvable IDs detected.',
+  });
+
+  // Check 2: Statuses and progress match tasks (skipping statusOverride)
+  let check2Passed = true;
+  for (const p of projects) {
+    if (p.statusOverride) continue; // The data check skips overridden projects
+    const calcProgress = getProjectProgress(p, tasks);
+    if (p.progress !== calcProgress) {
+      check2Passed = false;
+    }
+  }
+  checks.push({
+    id: 'statuses-progress',
+    label: 'Project statuses and progress match tasks',
+    passed: check2Passed,
+    details: check2Passed
+      ? 'All project progress percentages and derived statuses match task calculations.'
+      : 'Mismatch between project status/progress and tasks.',
+  });
+
+  // Check 3: No sessions on future days or for unstarted tasks
+  const futureSessions = focusSessions.some((s) => s.date > today);
+  const unstartedSessions = focusSessions.some((s) => {
+    const task = tasks.find((t) => t.id === s.taskId);
+    return !task || task.status === 'Backlog';
+  });
+  const check3Passed = !futureSessions && !unstartedSessions;
+  checks.push({
+    id: 'sessions-valid',
+    label: 'No sessions on future days or for unstarted tasks',
+    passed: check3Passed,
+    details: check3Passed
+      ? 'All focus sessions logged on past or current dates for active tasks.'
+      : 'Future or unstarted task focus sessions found.',
+  });
+
+  // Check 4: Done tasks have completion dates in the past
+  const doneTasks = tasks.filter((t) => t.status === 'Done');
+  const check4Passed = doneTasks.every((t) => Boolean(t.completedDate) && t.completedDate! <= today);
+  checks.push({
+    id: 'done-completion-dates',
+    label: 'Done tasks have completion dates in the past',
+    passed: check4Passed,
+    details: check4Passed
+      ? `All ${doneTasks.length} completed tasks have valid completion dates in the past.`
+      : 'Completed task missing completion date or date is in future.',
+  });
+
+  // Check 5: Assignees exist
+  const check5Passed = tasks.every((t) => teamIds.has(t.assigneeId));
+  checks.push({
+    id: 'assignees-exist',
+    label: 'Task assignees exist in team',
+    passed: check5Passed,
+    details: check5Passed
+      ? 'All task assignees map to valid team members.'
+      : 'Unassigned or unknown team member IDs found on tasks.',
+  });
+
+  // Check 6: Event attendees valid
+  const check6Passed = events.every((e) => e.attendeeIds.every((attId) => teamIds.has(attId)));
+  checks.push({
+    id: 'event-attendees-valid',
+    label: 'Event attendees exist in team',
+    passed: check6Passed,
+    details: check6Passed
+      ? 'All event attendee IDs exist in team.'
+      : 'Invalid event attendee IDs found.',
+  });
+
+  // Check 7: Stat cards sum to Total
+  let endedCnt = 0;
+  let runningCnt = 0;
+  let pendingCnt = 0;
+  projects.forEach((p) => {
+    const st = getProjectStatus(p, tasks);
+    if (st === 'Ended') endedCnt++;
+    else if (st === 'Pending') pendingCnt++;
+    else runningCnt++;
+  });
+  const totalCnt = projects.length;
+  const check7Passed = endedCnt + runningCnt + pendingCnt === totalCnt;
+  checks.push({
+    id: 'stat-cards-sum',
+    label: 'Stat cards sum to Total (Ended + Running + Pending = Total)',
+    passed: check7Passed,
+    details: check7Passed
+      ? `Total (${totalCnt}) = Ended (${endedCnt}) + Running (${runningCnt}) + Pending (${pendingCnt}).`
+      : `Sum mismatch: ${endedCnt} + ${runningCnt} + ${pendingCnt} != ${totalCnt}`,
+  });
+
+  // Check 8: Team, Profile, Dashboard and Tasks show identical counts per person
+  let check8Passed = true;
+  team.forEach((m) => {
+    const { openCount, completedCount } = getMemberTaskCounts(m.id, tasks);
+    const assignedOpen = tasks.filter(
+      (t) => (t.assigneeId === m.id || t.coAssigneeId === m.id) && t.status !== 'Done'
+    ).length;
+    const assignedDone = tasks.filter(
+      (t) => (t.assigneeId === m.id || t.coAssigneeId === m.id) && t.status === 'Done'
+    ).length;
+    if (openCount !== assignedOpen || completedCount !== assignedDone) {
+      check8Passed = false;
+    }
+  });
+  checks.push({
+    id: 'identical-person-counts',
+    label: 'Team, Profile, Dashboard, and Tasks show identical counts per person',
+    passed: check8Passed,
+    details: check8Passed
+      ? 'Per-person task counts match perfectly across all screens.'
+      : 'Mismatched task counts per person.',
+  });
+
+  // Check 9: For each filter chip, the count equals the number of rows shown
+  const allFilterRows = projects.length;
+  const pendingChipCount = projects.filter((p) => getProjectStatus(p, tasks) === 'Pending').length;
+  const runningChipCount = projects.filter((p) => getProjectStatus(p, tasks) === 'Running').length;
+  const endedChipCount = projects.filter((p) => getProjectStatus(p, tasks) === 'Ended').length;
+
+  const check9Passed = pendingChipCount + runningChipCount + endedChipCount === allFilterRows;
+  checks.push({
+    id: 'filter-chip-counts',
+    label: 'Filter chip counts equal number of rows shown for each status filter',
+    passed: check9Passed,
+    details: check9Passed
+      ? `Filter chips equal rows shown: All (${allFilterRows}), Running (${runningChipCount}), Pending (${pendingChipCount}), Ended (${endedChipCount}).`
+      : 'Mismatch between filter chip counts and status row counts.',
+  });
+
+  const overallPassed = checks.every((c) => c.passed);
+  const report: WorkspaceValidationReport = {
+    timestamp: new Date().toISOString(),
+    passed: overallPassed,
+    checks,
+  };
+
+  console.log('[Workspace Data Validation Report]', report);
+  return report;
+}
+
+// --- Persistence Loaders with Benchmark Fallback ---
+function loadPersistedProjects(): Project[] {
+  if (typeof window === 'undefined') return createSeedProjects();
+  try {
+    const raw = window.localStorage.getItem(PROJECTS_STORAGE_KEY);
+    if (raw !== null) {
+      const parsed = JSON.parse(raw);
+      if (Array.isArray(parsed) && parsed.some((p) => p.id === 'prj-harbor')) {
+        return dedupeById<Project>(parsed);
+      }
+    }
+  } catch {
+    // Ignore
+  }
+  return createSeedProjects();
+}
+
+function savePersistedProjects(projects: Project[]): void {
+  if (typeof window === 'undefined') return;
+  try {
+    window.localStorage.setItem(PROJECTS_STORAGE_KEY, JSON.stringify(dedupeById(projects)));
+  } catch {
+    // Ignore
+  }
+}
+
+function loadPersistedTasks(): TaskItem[] {
+  if (typeof window === 'undefined') return createSeedTasks();
+  try {
+    const raw = window.localStorage.getItem(TASKS_STORAGE_KEY);
+    if (raw !== null) {
+      const parsed = JSON.parse(raw);
+      if (Array.isArray(parsed) && parsed.some((t) => t.id === 'tsk-h-1')) {
+        return dedupeById<TaskItem>(parsed);
+      }
+    }
+  } catch {
+    // Ignore
+  }
+  return createSeedTasks();
+}
+
+function savePersistedTasks(tasks: TaskItem[]): void {
+  if (typeof window === 'undefined') return;
+  try {
+    window.localStorage.setItem(TASKS_STORAGE_KEY, JSON.stringify(dedupeById(tasks)));
+  } catch {
+    // Ignore
+  }
+}
+
+function loadPersistedTeam(): TeamMember[] {
+  if (typeof window === 'undefined') return SEED_TEAM;
+  try {
+    const raw = window.localStorage.getItem(TEAM_STORAGE_KEY);
+    if (raw !== null) {
+      const parsed = JSON.parse(raw);
+      if (Array.isArray(parsed) && parsed.some((m) => m.id === 'usr-soren')) {
+        return dedupeById<TeamMember>(parsed);
+      }
+    }
+  } catch {
+    // Ignore
+  }
+  return SEED_TEAM;
+}
+
+function savePersistedTeam(team: TeamMember[]): void {
+  if (typeof window === 'undefined') return;
+  try {
+    window.localStorage.setItem(TEAM_STORAGE_KEY, JSON.stringify(dedupeById(team)));
+  } catch {
+    // Ignore
+  }
+}
+
+function loadPersistedEvents(projects: Project[]): CalendarEvent[] {
+  if (typeof window === 'undefined') return createSeedEvents(projects);
+  try {
+    const raw = window.localStorage.getItem(EVENTS_STORAGE_KEY);
+    if (raw !== null) {
+      const parsed = JSON.parse(raw);
+      if (Array.isArray(parsed) && parsed.some((e) => e.id === 'evt-1')) {
+        return dedupeById<CalendarEvent>(parsed);
+      }
+    }
+  } catch {
+    // Ignore
+  }
+  return createSeedEvents(projects);
+}
+
+function savePersistedEvents(events: CalendarEvent[]): void {
+  if (typeof window === 'undefined') return;
+  try {
+    window.localStorage.setItem(EVENTS_STORAGE_KEY, JSON.stringify(dedupeById(events)));
+  } catch {
+    // Ignore
+  }
+}
+
+function loadPersistedFocusSessions(tasks: TaskItem[], projects: Project[]): FocusSession[] {
+  if (typeof window === 'undefined') return createSeedFocusSessions(tasks, projects);
+  try {
+    const raw = window.localStorage.getItem(FOCUS_SESSIONS_STORAGE_KEY);
+    if (raw !== null) {
+      const parsed = JSON.parse(raw);
+      if (Array.isArray(parsed) && parsed.length > 0) {
+        return dedupeById<FocusSession>(parsed);
+      }
+    }
+  } catch {
+    // Ignore
+  }
+  return createSeedFocusSessions(tasks, projects);
+}
+
+function savePersistedFocusSessions(sessions: FocusSession[]): void {
+  if (typeof window === 'undefined') return;
+  try {
+    window.localStorage.setItem(FOCUS_SESSIONS_STORAGE_KEY, JSON.stringify(dedupeById(sessions)));
+  } catch {
+    // Ignore
+  }
+}
+
+function loadInitialCurrentUser(): TeamMember {
+  return SEED_TEAM[0];
+}
+
 function loadInitialAccent(): AccentName {
   if (typeof window === 'undefined') return 'tide';
   try {
@@ -350,45 +1609,19 @@ function loadInitialWeekStart(): WeekStart {
 }
 
 function loadInitialTimerSeconds(): number {
-  if (typeof window === 'undefined') return 0;
-  try {
-    const saved = window.localStorage.getItem(TIMER_SECONDS_STORAGE_KEY);
-    if (saved !== null) {
-      const parsed = parseInt(saved, 10);
-      if (!Number.isNaN(parsed) && parsed >= 0) return parsed;
-    }
-    return 0;
-  } catch {
-    return 0;
-  }
+  return 0;
 }
 
 function loadInitialTimerRunning(): boolean {
-  if (typeof window === 'undefined') return false;
-  try {
-    return window.localStorage.getItem(TIMER_RUNNING_STORAGE_KEY) === 'true';
-  } catch {
-    return false;
-  }
+  return false;
 }
 
 function loadInitialTimerTaskId(): string {
-  if (typeof window === 'undefined') return 'tsk-401';
-  try {
-    const saved = window.localStorage.getItem(TIMER_TASK_STORAGE_KEY);
-    return saved || 'tsk-401';
-  } catch {
-    return 'tsk-401';
-  }
+  return 'tsk-h-5';
 }
 
 function loadInitialSignedOut(): boolean {
-  if (typeof window === 'undefined') return false;
-  try {
-    return window.localStorage.getItem(SIGNED_OUT_STORAGE_KEY) === 'true';
-  } catch {
-    return false;
-  }
+  return false;
 }
 
 function loadInitialRailCollapsed(): boolean {
@@ -435,741 +1668,6 @@ function loadInitialNotifications(): NotificationSettings {
   return DEFAULT_NOTIFICATIONS;
 }
 
-const SEED_TEAM: TeamMember[] = [
-  {
-    id: 'usr-soren',
-    name: 'Soren Lindqvist',
-    role: 'Principal Systems Architect',
-    discipline: 'Spatial Computing & Cartography',
-    department: 'Engineering',
-    presence: 'online',
-    statusLabel: 'Active in Cartography Lab',
-    location: 'Stockholm, SE',
-    timezone: 'CET (UTC+1)',
-    initials: 'SL',
-    capacityHours: 40,
-    allocatedHours: 32,
-    email: 'soren@plotline.studio',
-  },
-  {
-    id: 'usr-mireia',
-    name: 'Mireia Vance',
-    role: 'Design Director',
-    discipline: 'Industrial & Interface Design',
-    department: 'Design',
-    presence: 'online',
-    statusLabel: 'Reviewing Bridge UI Specs',
-    location: 'Barcelona, ES',
-    timezone: 'CET (UTC+1)',
-    initials: 'MV',
-    capacityHours: 40,
-    allocatedHours: 30,
-    email: 'mireia@plotline.studio',
-  },
-  {
-    id: 'usr-tarek',
-    name: 'Tarek Al-Mansoor',
-    role: 'Lead Telemetry Engineer',
-    discipline: 'Embedded & Edge Data',
-    department: 'Engineering',
-    presence: 'online',
-    statusLabel: 'Monitoring Wellhead #07',
-    location: 'Zurich, CH',
-    timezone: 'CET (UTC+1)',
-    initials: 'TA',
-    capacityHours: 40,
-    allocatedHours: 34,
-    email: 'tarek@plotline.studio',
-  },
-  {
-    id: 'usr-kaelen',
-    name: 'Kaelen Okafor',
-    role: 'Delivery Producer',
-    discipline: 'Operations & Client Strategy',
-    department: 'Management',
-    presence: 'online',
-    statusLabel: 'Client Charter Alignment',
-    location: 'London, UK',
-    timezone: 'GMT (UTC+0)',
-    initials: 'KO',
-    capacityHours: 40,
-    allocatedHours: 28,
-    email: 'kaelen@plotline.studio',
-  },
-  {
-    id: 'usr-nadia',
-    name: 'Nadia Kovalenko',
-    role: 'Senior Visualization Engineer',
-    discipline: 'Visualization & WebGL',
-    department: 'Engineering',
-    presence: 'away',
-    statusLabel: 'Shader Profiling Session',
-    location: 'Tallinn, EE',
-    timezone: 'EET (UTC+2)',
-    initials: 'NK',
-    capacityHours: 36,
-    allocatedHours: 26,
-    email: 'nadia@plotline.studio',
-  },
-  {
-    id: 'usr-juno',
-    name: 'Juno Takahashi',
-    role: 'Partner Communications Lead',
-    discipline: 'Technical Publications & Outreach',
-    department: 'Marketing',
-    presence: 'offline',
-    statusLabel: 'Kyoto Field Documentation',
-    location: 'Kyoto, JP',
-    timezone: 'JST (UTC+9)',
-    initials: 'JT',
-    capacityHours: 40,
-    allocatedHours: 24,
-    email: 'juno@plotline.studio',
-  },
-];
-
-function loadInitialCurrentUser(): TeamMember {
-  if (typeof window === 'undefined') return SEED_TEAM[0];
-  try {
-    const raw = window.localStorage.getItem(CURRENT_USER_STORAGE_KEY);
-    if (raw) {
-      const parsed = JSON.parse(raw);
-      if (parsed && parsed.id && parsed.name) return parsed;
-    }
-  } catch {
-    // Ignore
-  }
-  return SEED_TEAM[0];
-}
-
-const SEED_PROJECTS: Project[] = [
-  {
-    id: 'prj-kestrel',
-    code: 'PLT-101',
-    name: 'Kestrel Bathymetric Atlas',
-    client: 'North Sea Hydrographic Consortium',
-    sector: 'Marine Cartography',
-    status: 'On Track',
-    leadId: 'usr-soren',
-    startDate: '2026-09-01',
-    targetDate: '2026-12-15',
-    progress: 68,
-    budgetAllocated: 185000,
-    budgetSpent: 121400,
-    summary: 'Sub-meter sonar contour pipeline and deck officer tablet interface for deep-shelf cable routing.',
-  },
-  {
-    id: 'prj-caldera',
-    code: 'PLT-104',
-    name: 'Caldera Borehole Telemetry',
-    client: 'Reykjanes Thermal Collective',
-    sector: 'Geothermal Energy',
-    status: 'At Risk',
-    leadId: 'usr-tarek',
-    startDate: '2026-08-14',
-    targetDate: '2026-11-20',
-    progress: 54,
-    budgetAllocated: 240000,
-    budgetSpent: 164000,
-    summary: 'Real-time pressure and silica scaling diagnostics across 18 high-enthalpy geothermal wellheads.',
-  },
-  {
-    id: 'prj-nacre',
-    code: 'PLT-108',
-    name: 'Nacre Reference Console',
-    client: 'Atelier Onda Acoustics',
-    sector: 'Precision Audio Hardware',
-    status: 'On Track',
-    leadId: 'usr-mireia',
-    startDate: '2026-09-18',
-    targetDate: '2027-01-30',
-    progress: 42,
-    budgetAllocated: 145000,
-    budgetSpent: 58200,
-    summary: 'Embedded rotary control grammar and room-mode calibration workbench for studio monitors.',
-  },
-  {
-    id: 'prj-sable',
-    code: 'PLT-112',
-    name: 'Sable Seedbank Ledger',
-    client: 'Svalbard Arid Flora Trust',
-    sector: 'Botanical Preservation',
-    status: 'On Track',
-    leadId: 'usr-nadia',
-    startDate: '2026-10-01',
-    targetDate: '2027-02-14',
-    progress: 29,
-    budgetAllocated: 110000,
-    budgetSpent: 31900,
-    summary: 'Cryogenic vault provenance index, germination audit schedules, and offline field collection kit.',
-  },
-  {
-    id: 'prj-vespera',
-    code: 'PLT-115',
-    name: 'Vespera Horizon Array',
-    client: 'Atacama Submillimeter Observatory',
-    sector: 'Astrophysics Instrumentation',
-    status: 'Planning',
-    leadId: 'usr-kaelen',
-    startDate: '2026-10-20',
-    targetDate: '2027-04-10',
-    progress: 12,
-    budgetAllocated: 310000,
-    budgetSpent: 28500,
-    summary: 'Baseline interferometer scheduling matrix and high-altitude dish maintenance dispatcher.',
-  },
-];
-
-const SEED_BASE_TIMESTAMP = 1760000000000;
-
-const SEED_TASKS: TaskItem[] = [
-  {
-    id: 'tsk-401',
-    code: 'PLT-101-A',
-    title: 'Calibrate multi-beam contour smoothing kernel for 400m shelf drop',
-    category: 'Cartography',
-    projectId: 'prj-kestrel',
-    assigneeId: 'usr-soren',
-    coAssigneeId: 'usr-nadia',
-    status: 'In Progress',
-    priority: 'High',
-    dueDate: getIsoDateOffset(2),
-    estimateHours: 14,
-    loggedSeconds: 0,
-    cycleDays: 2.1,
-    onTime: true,
-    progress: 62,
-    subtasksDone: 3,
-    subtasksTotal: 5,
-    weekdayIndex: 1,
-    updatedAt: SEED_BASE_TIMESTAMP - 18 * 60_000,
-    updatedAtLabel: '18m ago',
-  },
-  {
-    id: 'tsk-402',
-    code: 'PLT-101-B',
-    title: 'Validate night-watch low-luminance palette on bridge display hardware',
-    category: 'Interface',
-    projectId: 'prj-kestrel',
-    assigneeId: 'usr-mireia',
-    status: 'In Review',
-    priority: 'Medium',
-    dueDate: getIsoDateOffset(4),
-    estimateHours: 16,
-    loggedSeconds: 0,
-    cycleDays: 2.6,
-    onTime: true,
-    progress: 85,
-    subtasksDone: 5,
-    subtasksTotal: 6,
-    weekdayIndex: 2,
-    updatedAt: SEED_BASE_TIMESTAMP - 42 * 60_000,
-    updatedAtLabel: '42m ago',
-  },
-  {
-    id: 'tsk-403',
-    code: 'PLT-104-A',
-    title: 'Isolate packet jitter on Wellhead #07 fiber-optic transceiver ring',
-    category: 'Telemetry',
-    projectId: 'prj-caldera',
-    assigneeId: 'usr-tarek',
-    coAssigneeId: 'usr-soren',
-    status: 'In Progress',
-    priority: 'High',
-    dueDate: getIsoDateOffset(1),
-    estimateHours: 20,
-    loggedSeconds: 0,
-    cycleDays: 3.2,
-    onTime: true,
-    progress: 50,
-    subtasksDone: 2,
-    subtasksTotal: 4,
-    weekdayIndex: 3,
-    updatedAt: SEED_BASE_TIMESTAMP - 60 * 60_000,
-    updatedAtLabel: '1h ago',
-  },
-  {
-    id: 'tsk-404',
-    code: 'PLT-104-B',
-    title: 'Draft thermal threshold escalation protocol with Reykjanes safety lead',
-    category: 'Field Ops',
-    projectId: 'prj-caldera',
-    assigneeId: 'usr-kaelen',
-    status: 'Backlog',
-    priority: 'High',
-    dueDate: getIsoDateOffset(5),
-    estimateHours: 17,
-    loggedSeconds: 0,
-    cycleDays: 2.8,
-    onTime: false,
-    progress: 20,
-    subtasksDone: 1,
-    subtasksTotal: 4,
-    weekdayIndex: 4,
-    updatedAt: SEED_BASE_TIMESTAMP - 120 * 60_000,
-    updatedAtLabel: '2h ago',
-  },
-  {
-    id: 'tsk-405',
-    code: 'PLT-108-A',
-    title: 'Prepare acoustic field dossier & partner launch brief for Atelier Onda',
-    category: 'Outreach',
-    projectId: 'prj-nacre',
-    assigneeId: 'usr-juno',
-    coAssigneeId: 'usr-mireia',
-    status: 'In Review',
-    priority: 'Medium',
-    dueDate: getIsoDateOffset(3),
-    estimateHours: 15,
-    loggedSeconds: 0,
-    cycleDays: 1.9,
-    onTime: true,
-    progress: 78,
-    subtasksDone: 4,
-    subtasksTotal: 5,
-    weekdayIndex: 5,
-    updatedAt: SEED_BASE_TIMESTAMP - 180 * 60_000,
-    updatedAtLabel: '3h ago',
-  },
-  {
-    id: 'tsk-406',
-    code: 'PLT-108-B',
-    title: 'Build WebGL waterfall decay plot with 120fps tabular cursor readout',
-    category: 'Visualization',
-    projectId: 'prj-nacre',
-    assigneeId: 'usr-nadia',
-    status: 'Done',
-    priority: 'Medium',
-    dueDate: getIsoDateOffset(-1),
-    completedDate: getIsoDateOffset(-1),
-    estimateHours: 12,
-    loggedSeconds: 0,
-    cycleDays: 2.2,
-    onTime: true,
-    progress: 100,
-    subtasksDone: 4,
-    subtasksTotal: 4,
-    weekdayIndex: 6,
-    updatedAt: SEED_BASE_TIMESTAMP - 300 * 60_000,
-    updatedAtLabel: '5h ago',
-  },
-  {
-    id: 'tsk-407',
-    code: 'PLT-112-A',
-    title: 'Define offline IndexedDB sync schema for remote desert specimen intake',
-    category: 'Architecture',
-    projectId: 'prj-sable',
-    assigneeId: 'usr-soren',
-    status: 'Done',
-    priority: 'Medium',
-    dueDate: getIsoDateOffset(-2),
-    completedDate: getIsoDateOffset(-2),
-    estimateHours: 11,
-    loggedSeconds: 0,
-    cycleDays: 1.8,
-    onTime: true,
-    progress: 100,
-    subtasksDone: 3,
-    subtasksTotal: 3,
-    weekdayIndex: 0,
-    updatedAt: SEED_BASE_TIMESTAMP - 86400_000,
-    updatedAtLabel: 'Yesterday',
-  },
-  {
-    id: 'tsk-408',
-    code: 'PLT-115-A',
-    title: 'Finalize Chajnantor plateau wind-load telemetry ingestion specification',
-    category: 'Telemetry',
-    projectId: 'prj-vespera',
-    assigneeId: 'usr-kaelen',
-    status: 'Backlog',
-    priority: 'Low',
-    dueDate: getIsoDateOffset(9),
-    estimateHours: 9,
-    loggedSeconds: 0,
-    cycleDays: 3.1,
-    onTime: true,
-    progress: 12,
-    subtasksDone: 0,
-    subtasksTotal: 3,
-    weekdayIndex: 2,
-    updatedAt: SEED_BASE_TIMESTAMP - 90000_000,
-    updatedAtLabel: 'Yesterday',
-  },
-];
-
-/**
- * Generates a deterministic 180-day history of focus sessions for completed past days
- * (daysAgo 1..179). Today (daysAgo 0) starts at 0s so live Focus Timer sessions on today
- * are reflected with exact second-level precision.
- */
-function buildSeededFocusHistory(): FocusSession[] {
-  const rand = mulberry32(hashSeed('plotline-90d-analytics-history-v3'));
-  const sessions: FocusSession[] = [];
-  const projectIds = ['prj-kestrel', 'prj-caldera', 'prj-nacre', 'prj-sable', 'prj-vespera'];
-  const taskIds = ['tsk-401', 'tsk-403', 'tsk-405', 'tsk-407', 'tsk-408', 'tsk-402', 'tsk-406'];
-  const memberIds = ['usr-soren', 'usr-tarek', 'usr-mireia', 'usr-nadia', 'usr-kaelen', 'usr-juno'];
-
-  // Days 1..179 ago (today starts clean at 0s)
-  for (let daysAgo = 179; daysAgo >= 1; daysAgo--) {
-    const dateStr = getIsoDateOffset(-daysAgo);
-    const dObj = new Date(`${dateStr}T12:00:00`);
-    const weekdayIndex = dObj.getDay();
-
-    // Create 2 to 3 sessions per day
-    const sessionCount = weekdayIndex === 0 || weekdayIndex === 6 ? 2 : 3;
-    for (let sIdx = 0; sIdx < sessionCount; sIdx++) {
-      const pIdx = (daysAgo + sIdx * 2) % (daysAgo < 25 ? 4 : 5);
-      const projectId = projectIds[pIdx];
-      const taskId = taskIds[(daysAgo + sIdx) % taskIds.length];
-      const memberId = memberIds[(daysAgo + sIdx * 3) % memberIds.length];
-
-      // Slight upward velocity in recent 30 days vs older days so deltas are distinct per range
-      const recencyBoost = daysAgo < 7 ? 1.18 : daysAgo < 30 ? 1.08 : daysAgo < 90 ? 0.96 : 0.85;
-      const baseHours = (1.1 + rand() * 1.65) * recencyBoost;
-      const seconds = Math.round(Number(baseHours.toFixed(1)) * 3600);
-      const hours = seconds / 3600;
-      const tasksCompletedCount = rand() > (daysAgo < 30 ? 0.42 : 0.54) ? 1 : 0;
-      const cycleDays = Number((1.6 + rand() * 2.1 * (daysAgo < 30 ? 0.88 : 1.08)).toFixed(1));
-      const onTimeCount = tasksCompletedCount > 0 ? (rand() > (daysAgo < 30 ? 0.08 : 0.16) ? 1 : 0) : 0;
-
-      sessions.push({
-        id: `fcs-hist-${daysAgo}-${sIdx}`,
-        taskId,
-        projectId,
-        memberId,
-        weekdayIndex,
-        date: dateStr,
-        daysAgo,
-        seconds,
-        hours,
-        tasksCompletedCount,
-        cycleDays,
-        onTimeCount,
-        createdAt: `${dateStr}T10:00:00Z`,
-      });
-    }
-  }
-
-  return sessions;
-}
-
-const SEED_FOCUS_SESSIONS: FocusSession[] = buildSeededFocusHistory();
-
-const SEED_EVENTS: CalendarEvent[] = [
-  {
-    id: 'evt-01',
-    title: 'North Sea Bathymetric Mesh Sign-Off',
-    projectId: 'prj-kestrel',
-    date: getTodayIsoDate(),
-    startTime: '09:30',
-    endTime: '10:45',
-    category: 'Review',
-    type: 'Milestone',
-    attendeeIds: ['usr-soren', 'usr-mireia', 'usr-kaelen'],
-    location: 'Room 04 · Cartography Lab',
-  },
-  {
-    id: 'evt-02',
-    title: 'Wellhead #07 Transceiver Telemetry Sync',
-    projectId: 'prj-caldera',
-    date: getTodayIsoDate(),
-    startTime: '14:00',
-    endTime: '15:00',
-    category: 'Meeting',
-    type: 'Field Review',
-    attendeeIds: ['usr-tarek', 'usr-soren'],
-    location: 'Telemetry Bridge / Remote Link',
-  },
-  {
-    id: 'evt-03',
-    title: 'Studio Calibration Coffee & Fika',
-    projectId: 'prj-nacre',
-    date: getTodayIsoDate(),
-    startTime: '16:30',
-    endTime: '17:15',
-    category: 'Social',
-    type: 'Client Sync',
-    attendeeIds: ['usr-soren', 'usr-mireia', 'usr-nadia', 'usr-juno'],
-    location: 'Commons Courtyard',
-  },
-  {
-    id: 'evt-04',
-    title: 'Atelier Onda Acoustic Enclosure Listening Session',
-    projectId: 'prj-nacre',
-    date: getIsoDateOffset(1),
-    startTime: '11:00',
-    endTime: '12:30',
-    category: 'Review',
-    type: 'Client Sync',
-    attendeeIds: ['usr-mireia', 'usr-juno', 'usr-nadia'],
-    location: 'Anechoic Studio B',
-  },
-  {
-    id: 'evt-05',
-    title: 'Reykjanes Silica Scaling Deadline',
-    projectId: 'prj-caldera',
-    date: getIsoDateOffset(2),
-    startTime: '17:00',
-    endTime: '18:00',
-    category: 'Deadline',
-    type: 'Milestone',
-    attendeeIds: ['usr-tarek', 'usr-kaelen'],
-    location: 'Reykjanes Field Sector',
-  },
-  {
-    id: 'evt-06',
-    title: 'All-Hands Cartography & Instrumentation Standup',
-    projectId: 'prj-kestrel',
-    date: getIsoDateOffset(3),
-    startTime: '10:00',
-    endTime: '11:00',
-    category: 'Team',
-    type: 'Architecture',
-    attendeeIds: ['usr-soren', 'usr-mireia', 'usr-tarek', 'usr-kaelen', 'usr-nadia'],
-    location: 'Main Drafting Hall',
-  },
-  {
-    id: 'evt-07',
-    title: 'Svalbard Vault Taxonomy & Barcode Audit',
-    projectId: 'prj-sable',
-    date: getIsoDateOffset(5),
-    startTime: '15:00',
-    endTime: '16:30',
-    category: 'Review',
-    type: 'Architecture',
-    attendeeIds: ['usr-nadia', 'usr-soren'],
-    location: 'Room 02 · Archive Wing',
-  },
-  {
-    id: 'evt-08',
-    title: 'Q4 Instrument Charter Freeze',
-    projectId: 'prj-vespera',
-    date: getIsoDateOffset(7),
-    startTime: '18:00',
-    endTime: '19:00',
-    category: 'Deadline',
-    type: 'Milestone',
-    attendeeIds: ['usr-kaelen', 'usr-soren'],
-    location: 'Client Portal',
-  },
-  {
-    id: 'evt-09',
-    title: 'Design Critique: Bridge Low-Light Tokens',
-    projectId: 'prj-kestrel',
-    date: getIsoDateOffset(-2),
-    startTime: '13:00',
-    endTime: '14:15',
-    category: 'Team',
-    type: 'Field Review',
-    attendeeIds: ['usr-mireia', 'usr-nadia'],
-    location: 'Design Crit Wall',
-  },
-  {
-    id: 'evt-10',
-    title: 'Hydrographic Partner Roundtable',
-    projectId: 'prj-kestrel',
-    date: getIsoDateOffset(2),
-    startTime: '09:00',
-    endTime: '10:00',
-    category: 'Meeting',
-    type: 'Client Sync',
-    attendeeIds: ['usr-soren', 'usr-kaelen'],
-    location: 'Briefing Room A',
-  },
-  {
-    id: 'evt-11',
-    title: 'Wellhead Fiber Ring Stress Test',
-    projectId: 'prj-caldera',
-    date: getIsoDateOffset(2),
-    startTime: '11:30',
-    endTime: '12:30',
-    category: 'Review',
-    type: 'Field Review',
-    attendeeIds: ['usr-tarek', 'usr-nadia'],
-    location: 'Telemetry Lab',
-  },
-  {
-    id: 'evt-12',
-    title: 'Nordic Field Crew Dinner',
-    projectId: 'prj-sable',
-    date: getIsoDateOffset(2),
-    startTime: '19:30',
-    endTime: '21:00',
-    category: 'Social',
-    type: 'Client Sync',
-    attendeeIds: ['usr-soren', 'usr-mireia', 'usr-tarek', 'usr-kaelen'],
-    location: 'Skeppsholmen Pier',
-  },
-];
-
-function loadPersistedTasks(): TaskItem[] {
-  if (typeof window === 'undefined') return SEED_TASKS;
-  try {
-    const raw = window.localStorage.getItem(TASKS_STORAGE_KEY);
-    if (raw !== null) {
-      const parsed = JSON.parse(raw);
-      if (Array.isArray(parsed)) {
-        const cleaned = dedupeById<TaskItem>(parsed)
-          .filter(
-            (t) =>
-              !t.title?.startsWith('Establish baseline survey & instrumentation charter for ') &&
-              !t.title?.startsWith('Verify imported point-cloud checksums for ')
-          )
-          .map((t, idx) => ({
-            ...t,
-            updatedAt:
-              typeof t.updatedAt === 'number'
-                ? t.updatedAt
-                : SEED_BASE_TIMESTAMP - (idx + 1) * 60_000,
-          }));
-        if (cleaned.length !== parsed.length) {
-          savePersistedTasks(cleaned);
-        }
-        return cleaned;
-      }
-    }
-  } catch {
-    // Ignore
-  }
-  return SEED_TASKS;
-}
-
-function savePersistedTasks(tasks: TaskItem[]): void {
-  if (typeof window === 'undefined') return;
-  try {
-    window.localStorage.setItem(TASKS_STORAGE_KEY, JSON.stringify(dedupeById(tasks)));
-  } catch {
-    // Ignore
-  }
-}
-
-function loadPersistedProjects(): Project[] {
-  if (typeof window === 'undefined') return SEED_PROJECTS;
-  try {
-    const raw = window.localStorage.getItem(PROJECTS_STORAGE_KEY);
-    if (raw !== null) {
-      const parsed = JSON.parse(raw);
-      if (Array.isArray(parsed)) {
-        const deduped = dedupeById<Project>(parsed);
-        if (deduped.length !== parsed.length) {
-          savePersistedProjects(deduped);
-        }
-        return deduped;
-      }
-    }
-  } catch {
-    // Ignore
-  }
-  return SEED_PROJECTS;
-}
-
-function savePersistedProjects(projects: Project[]): void {
-  if (typeof window === 'undefined') return;
-  try {
-    window.localStorage.setItem(PROJECTS_STORAGE_KEY, JSON.stringify(dedupeById(projects)));
-  } catch {
-    // Ignore
-  }
-}
-
-function loadPersistedTeam(): TeamMember[] {
-  if (typeof window === 'undefined') return SEED_TEAM;
-  try {
-    const raw = window.localStorage.getItem(TEAM_STORAGE_KEY);
-    if (raw !== null) {
-      const parsed = JSON.parse(raw);
-      if (Array.isArray(parsed)) {
-        const deduped = dedupeById<TeamMember>(parsed);
-        if (deduped.length !== parsed.length) {
-          savePersistedTeam(deduped);
-        }
-        return deduped;
-      }
-    }
-  } catch {
-    // Ignore
-  }
-  return SEED_TEAM;
-}
-
-function savePersistedTeam(team: TeamMember[]): void {
-  if (typeof window === 'undefined') return;
-  try {
-    window.localStorage.setItem(TEAM_STORAGE_KEY, JSON.stringify(dedupeById(team)));
-  } catch {
-    // Ignore
-  }
-}
-
-function loadPersistedEvents(): CalendarEvent[] {
-  if (typeof window === 'undefined') return SEED_EVENTS;
-  try {
-    const raw = window.localStorage.getItem(EVENTS_STORAGE_KEY);
-    if (raw !== null) {
-      const parsed = JSON.parse(raw);
-      if (Array.isArray(parsed)) {
-        const deduped = dedupeById<CalendarEvent>(parsed);
-        if (deduped.length !== parsed.length) {
-          savePersistedEvents(deduped);
-        }
-        return deduped;
-      }
-    }
-  } catch {
-    // Ignore
-  }
-  return SEED_EVENTS;
-}
-
-function savePersistedEvents(events: CalendarEvent[]): void {
-  if (typeof window === 'undefined') return;
-  try {
-    window.localStorage.setItem(EVENTS_STORAGE_KEY, JSON.stringify(dedupeById(events)));
-  } catch {
-    // Ignore
-  }
-}
-
-function loadPersistedFocusSessions(): FocusSession[] {
-  if (typeof window === 'undefined') return SEED_FOCUS_SESSIONS;
-  try {
-    const raw = window.localStorage.getItem(FOCUS_SESSIONS_STORAGE_KEY);
-    if (raw !== null) {
-      const parsed = JSON.parse(raw);
-      if (Array.isArray(parsed)) {
-        const normalized = dedupeById<FocusSession>(parsed)
-          .filter((s) => !s.id?.startsWith('fcs-hist-0-'))
-          .map((s) => {
-            const secs =
-              typeof s.seconds === 'number' && s.seconds >= 0
-                ? Math.round(s.seconds)
-                : Math.round((s.hours || 0) * 3600);
-            return {
-              ...s,
-              seconds: secs,
-              hours: secs / 3600,
-            };
-          });
-        savePersistedFocusSessions(normalized);
-        return normalized;
-      }
-    }
-  } catch {
-    // Ignore
-  }
-  return SEED_FOCUS_SESSIONS;
-}
-
-function savePersistedFocusSessions(sessions: FocusSession[]): void {
-  if (typeof window === 'undefined') return;
-  try {
-    window.localStorage.setItem(FOCUS_SESSIONS_STORAGE_KEY, JSON.stringify(dedupeById(sessions)));
-  } catch {
-    // Ignore
-  }
-}
-
 function progressForTaskStatus(status: TaskItem['status'], currentProgress: number): number {
   switch (status) {
     case 'Done':
@@ -1207,6 +1705,8 @@ export interface PlotlineState {
   newTaskModalOpen: boolean;
   commandPaletteOpen: boolean;
   selectedProfileMemberId: string | null;
+  selectedProjectIdForDialog: string | null;
+  importModalOpen: boolean;
   tourStep: number | null;
   isSignedOut: boolean;
   setAccent: (accent: AccentName | 'Tide' | 'Moss' | 'Iris' | 'Signal', showToast?: boolean) => void;
@@ -1219,11 +1719,15 @@ export interface PlotlineState {
   setNewTaskModalOpen: (open: boolean) => void;
   setCommandPaletteOpen: (open: boolean) => void;
   setSelectedProfileMemberId: (id: string | null) => void;
+  openProjectDialog: (id: string | null) => void;
+  setImportModalOpen: (open: boolean) => void;
   setTourStep: (step: number | null) => void;
   setSignedOut: (signedOut: boolean) => void;
   updateProfile: (input: UpdateProfileInput) => void;
   toggleNotification: (key: keyof NotificationSettings) => void;
   addProject: (input: NewProjectInput) => Project;
+  updateProject: (id: string, updates: Partial<Project>) => void;
+  importProjects: (items: Array<{ name: string; client: string; targetDate: string; status: 'Pending' | 'Running' | 'Ended' }>) => { importedCount: number; skippedCount: number };
   importSampleBatch: () => Project;
   moveTask: (taskId: string, newStatus: TaskItem['status']) => void;
   addTask: (input: NewTaskInput) => TaskItem;
@@ -1243,860 +1747,919 @@ export interface PlotlineState {
   pushToast: (title: string, detail?: string) => void;
   pushToastWithUndo: (title: string, detail?: string, undoAction?: () => void) => void;
   dismissToast: (id: string) => void;
+  resetDemoData: () => void;
+  runValidationCheck: () => WorkspaceValidationReport;
 }
 
-export const usePlotlineStore = create<PlotlineState>((set, get) => ({
-  projects: loadPersistedProjects(),
-  tasks: loadPersistedTasks(),
-  team: loadPersistedTeam(),
-  events: loadPersistedEvents(),
-  focusSessions: loadPersistedFocusSessions(),
-  notifications: loadInitialNotifications(),
-  accent: loadInitialAccent(),
-  weekStart: loadInitialWeekStart(),
-  activeRoute: 'Dashboard',
-  railCollapsed: loadInitialRailCollapsed(),
-  searchQuery: '',
-  currentUser: loadInitialCurrentUser(),
-  lastAddedProjectId: null,
-  checkedInEventIds: loadInitialCheckedInEvents(),
-  timerSeconds: loadInitialTimerSeconds(),
-  timerRunning: loadInitialTimerRunning(),
-  timerTaskId: loadInitialTimerTaskId(),
-  toasts: [],
-  newProjectModalOpen: false,
-  newTaskModalOpen: false,
-  commandPaletteOpen: false,
-  selectedProfileMemberId: null,
-  tourStep: null,
-  isSignedOut: loadInitialSignedOut(),
+export const usePlotlineStore = create<PlotlineState>((set, get) => {
+  const initialProjects = loadPersistedProjects();
+  const initialTasks = loadPersistedTasks();
+  const initialTeam = loadPersistedTeam();
+  const initialEvents = loadPersistedEvents(initialProjects);
+  const initialFocusSessions = loadPersistedFocusSessions(initialTasks, initialProjects);
 
-  setAccent: (rawAccent, showToast = false) => {
-    const normalized = normalizeAccent(rawAccent);
-    try {
-      window.localStorage.setItem(ACCENT_STORAGE_KEY, normalized);
-    } catch {
-      // Ignore
-    }
-    applyAccentCssVariables(normalized);
-    set({ accent: normalized });
-    if (showToast) {
-      const label = ACCENT_THEMES[normalized].label;
-      get().pushToast(`Accent set to ${label}`, ACCENT_THEMES[normalized].description);
-    }
-  },
+  // Run validation check on startup
+  if (typeof window !== 'undefined') {
+    setTimeout(() => {
+      validateWorkspace(initialProjects, initialTasks, initialTeam, initialEvents, initialFocusSessions);
+    }, 100);
+  }
 
-  setWeekStart: (weekStart, showToast = false) => {
-    try {
-      window.localStorage.setItem(WEEK_START_STORAGE_KEY, weekStart);
-    } catch {
-      // Ignore
-    }
-    set({ weekStart });
-    if (showToast) {
-      get().pushToast(
-        `Week start set to ${weekStart === 'monday' ? 'Monday' : 'Sunday'}`,
-        'Calendar grid and Weekly Output columns updated.'
-      );
-    }
-  },
+  return {
+    projects: initialProjects,
+    tasks: initialTasks,
+    team: initialTeam,
+    events: initialEvents,
+    focusSessions: initialFocusSessions,
+    notifications: loadInitialNotifications(),
+    accent: loadInitialAccent(),
+    weekStart: loadInitialWeekStart(),
+    activeRoute: 'Dashboard',
+    railCollapsed: loadInitialRailCollapsed(),
+    searchQuery: '',
+    currentUser: loadInitialCurrentUser(),
+    lastAddedProjectId: null,
+    checkedInEventIds: loadInitialCheckedInEvents(),
+    timerSeconds: loadInitialTimerSeconds(),
+    timerRunning: loadInitialTimerRunning(),
+    timerTaskId: loadInitialTimerTaskId(),
+    toasts: [],
+    newProjectModalOpen: false,
+    newTaskModalOpen: false,
+    commandPaletteOpen: false,
+    selectedProfileMemberId: null,
+    selectedProjectIdForDialog: null,
+    importModalOpen: false,
+    tourStep: null,
+    isSignedOut: loadInitialSignedOut(),
 
-  setActiveRoute: (activeRoute) => set({ activeRoute }),
-  setRailCollapsed: (railCollapsed) => {
-    try {
-      window.localStorage.setItem(RAIL_COLLAPSED_STORAGE_KEY, String(railCollapsed));
-    } catch {
-      // Ignore
-    }
-    set({ railCollapsed });
-  },
-  toggleRail: () =>
-    set((state) => {
-      const next = !state.railCollapsed;
+    openProjectDialog: (id) => set({ selectedProjectIdForDialog: id }),
+    setImportModalOpen: (importModalOpen) => set({ importModalOpen }),
+    setAccent: (rawAccent, showToast = false) => {
+      const normalized = normalizeAccent(rawAccent);
       try {
-        window.localStorage.setItem(RAIL_COLLAPSED_STORAGE_KEY, String(next));
+        window.localStorage.setItem(ACCENT_STORAGE_KEY, normalized);
       } catch {
         // Ignore
       }
-      return { railCollapsed: next };
-    }),
-  setSearchQuery: (searchQuery) => set({ searchQuery }),
-  setNewProjectModalOpen: (newProjectModalOpen) => set({ newProjectModalOpen }),
-  setNewTaskModalOpen: (newTaskModalOpen) => set({ newTaskModalOpen }),
-  setCommandPaletteOpen: (commandPaletteOpen) => set({ commandPaletteOpen }),
-  setSelectedProfileMemberId: (selectedProfileMemberId) => set({ selectedProfileMemberId }),
-  setTourStep: (tourStep) => set({ tourStep }),
-
-  setSignedOut: (isSignedOut) => {
-    try {
-      window.localStorage.setItem(SIGNED_OUT_STORAGE_KEY, String(isSignedOut));
-    } catch {
-      // Ignore
-    }
-    set({ isSignedOut });
-  },
-
-  updateProfile: (input) => {
-    const state = get();
-    const cleanName = input.name.trim() || state.currentUser.name;
-    const cleanRole = input.role.trim() || state.currentUser.role;
-    const cleanEmail = input.email.trim() || state.currentUser.email;
-    const initials = computeInitials(cleanName);
-
-    const updatedUser: TeamMember = {
-      ...state.currentUser,
-      name: cleanName,
-      role: cleanRole,
-      email: cleanEmail,
-      initials,
-    };
-
-    const updatedTeam = state.team.map((m) =>
-      m.id === updatedUser.id ? updatedUser : m
-    );
-
-    try {
-      window.localStorage.setItem(CURRENT_USER_STORAGE_KEY, JSON.stringify(updatedUser));
-    } catch {
-      // Ignore
-    }
-    savePersistedTeam(updatedTeam);
-
-    set({
-      currentUser: updatedUser,
-      team: updatedTeam,
-    });
-
-    get().pushToast('Profile saved', `${updatedUser.name} · ${updatedUser.role}`);
-  },
-
-  toggleNotification: (key) => {
-    const state = get();
-    const next: NotificationSettings = {
-      ...state.notifications,
-      [key]: !state.notifications[key],
-    };
-    try {
-      window.localStorage.setItem(NOTIFICATIONS_STORAGE_KEY, JSON.stringify(next));
-    } catch {
-      // Ignore
-    }
-    set({ notifications: next });
-  },
-
-  addProject: (input) => {
-    const snapshot = get();
-    const newId =
-      input.id || `prj-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
-    const existing = snapshot.projects.find((p) => p.id === newId);
-    if (existing) return existing;
-
-    const nextNumber = 116 + snapshot.projects.length;
-    const code = `PLT-${nextNumber}`;
-    const newProject: Project = {
-      id: newId,
-      code,
-      name: input.name.trim(),
-      client: input.client?.trim() || 'Independent Field Commission',
-      sector: input.sector?.trim() || 'Spatial Engineering',
-      status: input.status || 'On Track',
-      leadId: snapshot.currentUser.id,
-      startDate: getTodayIsoDate(),
-      targetDate: input.targetDate,
-      progress: 8,
-      budgetAllocated: 160000,
-      budgetSpent: 12800,
-      summary: `Newly chartered delivery stream (${code}) scheduled for completion by ${input.targetDate}.`,
-    };
-
-    let didInsert = false;
-    set((state) => {
-      if (state.projects.some((p) => p.id === newId)) {
-        return state;
+      applyAccentCssVariables(normalized);
+      set({ accent: normalized });
+      if (showToast) {
+        const label = ACCENT_THEMES[normalized].label;
+        get().pushToast(`Accent set to ${label}`, ACCENT_THEMES[normalized].description);
       }
-      didInsert = true;
-      const nextProjects = dedupeById([newProject, ...state.projects]);
-      savePersistedProjects(nextProjects);
-      return {
-        projects: nextProjects,
-        lastAddedProjectId: newId,
-      };
-    });
+    },
 
-    if (didInsert) {
-      get().pushToast(
-        `Project "${newProject.name}" created`,
-        `${newProject.code} added to active portfolio · Due ${newProject.targetDate}`
-      );
-    }
-
-    return newProject;
-  },
-
-  importSampleBatch: () => {
-    const snapshot = get();
-    const newId = `prj-imp-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
-    const existing = snapshot.projects.find((p) => p.id === newId);
-    if (existing) return existing;
-
-    const nextNumber = 120 + snapshot.projects.length;
-    const code = `PLT-${nextNumber}`;
-    const importedProject: Project = {
-      id: newId,
-      code,
-      name: 'Aethelgard Glacier Lidar Grid',
-      client: 'Nordic Cryosphere Institute',
-      sector: 'Glaciology & Remote Sensing',
-      status: 'On Track',
-      leadId: 'usr-mireia',
-      startDate: getTodayIsoDate(),
-      targetDate: '2027-03-18',
-      progress: 18,
-      budgetAllocated: 195000,
-      budgetSpent: 35100,
-      summary: 'Imported airborne altimetry mesh and crevasse drift ledger.',
-    };
-
-    let didInsert = false;
-    set((state) => {
-      if (state.projects.some((p) => p.id === newId)) {
-        return state;
+    setWeekStart: (weekStart, showToast = false) => {
+      try {
+        window.localStorage.setItem(WEEK_START_STORAGE_KEY, weekStart);
+      } catch {
+        // Ignore
       }
-      didInsert = true;
-      const nextProjects = dedupeById([importedProject, ...state.projects]);
-      savePersistedProjects(nextProjects);
-      return {
-        projects: nextProjects,
-        lastAddedProjectId: newId,
-      };
-    });
-
-    if (didInsert) {
-      get().pushToast(
-        `Imported ${importedProject.code}: ${importedProject.name}`,
-        'Portfolio metrics, project rings, and project list updated.'
-      );
-    }
-
-    return importedProject;
-  },
-
-  moveTask: (taskId, newStatus) => {
-    const snapshot = get();
-    const target = snapshot.tasks.find((t) => t.id === taskId);
-    if (!target || target.status === newStatus) return;
-
-    const nowTs = Date.now();
-    const nextProgress = progressForTaskStatus(newStatus, target.progress);
-    const nextSubtasksDone =
-      newStatus === 'Done'
-        ? target.subtasksTotal
-        : newStatus === 'Backlog'
-        ? Math.min(1, target.subtasksDone)
-        : Math.max(1, Math.min(target.subtasksTotal - 1, target.subtasksDone));
-
-    set((state) => {
-      const currentTarget = state.tasks.find((t) => t.id === taskId);
-      if (!currentTarget || currentTarget.status === newStatus) return state;
-
-      // Preserve original array order (do not reorder on drag); update in place with updatedAt timestamp
-      const updatedTasks = state.tasks.map((t) =>
-        t.id === taskId
-          ? {
-              ...t,
-              status: newStatus,
-              completedDate: newStatus === 'Done' ? getTodayIsoDate() : t.completedDate,
-              progress: nextProgress,
-              subtasksDone: nextSubtasksDone,
-              updatedAt: nowTs,
-              updatedAtLabel: 'Just now',
-            }
-          : t
-      );
-
-      const updatedProjects = state.projects.map((proj) => {
-        if (proj.id !== currentTarget.projectId) return proj;
-        const projTasks = updatedTasks.filter((t) => t.projectId === proj.id);
-        if (projTasks.length === 0) return proj;
-        const avgTaskProgress = Math.round(
-          projTasks.reduce((sum, t) => sum + t.progress, 0) / projTasks.length
+      set({ weekStart });
+      if (showToast) {
+        get().pushToast(
+          `Week start set to ${weekStart === 'monday' ? 'Monday' : 'Sunday'}`,
+          'Calendar grid and Weekly Output columns updated.'
         );
-        return {
-          ...proj,
-          progress: avgTaskProgress,
-        };
-      });
-
-      savePersistedTasks(updatedTasks);
-      savePersistedProjects(updatedProjects);
-
-      return {
-        tasks: updatedTasks,
-        projects: updatedProjects,
-      };
-    });
-
-    const stageLabel = newStatus === 'Backlog' ? 'To do' : newStatus;
-    get().pushToast(`Moved "${target.code}" to ${stageLabel}`, target.title);
-  },
-
-  addTask: (input) => {
-    const snapshot = get();
-    const newId =
-      input.id || `tsk-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
-    const existing = snapshot.tasks.find((t) => t.id === newId);
-    if (existing) return existing;
-
-    const nowTs = Date.now();
-    const defaultProject = snapshot.projects[0];
-    const nextCodeNum = 410 + snapshot.tasks.length;
-    const status = input.status || 'Backlog';
-    const targetProjectId = defaultProject?.id || 'prj-kestrel';
-    const newTask: TaskItem = {
-      id: newId,
-      code: `PLT-${nextCodeNum}`,
-      title: input.title.trim(),
-      category: input.category.trim() || 'Engineering',
-      projectId: targetProjectId,
-      assigneeId: input.assigneeId || snapshot.currentUser.id,
-      status,
-      priority: input.priority,
-      dueDate: input.dueDate,
-      estimateHours: input.priority === 'High' ? 14 : input.priority === 'Medium' ? 10 : 6,
-      loggedSeconds: 0,
-      cycleDays: 2.2,
-      onTime: true,
-      progress: progressForTaskStatus(status, 15),
-      subtasksDone: status === 'Done' ? 4 : 1,
-      subtasksTotal: 4,
-      weekdayIndex: new Date().getDay(),
-      updatedAt: nowTs,
-      updatedAtLabel: 'Just now',
-    };
-
-    let didInsert = false;
-    set((state) => {
-      if (state.tasks.some((t) => t.id === newId)) {
-        return state;
       }
-      didInsert = true;
-      const nextTasks = dedupeById([newTask, ...state.tasks]);
-      const nextProjects = state.projects.map((proj) => {
-        if (proj.id !== targetProjectId) return proj;
-        const projTasks = nextTasks.filter((t) => t.projectId === proj.id);
-        if (projTasks.length === 0) return proj;
-        const avgTaskProgress = Math.round(
-          projTasks.reduce((sum, t) => sum + t.progress, 0) / projTasks.length
-        );
-        return {
-          ...proj,
-          progress: avgTaskProgress,
-        };
-      });
+    },
 
-      savePersistedTasks(nextTasks);
-      savePersistedProjects(nextProjects);
-      return { tasks: nextTasks, projects: nextProjects };
-    });
-
-    if (didInsert) {
-      get().pushToast(`Task "${newTask.code}" created`, newTask.title);
-    }
-    return newTask;
-  },
-
-  addTeamMember: (input) => {
-    const snapshot = get();
-    const newId =
-      input.id || `usr-${Date.now()}-${Math.random().toString(36).slice(2, 5)}`;
-    const existing = snapshot.team.find((m) => m.id === newId);
-    if (existing) return existing;
-
-    const cleanName = input.name.trim();
-    const initials = computeInitials(cleanName);
-    const parts = cleanName.split(/\s+/);
-
-    const newMember: TeamMember = {
-      id: newId,
-      name: cleanName,
-      role: input.role.trim() || 'Specialist',
-      discipline: input.department,
-      department: input.department,
-      presence: 'online',
-      statusLabel: 'Newly onboarded to studio',
-      location: input.location?.trim() || 'Remote · CET',
-      timezone: 'CET (UTC+1)',
-      initials,
-      capacityHours: 40,
-      allocatedHours: 20,
-      email:
-        input.email?.trim() ||
-        `${parts[0].toLowerCase()}@plotline.studio`,
-    };
-
-    let didInsert = false;
-    set((state) => {
-      if (state.team.some((m) => m.id === newId)) {
-        return state;
-      }
-      didInsert = true;
-      const nextTeam = dedupeById([...state.team, newMember]);
-      savePersistedTeam(nextTeam);
-      return { team: nextTeam };
-    });
-
-    if (didInsert) {
-      get().pushToast(`Invited ${newMember.name}`, `${newMember.role} · ${newMember.department}`);
-    }
-    return newMember;
-  },
-
-  addEvent: (input) => {
-    const snapshot = get();
-    const newId =
-      input.id || `evt-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
-    const existing = snapshot.events.find((e) => e.id === newId);
-    if (existing) return existing;
-
-    const newEvent: CalendarEvent = {
-      id: newId,
-      title: input.title.trim(),
-      category: input.category,
-      projectId: input.projectId || snapshot.projects[0]?.id || 'prj-kestrel',
-      date: input.date,
-      startTime: input.startTime || '10:00',
-      endTime: input.endTime || '11:00',
-      attendeeIds:
-        input.attendeeIds.length > 0 ? input.attendeeIds : [snapshot.currentUser.id],
-      location: input.location?.trim() || 'Studio Room 01 · Hybrid',
-    };
-
-    let didInsert = false;
-    set((state) => {
-      if (state.events.some((e) => e.id === newId)) {
-        return state;
-      }
-      didInsert = true;
-      const nextEvents = dedupeById([newEvent, ...state.events]);
-      savePersistedEvents(nextEvents);
-      return { events: nextEvents };
-    });
-
-    if (didInsert) {
-      get().pushToast(
-        `Event "${newEvent.title}" scheduled`,
-        `${newEvent.date} · ${newEvent.startTime}–${newEvent.endTime}`
-      );
-    }
-    return newEvent;
-  },
-
-  updateEvent: (eventId, input) => {
-    const state = get();
-    const nextEvents = state.events.map((evt) => {
-      if (evt.id !== eventId) return evt;
-      return {
-        ...evt,
-        title: input.title !== undefined ? input.title.trim() : evt.title,
-        category: input.category !== undefined ? input.category : evt.category,
-        date: input.date !== undefined ? input.date : evt.date,
-        startTime: input.startTime !== undefined ? input.startTime : evt.startTime,
-        endTime: input.endTime !== undefined ? input.endTime : evt.endTime,
-        attendeeIds: input.attendeeIds !== undefined ? input.attendeeIds : evt.attendeeIds,
-        location: input.location !== undefined ? input.location : evt.location,
-      };
-    });
-    savePersistedEvents(nextEvents);
-    set({ events: nextEvents });
-    get().pushToast('Event updated');
-  },
-
-  deleteProject: (projectId) => {
-    const snapshot = get();
-    const target = snapshot.projects.find((p) => p.id === projectId);
-    if (!target) return;
-
-    const savedSnapshot: StoreSnapshot = {
-      projects: [...snapshot.projects],
-      tasks: [...snapshot.tasks],
-      team: [...snapshot.team],
-      events: [...snapshot.events],
-      focusSessions: [...snapshot.focusSessions],
-      timerRunning: snapshot.timerRunning,
-      timerSeconds: snapshot.timerSeconds,
-      timerTaskId: snapshot.timerTaskId,
-    };
-
-    const nextProjects = snapshot.projects.filter((p) => p.id !== projectId);
-    const deletedTaskIds = new Set(
-      snapshot.tasks.filter((t) => t.projectId === projectId).map((t) => t.id)
-    );
-    const nextTasks = snapshot.tasks.filter((t) => t.projectId !== projectId);
-
-    let nextTimerRunning = snapshot.timerRunning;
-    let nextTimerSeconds = snapshot.timerSeconds;
-    if (deletedTaskIds.has(snapshot.timerTaskId)) {
-      nextTimerRunning = false;
-      nextTimerSeconds = 0;
+    setActiveRoute: (activeRoute) => set({ activeRoute }),
+    setRailCollapsed: (railCollapsed) => {
       try {
-        window.localStorage.setItem(TIMER_RUNNING_STORAGE_KEY, 'false');
-        window.localStorage.setItem(TIMER_SECONDS_STORAGE_KEY, '0');
+        window.localStorage.setItem(RAIL_COLLAPSED_STORAGE_KEY, String(railCollapsed));
       } catch {
         // Ignore
       }
-    }
-
-    savePersistedProjects(nextProjects);
-    savePersistedTasks(nextTasks);
-
-    set({
-      projects: nextProjects,
-      tasks: nextTasks,
-      timerRunning: nextTimerRunning,
-      timerSeconds: nextTimerSeconds,
-    });
-
-    get().pushToastWithUndo(
-      `Project "${target.name}" deleted`,
-      'Associated tasks removed',
-      () => get().restoreSnapshot(savedSnapshot)
-    );
-  },
-
-  deleteMember: (memberId) => {
-    const snapshot = get();
-    if (memberId === snapshot.currentUser.id) return;
-    const target = snapshot.team.find((m) => m.id === memberId);
-    if (!target) return;
-
-    const savedSnapshot: StoreSnapshot = {
-      projects: [...snapshot.projects],
-      tasks: [...snapshot.tasks],
-      team: [...snapshot.team],
-      events: [...snapshot.events],
-      focusSessions: [...snapshot.focusSessions],
-      timerRunning: snapshot.timerRunning,
-      timerSeconds: snapshot.timerSeconds,
-      timerTaskId: snapshot.timerTaskId,
-    };
-
-    const nextTeam = snapshot.team.filter((m) => m.id !== memberId);
-    const nextTasks = snapshot.tasks.map((t) => {
-      let updated = false;
-      let nextAssignee = t.assigneeId;
-      let nextCoAssignee = t.coAssigneeId;
-
-      if (t.assigneeId === memberId) {
-        nextAssignee = '';
-        updated = true;
-      }
-      if (t.coAssigneeId === memberId) {
-        nextCoAssignee = undefined;
-        updated = true;
-      }
-
-      return updated
-        ? { ...t, assigneeId: nextAssignee, coAssigneeId: nextCoAssignee }
-        : t;
-    });
-
-    savePersistedTeam(nextTeam);
-    savePersistedTasks(nextTasks);
-
-    const nextProfileId =
-      snapshot.selectedProfileMemberId === memberId
-        ? null
-        : snapshot.selectedProfileMemberId;
-
-    set({
-      team: nextTeam,
-      tasks: nextTasks,
-      selectedProfileMemberId: nextProfileId,
-    });
-
-    get().pushToastWithUndo(
-      `Specialist "${target.name}" deleted`,
-      'Assigned tasks moved to Unassigned',
-      () => get().restoreSnapshot(savedSnapshot)
-    );
-  },
-
-  deleteEvent: (eventId) => {
-    const snapshot = get();
-    const target = snapshot.events.find((e) => e.id === eventId);
-    if (!target) return;
-
-    const savedSnapshot: StoreSnapshot = {
-      projects: [...snapshot.projects],
-      tasks: [...snapshot.tasks],
-      team: [...snapshot.team],
-      events: [...snapshot.events],
-      focusSessions: [...snapshot.focusSessions],
-      timerRunning: snapshot.timerRunning,
-      timerSeconds: snapshot.timerSeconds,
-      timerTaskId: snapshot.timerTaskId,
-    };
-
-    const nextEvents = snapshot.events.filter((e) => e.id !== eventId);
-    savePersistedEvents(nextEvents);
-
-    set({ events: nextEvents });
-
-    get().pushToastWithUndo(
-      `Event "${target.title}" deleted`,
-      `${target.date} · ${target.startTime}–${target.endTime}`,
-      () => get().restoreSnapshot(savedSnapshot)
-    );
-  },
-
-  deleteTask: (taskId) => {
-    const snapshot = get();
-    const target = snapshot.tasks.find((t) => t.id === taskId);
-    if (!target) return;
-
-    const savedSnapshot: StoreSnapshot = {
-      projects: [...snapshot.projects],
-      tasks: [...snapshot.tasks],
-      team: [...snapshot.team],
-      events: [...snapshot.events],
-      focusSessions: [...snapshot.focusSessions],
-      timerRunning: snapshot.timerRunning,
-      timerSeconds: snapshot.timerSeconds,
-      timerTaskId: snapshot.timerTaskId,
-    };
-
-    const nextTasks = snapshot.tasks.filter((t) => t.id !== taskId);
-
-    let nextTimerRunning = snapshot.timerRunning;
-    let nextTimerSeconds = snapshot.timerSeconds;
-    if (snapshot.timerTaskId === taskId) {
-      nextTimerRunning = false;
-      nextTimerSeconds = 0;
-      try {
-        window.localStorage.setItem(TIMER_RUNNING_STORAGE_KEY, 'false');
-        window.localStorage.setItem(TIMER_SECONDS_STORAGE_KEY, '0');
-      } catch {
-        // Ignore
-      }
-    }
-
-    savePersistedTasks(nextTasks);
-
-    set({
-      tasks: nextTasks,
-      timerRunning: nextTimerRunning,
-      timerSeconds: nextTimerSeconds,
-    });
-
-    get().pushToastWithUndo(
-      `Task "${target.code}" deleted`,
-      target.title,
-      () => get().restoreSnapshot(savedSnapshot)
-    );
-  },
-
-  restoreSnapshot: (snapshot) => {
-    savePersistedProjects(snapshot.projects);
-    savePersistedTasks(snapshot.tasks);
-    savePersistedTeam(snapshot.team);
-    savePersistedEvents(snapshot.events);
-    savePersistedFocusSessions(snapshot.focusSessions);
-
-    try {
-      window.localStorage.setItem(
-        TIMER_RUNNING_STORAGE_KEY,
-        String(snapshot.timerRunning)
-      );
-      window.localStorage.setItem(
-        TIMER_SECONDS_STORAGE_KEY,
-        String(snapshot.timerSeconds)
-      );
-      window.localStorage.setItem(
-        TIMER_TASK_STORAGE_KEY,
-        snapshot.timerTaskId
-      );
-    } catch {
-      // Ignore
-    }
-
-    set({
-      projects: snapshot.projects,
-      tasks: snapshot.tasks,
-      team: snapshot.team,
-      events: snapshot.events,
-      focusSessions: snapshot.focusSessions,
-      timerRunning: snapshot.timerRunning,
-      timerSeconds: snapshot.timerSeconds,
-      timerTaskId: snapshot.timerTaskId,
-    });
-
-    get().pushToast('Deletion undone', 'Restored record and all cascaded changes.');
-  },
-
-  toggleEventCheckIn: (eventId) => {
-    const state = get();
-    const isCheckedIn = state.checkedInEventIds.includes(eventId);
-    const targetEvent = state.events.find((e) => e.id === eventId);
-    const nextIds = isCheckedIn
-      ? state.checkedInEventIds.filter((id) => id !== eventId)
-      : [...state.checkedInEventIds, eventId];
-
-    try {
-      window.localStorage.setItem(CHECKED_IN_EVENTS_STORAGE_KEY, JSON.stringify(nextIds));
-    } catch {
-      // Ignore
-    }
-    set({ checkedInEventIds: nextIds });
-
-    if (targetEvent) {
-      get().pushToast(
-        isCheckedIn ? `Meeting ended: ${targetEvent.title}` : `Meeting started: ${targetEvent.title}`,
-        `${targetEvent.startTime}–${targetEvent.endTime} · ${targetEvent.location}`
-      );
-    }
-  },
-
-  toggleTimer: () => {
-    set((state) => {
-      const nextRunning = !state.timerRunning;
-      const nextSeconds = state.timerSeconds;
-      try {
-        window.localStorage.setItem(TIMER_RUNNING_STORAGE_KEY, String(nextRunning));
-        window.localStorage.setItem(TIMER_SECONDS_STORAGE_KEY, String(nextSeconds));
-      } catch {
-        // Ignore
-      }
-      return { timerRunning: nextRunning, timerSeconds: nextSeconds };
-    });
-  },
-
-  resetTimer: () => {
-    const snapshot = get();
-    const elapsedSeconds =
-      snapshot.timerSeconds > 0
-        ? snapshot.timerSeconds
-        : snapshot.timerRunning
-        ? 1
-        : 0;
-    const activeTask =
-      snapshot.tasks.find((t) => t.id === snapshot.timerTaskId) || snapshot.tasks[0];
-
-    try {
-      window.localStorage.setItem(TIMER_SECONDS_STORAGE_KEY, '0');
-      window.localStorage.setItem(TIMER_RUNNING_STORAGE_KEY, 'false');
-    } catch {
-      // Ignore
-    }
-
-    if (elapsedSeconds > 0 && activeTask) {
-      const newSessionId = `fcs-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
-      const nowTs = Date.now();
-      const todayWeekday = new Date().getDay();
-      const newSession: FocusSession = {
-        id: newSessionId,
-        taskId: activeTask.id,
-        projectId: activeTask.projectId,
-        memberId: activeTask.assigneeId || snapshot.currentUser.id,
-        weekdayIndex: todayWeekday,
-        date: getTodayIsoDate(),
-        daysAgo: 0,
-        seconds: elapsedSeconds,
-        hours: elapsedSeconds / 3600,
-        tasksCompletedCount: 0,
-        cycleDays: 2.0,
-        onTimeCount: 0,
-        createdAt: new Date(nowTs).toISOString(),
-      };
-
-      let didLog = false;
+      set({ railCollapsed });
+    },
+    toggleRail: () =>
       set((state) => {
-        if (state.focusSessions.some((s) => s.id === newSessionId)) {
-          return { timerSeconds: 0, timerRunning: false };
+        const next = !state.railCollapsed;
+        try {
+          window.localStorage.setItem(RAIL_COLLAPSED_STORAGE_KEY, String(next));
+        } catch {
+          // Ignore
         }
-        didLog = true;
-        const nextSessions = dedupeById([...state.focusSessions, newSession]);
-        savePersistedFocusSessions(nextSessions);
+        return { railCollapsed: next };
+      }),
+    setSearchQuery: (searchQuery) => set({ searchQuery }),
+    setNewProjectModalOpen: (newProjectModalOpen) => set({ newProjectModalOpen }),
+    setNewTaskModalOpen: (newTaskModalOpen) => set({ newTaskModalOpen }),
+    setCommandPaletteOpen: (commandPaletteOpen) => set({ commandPaletteOpen }),
+    setSelectedProfileMemberId: (selectedProfileMemberId) => set({ selectedProfileMemberId }),
+    setTourStep: (tourStep) => set({ tourStep }),
 
-        const nextTasks = state.tasks.map((t) => {
-          if (t.id !== activeTask.id) return t;
-          const prevLogged = t.loggedSeconds || 0;
-          const nextLogged = prevLogged + elapsedSeconds;
+    setSignedOut: (isSignedOut) => {
+      try {
+        window.localStorage.setItem(SIGNED_OUT_STORAGE_KEY, String(isSignedOut));
+      } catch {
+        // Ignore
+      }
+      set({ isSignedOut });
+    },
+
+    updateProfile: (input) => {
+      const state = get();
+      const cleanName = input.name.trim() || state.currentUser.name;
+      const cleanRole = input.role.trim() || state.currentUser.role;
+      const cleanEmail = input.email.trim() || state.currentUser.email;
+      const initials = computeInitials(cleanName);
+
+      const updatedUser: TeamMember = {
+        ...state.currentUser,
+        name: cleanName,
+        role: cleanRole,
+        email: cleanEmail,
+        initials,
+      };
+
+      const updatedTeam = state.team.map((m) =>
+        m.id === updatedUser.id ? updatedUser : m
+      );
+
+      try {
+        window.localStorage.setItem(CURRENT_USER_STORAGE_KEY, JSON.stringify(updatedUser));
+      } catch {
+        // Ignore
+      }
+      savePersistedTeam(updatedTeam);
+
+      set({
+        currentUser: updatedUser,
+        team: updatedTeam,
+      });
+
+      get().pushToast('Profile saved', `${updatedUser.name} · ${updatedUser.role}`);
+    },
+
+    toggleNotification: (key) => {
+      const state = get();
+      const next: NotificationSettings = {
+        ...state.notifications,
+        [key]: !state.notifications[key],
+      };
+      try {
+        window.localStorage.setItem(NOTIFICATIONS_STORAGE_KEY, JSON.stringify(next));
+      } catch {
+        // Ignore
+      }
+      set({ notifications: next });
+    },
+
+    addProject: (input) => {
+      const snapshot = get();
+      const newId =
+        input.id || `prj-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
+      const existing = snapshot.projects.find((p) => p.id === newId);
+      if (existing) return existing;
+
+      const nextNumber = 107 + snapshot.projects.length;
+      const code = `PLT-${nextNumber}`;
+      const newProject: Project = {
+        id: newId,
+        code,
+        name: input.name.trim(),
+        client: input.client?.trim() || 'Independent Partner',
+        sector: input.sector?.trim() || 'Engineering & Operations',
+        status: input.status || 'On Track',
+        leadId: snapshot.currentUser.id,
+        startDate: getTodayIsoDate(),
+        targetDate: input.targetDate,
+        progress: 0,
+        budgetAllocated: 150000,
+        budgetSpent: 0,
+        summary: `Newly chartered project (${code}) target completion ${input.targetDate}.`,
+      };
+
+      let didInsert = false;
+      set((state) => {
+        if (state.projects.some((p) => p.id === newId)) {
+          return state;
+        }
+        didInsert = true;
+        const nextProjects = dedupeById([newProject, ...state.projects]);
+        savePersistedProjects(nextProjects);
+        return {
+          projects: nextProjects,
+          lastAddedProjectId: newId,
+        };
+      });
+
+      if (didInsert) {
+        get().pushToast(
+          `Project "${newProject.name}" created`,
+          `${newProject.code} added to active portfolio · Due ${newProject.targetDate}`
+        );
+      }
+
+      return newProject;
+    },
+
+    updateProject: (id, updates) => {
+      let updatedProjName = '';
+      set((state) => {
+        const nextProjects = state.projects.map((p) => {
+          if (p.id !== id) return p;
+          updatedProjName = updates.name !== undefined ? updates.name : p.name;
+          const updated = {
+            ...p,
+            ...updates,
+            name: updates.name !== undefined ? updates.name.trim() : p.name,
+            client: updates.client !== undefined ? updates.client.trim() : p.client,
+            targetDate: updates.targetDate !== undefined ? updates.targetDate : p.targetDate,
+            progress: updates.progress !== undefined ? Math.max(0, Math.min(100, updates.progress)) : p.progress,
+          };
+          if (updates.statusOverride !== undefined) {
+            updated.statusOverride = updates.statusOverride;
+            updated.status = updates.statusOverride;
+          }
+          return updated;
+        });
+        savePersistedProjects(nextProjects);
+        return { projects: nextProjects };
+      });
+      if (updatedProjName) {
+        get().pushToast(`Project "${updatedProjName}" updated`);
+      }
+    },
+
+    importProjects: (items) => {
+      const snapshot = get();
+      let importedCount = 0;
+      let skippedCount = 0;
+      const newProjects: Project[] = [];
+
+      const existingKeys = new Set(
+        snapshot.projects.map((p) => `${p.name.trim().toLowerCase()}|${p.targetDate.trim()}`)
+      );
+
+      items.forEach((item, idx) => {
+        const cleanName = item.name.trim();
+        const cleanDate = item.targetDate.trim();
+        const key = `${cleanName.toLowerCase()}|${cleanDate}`;
+        if (!cleanName || existingKeys.has(key)) {
+          skippedCount++;
+          return;
+        }
+        existingKeys.add(key);
+        importedCount++;
+
+        const nextNum = 110 + snapshot.projects.length + newProjects.length;
+        const newPrj: Project = {
+          id: `prj-imp-${Date.now()}-${idx}-${Math.random().toString(36).slice(2, 6)}`,
+          code: `PLT-${nextNum}`,
+          name: cleanName,
+          client: item.client.trim() || 'Imported Partner',
+          sector: 'Specialized Operations',
+          status: 'Pending',
+          leadId: snapshot.currentUser.id,
+          startDate: getTodayIsoDate(),
+          targetDate: cleanDate,
+          progress: 0,
+          budgetAllocated: 150000,
+          budgetSpent: 0,
+          summary: `Imported project stream (${cleanName}).`,
+        };
+        newProjects.push(newPrj);
+      });
+
+      if (newProjects.length > 0) {
+        const nextProjects = dedupeById([...newProjects, ...snapshot.projects]);
+        savePersistedProjects(nextProjects);
+        set({ projects: nextProjects });
+      }
+
+      const toastTitle = `${importedCount} ${importedCount === 1 ? 'project' : 'projects'} imported, ${skippedCount} skipped`;
+      get().pushToast(toastTitle, importedCount > 0 ? 'Active portfolio updated' : 'No new projects added');
+
+      return { importedCount, skippedCount };
+    },
+
+    importSampleBatch: () => {
+      const snapshot = get();
+      const newId = `prj-imp-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
+      const existing = snapshot.projects.find((p) => p.id === newId);
+      if (existing) return existing;
+
+      const nextNumber = 120 + snapshot.projects.length;
+      const code = `PLT-${nextNumber}`;
+      const importedProject: Project = {
+        id: newId,
+        code,
+        name: 'Aethelgard Glacier Lidar Grid',
+        client: 'Nordic Cryosphere Institute',
+        sector: 'Glaciology & Remote Sensing',
+        status: 'On Track',
+        leadId: 'usr-mireia',
+        startDate: getTodayIsoDate(),
+        targetDate: getIsoDateOffset(45),
+        progress: 18,
+        budgetAllocated: 195000,
+        budgetSpent: 35100,
+        summary: 'Imported airborne altimetry mesh and crevasse drift ledger.',
+      };
+
+      let didInsert = false;
+      set((state) => {
+        if (state.projects.some((p) => p.id === newId)) {
+          return state;
+        }
+        didInsert = true;
+        const nextProjects = dedupeById([importedProject, ...state.projects]);
+        savePersistedProjects(nextProjects);
+        return {
+          projects: nextProjects,
+          lastAddedProjectId: newId,
+        };
+      });
+
+      if (didInsert) {
+        get().pushToast(
+          `Imported ${importedProject.code}: ${importedProject.name}`,
+          'Portfolio metrics and projects updated.'
+        );
+      }
+
+      return importedProject;
+    },
+
+    moveTask: (taskId, newStatus) => {
+      const snapshot = get();
+      const target = snapshot.tasks.find((t) => t.id === taskId);
+      if (!target || target.status === newStatus) return;
+
+      const nowTs = Date.now();
+      const nextProgress = progressForTaskStatus(newStatus, target.progress);
+      const nextSubtasksDone =
+        newStatus === 'Done'
+          ? target.subtasksTotal
+          : newStatus === 'Backlog'
+          ? 0
+          : Math.max(1, Math.min(target.subtasksTotal - 1, target.subtasksDone));
+
+      set((state) => {
+        const currentTarget = state.tasks.find((t) => t.id === taskId);
+        if (!currentTarget || currentTarget.status === newStatus) return state;
+
+        const updatedTasks = state.tasks.map((t) =>
+          t.id === taskId
+            ? {
+                ...t,
+                status: newStatus,
+                completedDate: newStatus === 'Done' ? getTodayIsoDate() : t.completedDate,
+                progress: nextProgress,
+                subtasksDone: nextSubtasksDone,
+                updatedAt: nowTs,
+                updatedAtLabel: 'Just now',
+              }
+            : t
+        );
+
+        const updatedProjects = state.projects.map((proj) => {
+          if (proj.id !== currentTarget.projectId) return proj;
+          const projProgress = getProjectProgress(proj, updatedTasks);
           return {
-            ...t,
-            loggedSeconds: nextLogged,
-            updatedAt: nowTs,
-            updatedAtLabel: 'Just now',
+            ...proj,
+            progress: projProgress,
           };
         });
-        savePersistedTasks(nextTasks);
+
+        savePersistedTasks(updatedTasks);
+        savePersistedProjects(updatedProjects);
 
         return {
-          timerSeconds: 0,
-          timerRunning: false,
-          focusSessions: nextSessions,
-          tasks: nextTasks,
+          tasks: updatedTasks,
+          projects: updatedProjects,
         };
       });
 
-      if (didLog) {
+      const stageLabel = newStatus === 'Backlog' ? 'To do' : newStatus;
+      get().pushToast(`Moved "${target.code}" to ${stageLabel}`, target.title);
+    },
+
+    addTask: (input) => {
+      const snapshot = get();
+      const newId =
+        input.id || `tsk-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
+      const existing = snapshot.tasks.find((t) => t.id === newId);
+      if (existing) return existing;
+
+      const nowTs = Date.now();
+      const defaultProject = snapshot.projects[0];
+      const nextCodeNum = 100 + snapshot.tasks.length;
+      const status = input.status || 'Backlog';
+      const targetProjectId = defaultProject?.id || 'prj-harbor';
+      const newTask: TaskItem = {
+        id: newId,
+        code: `PLT-${nextCodeNum}`,
+        title: input.title.trim(),
+        category: input.category.trim() || 'Engineering',
+        projectId: targetProjectId,
+        assigneeId: input.assigneeId || snapshot.currentUser.id,
+        status,
+        priority: input.priority,
+        dueDate: input.dueDate,
+        estimateHours: input.priority === 'High' ? 14 : input.priority === 'Medium' ? 10 : 6,
+        loggedSeconds: 0,
+        cycleDays: 2.2,
+        onTime: true,
+        progress: progressForTaskStatus(status, 15),
+        subtasksDone: status === 'Done' ? 4 : 0,
+        subtasksTotal: 4,
+        weekdayIndex: new Date().getDay(),
+        updatedAt: nowTs,
+        updatedAtLabel: 'Just now',
+      };
+
+      let didInsert = false;
+      set((state) => {
+        if (state.tasks.some((t) => t.id === newId)) {
+          return state;
+        }
+        didInsert = true;
+        const nextTasks = dedupeById([newTask, ...state.tasks]);
+        const nextProjects = state.projects.map((proj) => {
+          if (proj.id !== targetProjectId) return proj;
+          const projProgress = getProjectProgress(proj, nextTasks);
+          return {
+            ...proj,
+            progress: projProgress,
+          };
+        });
+
+        savePersistedTasks(nextTasks);
+        savePersistedProjects(nextProjects);
+        return { tasks: nextTasks, projects: nextProjects };
+      });
+
+      if (didInsert) {
+        get().pushToast(`Task "${newTask.code}" created`, newTask.title);
+      }
+      return newTask;
+    },
+
+    addTeamMember: (input) => {
+      const snapshot = get();
+      const newId =
+        input.id || `usr-${Date.now()}-${Math.random().toString(36).slice(2, 5)}`;
+      const existing = snapshot.team.find((m) => m.id === newId);
+      if (existing) return existing;
+
+      const cleanName = input.name.trim();
+      const initials = computeInitials(cleanName);
+      const parts = cleanName.split(/\s+/);
+
+      const newMember: TeamMember = {
+        id: newId,
+        name: cleanName,
+        role: input.role.trim() || 'Specialist',
+        discipline: input.department,
+        department: input.department,
+        presence: 'online',
+        statusLabel: 'Newly onboarded specialist',
+        location: input.location?.trim() || 'Remote · CET',
+        timezone: 'CET (UTC+1)',
+        initials,
+        capacityHours: 60,
+        allocatedHours: 20,
+        email:
+          input.email?.trim() ||
+          `${parts[0].toLowerCase()}@plotline.studio`,
+      };
+
+      let didInsert = false;
+      set((state) => {
+        if (state.team.some((m) => m.id === newId)) {
+          return state;
+        }
+        didInsert = true;
+        const nextTeam = dedupeById([...state.team, newMember]);
+        savePersistedTeam(nextTeam);
+        return { team: nextTeam };
+      });
+
+      if (didInsert) {
+        get().pushToast(`Invited ${newMember.name}`, `${newMember.role} · ${newMember.department}`);
+      }
+      return newMember;
+    },
+
+    addEvent: (input) => {
+      const snapshot = get();
+      const newId =
+        input.id || `evt-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
+      const existing = snapshot.events.find((e) => e.id === newId);
+      if (existing) return existing;
+
+      const newEvent: CalendarEvent = {
+        id: newId,
+        title: input.title.trim(),
+        category: input.category,
+        projectId: input.projectId || snapshot.projects[0]?.id || 'prj-harbor',
+        date: input.date,
+        startTime: input.startTime || '10:00',
+        endTime: input.endTime || '11:00',
+        attendeeIds:
+          input.attendeeIds.length > 0 ? input.attendeeIds : [snapshot.currentUser.id],
+        location: input.location?.trim() || 'Studio Room 01',
+      };
+
+      let didInsert = false;
+      set((state) => {
+        if (state.events.some((e) => e.id === newId)) {
+          return state;
+        }
+        didInsert = true;
+        const nextEvents = dedupeById([newEvent, ...state.events]);
+        savePersistedEvents(nextEvents);
+        return { events: nextEvents };
+      });
+
+      if (didInsert) {
         get().pushToast(
-          `Logged ${formatDuration(elapsedSeconds)} focus session`,
-          `${activeTask.code} · ${activeTask.title}`
+          `Event "${newEvent.title}" scheduled`,
+          `${newEvent.date} · ${newEvent.startTime}–${newEvent.endTime}`
         );
       }
-      return;
-    }
+      return newEvent;
+    },
 
-    set({ timerSeconds: 0, timerRunning: false });
-  },
+    updateEvent: (eventId, input) => {
+      const state = get();
+      const nextEvents = state.events.map((evt) => {
+        if (evt.id !== eventId) return evt;
+        return {
+          ...evt,
+          title: input.title !== undefined ? input.title.trim() : evt.title,
+          category: input.category !== undefined ? input.category : evt.category,
+          date: input.date !== undefined ? input.date : evt.date,
+          startTime: input.startTime !== undefined ? input.startTime : evt.startTime,
+          endTime: input.endTime !== undefined ? input.endTime : evt.endTime,
+          attendeeIds: input.attendeeIds !== undefined ? input.attendeeIds : evt.attendeeIds,
+          location: input.location !== undefined ? input.location : evt.location,
+        };
+      });
+      savePersistedEvents(nextEvents);
+      set({ events: nextEvents });
+      get().pushToast('Event updated');
+    },
 
-  tickTimer: () => {
-    set((state) => {
-      if (!state.timerRunning) return state;
-      const nextSeconds = state.timerSeconds + 1;
+    deleteProject: (projectId) => {
+      const snapshot = get();
+      const target = snapshot.projects.find((p) => p.id === projectId);
+      if (!target) return;
+
+      const savedSnapshot: StoreSnapshot = {
+        projects: [...snapshot.projects],
+        tasks: [...snapshot.tasks],
+        team: [...snapshot.team],
+        events: [...snapshot.events],
+        focusSessions: [...snapshot.focusSessions],
+        timerRunning: snapshot.timerRunning,
+        timerSeconds: snapshot.timerSeconds,
+        timerTaskId: snapshot.timerTaskId,
+      };
+
+      const nextProjects = snapshot.projects.filter((p) => p.id !== projectId);
+      const nextTasks = snapshot.tasks.filter((t) => t.projectId !== projectId);
+
+      savePersistedProjects(nextProjects);
+      savePersistedTasks(nextTasks);
+
+      set({
+        projects: nextProjects,
+        tasks: nextTasks,
+      });
+
+      get().pushToastWithUndo(
+        `Project "${target.name}" deleted`,
+        'Associated deliverables removed',
+        () => get().restoreSnapshot(savedSnapshot)
+      );
+    },
+
+    deleteMember: (memberId) => {
+      const snapshot = get();
+      if (memberId === snapshot.currentUser.id) return;
+      const target = snapshot.team.find((m) => m.id === memberId);
+      if (!target) return;
+
+      const savedSnapshot: StoreSnapshot = {
+        projects: [...snapshot.projects],
+        tasks: [...snapshot.tasks],
+        team: [...snapshot.team],
+        events: [...snapshot.events],
+        focusSessions: [...snapshot.focusSessions],
+        timerRunning: snapshot.timerRunning,
+        timerSeconds: snapshot.timerSeconds,
+        timerTaskId: snapshot.timerTaskId,
+      };
+
+      const nextTeam = snapshot.team.filter((m) => m.id !== memberId);
+      const nextTasks = snapshot.tasks.map((t) => {
+        let updated = false;
+        let nextAssignee = t.assigneeId;
+        let nextCoAssignee = t.coAssigneeId;
+
+        if (t.assigneeId === memberId) {
+          nextAssignee = 'usr-soren';
+          updated = true;
+        }
+        if (t.coAssigneeId === memberId) {
+          nextCoAssignee = undefined;
+          updated = true;
+        }
+
+        return updated
+          ? { ...t, assigneeId: nextAssignee, coAssigneeId: nextCoAssignee }
+          : t;
+      });
+
+      savePersistedTeam(nextTeam);
+      savePersistedTasks(nextTasks);
+
+      set({
+        team: nextTeam,
+        tasks: nextTasks,
+      });
+
+      get().pushToastWithUndo(
+        `Specialist "${target.name}" deleted`,
+        'Assigned tasks reallocated',
+        () => get().restoreSnapshot(savedSnapshot)
+      );
+    },
+
+    deleteEvent: (eventId) => {
+      const snapshot = get();
+      const target = snapshot.events.find((e) => e.id === eventId);
+      if (!target) return;
+
+      const savedSnapshot: StoreSnapshot = {
+        projects: [...snapshot.projects],
+        tasks: [...snapshot.tasks],
+        team: [...snapshot.team],
+        events: [...snapshot.events],
+        focusSessions: [...snapshot.focusSessions],
+        timerRunning: snapshot.timerRunning,
+        timerSeconds: snapshot.timerSeconds,
+        timerTaskId: snapshot.timerTaskId,
+      };
+
+      const nextEvents = snapshot.events.filter((e) => e.id !== eventId);
+      savePersistedEvents(nextEvents);
+
+      set({ events: nextEvents });
+
+      get().pushToastWithUndo(
+        `Event "${target.title}" deleted`,
+        `${target.date} · ${target.startTime}–${target.endTime}`,
+        () => get().restoreSnapshot(savedSnapshot)
+      );
+    },
+
+    deleteTask: (taskId) => {
+      const snapshot = get();
+      const target = snapshot.tasks.find((t) => t.id === taskId);
+      if (!target) return;
+
+      const savedSnapshot: StoreSnapshot = {
+        projects: [...snapshot.projects],
+        tasks: [...snapshot.tasks],
+        team: [...snapshot.team],
+        events: [...snapshot.events],
+        focusSessions: [...snapshot.focusSessions],
+        timerRunning: snapshot.timerRunning,
+        timerSeconds: snapshot.timerSeconds,
+        timerTaskId: snapshot.timerTaskId,
+      };
+
+      const nextTasks = snapshot.tasks.filter((t) => t.id !== taskId);
+      savePersistedTasks(nextTasks);
+
+      set({
+        tasks: nextTasks,
+      });
+
+      get().pushToastWithUndo(
+        `Task "${target.code}" deleted`,
+        target.title,
+        () => get().restoreSnapshot(savedSnapshot)
+      );
+    },
+
+    restoreSnapshot: (snapshot) => {
+      savePersistedProjects(snapshot.projects);
+      savePersistedTasks(snapshot.tasks);
+      savePersistedTeam(snapshot.team);
+      savePersistedEvents(snapshot.events);
+      savePersistedFocusSessions(snapshot.focusSessions);
+
+      set({
+        projects: snapshot.projects,
+        tasks: snapshot.tasks,
+        team: snapshot.team,
+        events: snapshot.events,
+        focusSessions: snapshot.focusSessions,
+        timerRunning: snapshot.timerRunning,
+        timerSeconds: snapshot.timerSeconds,
+        timerTaskId: snapshot.timerTaskId,
+      });
+
+      get().pushToast('Deletion undone', 'Restored dataset record.');
+    },
+
+    toggleEventCheckIn: (eventId) => {
+      const state = get();
+      const isCheckedIn = state.checkedInEventIds.includes(eventId);
+      const targetEvent = state.events.find((e) => e.id === eventId);
+      const nextIds = isCheckedIn
+        ? state.checkedInEventIds.filter((id) => id !== eventId)
+        : [...state.checkedInEventIds, eventId];
+
       try {
-        window.localStorage.setItem(TIMER_SECONDS_STORAGE_KEY, String(nextSeconds));
+        window.localStorage.setItem(CHECKED_IN_EVENTS_STORAGE_KEY, JSON.stringify(nextIds));
       } catch {
         // Ignore
       }
-      return { timerSeconds: nextSeconds };
-    });
-  },
+      set({ checkedInEventIds: nextIds });
 
-  setTimerTask: (timerTaskId) => {
-    try {
-      window.localStorage.setItem(TIMER_TASK_STORAGE_KEY, timerTaskId);
-    } catch {
-      // Ignore
-    }
-    set({ timerTaskId });
-  },
+      if (targetEvent) {
+        get().pushToast(
+          isCheckedIn ? `Meeting ended: ${targetEvent.title}` : `Meeting started: ${targetEvent.title}`,
+          `${targetEvent.startTime}–${targetEvent.endTime} · ${targetEvent.location}`
+        );
+      }
+    },
 
-  pushToast: (title, detail) => {
-    const id = `tst-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
-    set((state) => ({
-      toasts: [...state.toasts, { id, title, detail }],
-    }));
-    setTimeout(() => {
-      get().dismissToast(id);
-    }, 4200);
-  },
+    toggleTimer: () => {
+      set((state) => {
+        const nextRunning = !state.timerRunning;
+        const nextSeconds = state.timerSeconds;
+        return { timerRunning: nextRunning, timerSeconds: nextSeconds };
+      });
+    },
 
-  pushToastWithUndo: (title, detail, undoAction) => {
-    const id = `tst-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
-    set((state) => ({
-      toasts: [...state.toasts, { id, title, detail, undoAction }],
-    }));
-    setTimeout(() => {
-      get().dismissToast(id);
-    }, 6000);
-  },
+    resetTimer: () => {
+      const snapshot = get();
+      const elapsedSeconds =
+        snapshot.timerSeconds > 0
+          ? snapshot.timerSeconds
+          : snapshot.timerRunning
+          ? 1
+          : 0;
+      const activeTask =
+        snapshot.tasks.find((t) => t.id === snapshot.timerTaskId) || snapshot.tasks[0];
 
-  dismissToast: (id) => {
-    set((state) => ({
-      toasts: state.toasts.filter((t) => t.id !== id),
-    }));
-  },
-}));
+      if (elapsedSeconds > 0 && activeTask) {
+        const newSessionId = `fcs-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
+        const nowTs = Date.now();
+        const todayWeekday = new Date().getDay();
+        const newSession: FocusSession = {
+          id: newSessionId,
+          taskId: activeTask.id,
+          projectId: activeTask.projectId,
+          memberId: activeTask.assigneeId || snapshot.currentUser.id,
+          weekdayIndex: todayWeekday,
+          date: getTodayIsoDate(),
+          daysAgo: 0,
+          seconds: elapsedSeconds,
+          hours: elapsedSeconds / 3600,
+          tasksCompletedCount: 0,
+          cycleDays: 2.0,
+          onTimeCount: 0,
+          createdAt: new Date(nowTs).toISOString(),
+        };
+
+        let didLog = false;
+        set((state) => {
+          if (state.focusSessions.some((s) => s.id === newSessionId)) {
+            return { timerSeconds: 0, timerRunning: false };
+          }
+          didLog = true;
+          const nextSessions = dedupeById([...state.focusSessions, newSession]);
+          savePersistedFocusSessions(nextSessions);
+
+          const nextTasks = state.tasks.map((t) => {
+            if (t.id !== activeTask.id) return t;
+            const prevLogged = t.loggedSeconds || 0;
+            const nextLogged = prevLogged + elapsedSeconds;
+            return {
+              ...t,
+              loggedSeconds: nextLogged,
+              updatedAt: nowTs,
+              updatedAtLabel: 'Just now',
+            };
+          });
+          savePersistedTasks(nextTasks);
+
+          return {
+            timerSeconds: 0,
+            timerRunning: false,
+            focusSessions: nextSessions,
+            tasks: nextTasks,
+          };
+        });
+
+        if (didLog) {
+          get().pushToast(
+            `Logged ${formatDuration(elapsedSeconds)} focus session`,
+            `${activeTask.code} · ${activeTask.title}`
+          );
+        }
+        return;
+      }
+
+      set({ timerSeconds: 0, timerRunning: false });
+    },
+
+    tickTimer: () => {
+      set((state) => {
+        if (!state.timerRunning) return state;
+        const nextSeconds = state.timerSeconds + 1;
+        return { timerSeconds: nextSeconds };
+      });
+    },
+
+    setTimerTask: (timerTaskId) => {
+      set({ timerTaskId });
+    },
+
+    pushToast: (title, detail) => {
+      const id = `tst-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
+      set((state) => ({
+        toasts: [...state.toasts, { id, title, detail }],
+      }));
+      setTimeout(() => {
+        get().dismissToast(id);
+      }, 4200);
+    },
+
+    pushToastWithUndo: (title, detail, undoAction) => {
+      const id = `tst-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
+      set((state) => ({
+        toasts: [...state.toasts, { id, title, detail, undoAction }],
+      }));
+      setTimeout(() => {
+        get().dismissToast(id);
+      }, 6000);
+    },
+
+    dismissToast: (id) => {
+      set((state) => ({
+        toasts: state.toasts.filter((t) => t.id !== id),
+      }));
+    },
+
+    resetDemoData: () => {
+      if (typeof window !== 'undefined') {
+        try {
+          window.localStorage.removeItem(PROJECTS_STORAGE_KEY);
+          window.localStorage.removeItem(TASKS_STORAGE_KEY);
+          window.localStorage.removeItem(TEAM_STORAGE_KEY);
+          window.localStorage.removeItem(EVENTS_STORAGE_KEY);
+          window.localStorage.removeItem(FOCUS_SESSIONS_STORAGE_KEY);
+          window.localStorage.removeItem(CHECKED_IN_EVENTS_STORAGE_KEY);
+        } catch {
+          // Ignore
+        }
+      }
+
+      const freshProjects = createSeedProjects();
+      const freshTasks = createSeedTasks();
+      const freshTeam = SEED_TEAM;
+      const freshEvents = createSeedEvents(freshProjects);
+      const freshSessions = createSeedFocusSessions(freshTasks, freshProjects);
+
+      set({
+        projects: freshProjects,
+        tasks: freshTasks,
+        team: freshTeam,
+        events: freshEvents,
+        focusSessions: freshSessions,
+        checkedInEventIds: [],
+        timerSeconds: 0,
+        timerRunning: false,
+        timerTaskId: 'tsk-h-5',
+      });
+
+      validateWorkspace(freshProjects, freshTasks, freshTeam, freshEvents, freshSessions);
+      get().pushToast('Demo data reset', 'Restored initial benchmark dataset.');
+    },
+
+    runValidationCheck: () => {
+      const state = get();
+      return validateWorkspace(
+        state.projects,
+        state.tasks,
+        state.team,
+        state.events,
+        state.focusSessions
+      );
+    },
+  };
+});
 
 export const useStore = usePlotlineStore;

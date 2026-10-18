@@ -109,9 +109,28 @@ export function Dialog({
 
       window.addEventListener('keydown', handleKeyDown);
 
+      const handleVisualViewportResize = () => {
+        const activeEl = document.activeElement as HTMLElement | null;
+        if (activeEl && containerRef.current?.contains(activeEl)) {
+          if (['INPUT', 'SELECT', 'TEXTAREA'].includes(activeEl.tagName)) {
+            activeEl.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+          }
+        }
+      };
+
+      const vv = typeof window !== 'undefined' ? window.visualViewport : null;
+      if (vv) {
+        vv.addEventListener('resize', handleVisualViewportResize);
+        vv.addEventListener('scroll', handleVisualViewportResize);
+      }
+
       return () => {
         clearTimeout(timer);
         window.removeEventListener('keydown', handleKeyDown);
+        if (vv) {
+          vv.removeEventListener('resize', handleVisualViewportResize);
+          vv.removeEventListener('scroll', handleVisualViewportResize);
+        }
         openDialogCount = Math.max(0, openDialogCount - 1);
         if (openDialogCount === 0) {
           document.body.classList.remove('dialog-open');
@@ -169,7 +188,7 @@ export function Dialog({
             animate={{ opacity: 1, scale: 1, y: 0 }}
             exit={{ opacity: 0, scale: 0.96, y: 12 }}
             transition={{ duration: 0.24, ease: [0.16, 1, 0.3, 1] }}
-            className={`relative w-full ${resolvedWidthClass} max-h-[90vh] sm:max-h-[85vh] rounded-t-[20px] sm:rounded-[20px] bg-[var(--surface-elevated)] border border-[var(--border-hairline)] shadow-[0_2px_6px_rgba(0,0,0,.06),0_24px_60px_-12px_rgba(0,0,0,.28)] flex flex-col overflow-hidden z-10 outline-none`}
+            className={`relative w-full ${resolvedWidthClass} max-h-[calc(100dvh-32px)] rounded-t-[20px] sm:rounded-[20px] bg-[var(--surface-elevated)] border border-[var(--border-hairline)] shadow-[0_2px_6px_rgba(0,0,0,.06),0_24px_60px_-12px_rgba(0,0,0,.28)] flex flex-col overflow-hidden z-10 outline-none`}
           >
             {/* Variant = Hero Header */}
             {variant === 'hero' && heroData ? (

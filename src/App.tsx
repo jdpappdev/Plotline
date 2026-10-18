@@ -7,6 +7,7 @@ import {
   ChevronLeft,
   ChevronRight,
   Compass,
+  FolderKanban,
   HelpCircle,
   LayoutDashboard,
   LogOut,
@@ -21,6 +22,9 @@ import CalendarScreen from './components/CalendarScreen';
 import CommandPalette from './components/CommandPalette';
 import DashboardScreen from './components/DashboardScreen';
 import HelpScreen, { TourOverlay } from './components/HelpScreen';
+import ImportProjectsModal from './components/ImportProjectsModal';
+import ProjectDialog from './components/ProjectDialog';
+import ProjectsScreen from './components/ProjectsScreen';
 import SettingsScreen from './components/SettingsScreen';
 import TasksScreen from './components/TasksScreen';
 import TeamScreen from './components/TeamScreen';
@@ -43,6 +47,7 @@ interface RouteConfig {
 
 const ROUTES: RouteConfig[] = [
   { id: 'Dashboard', label: 'Dashboard', icon: LayoutDashboard },
+  { id: 'Projects', label: 'Projects', icon: FolderKanban },
   { id: 'Tasks', label: 'Tasks', icon: CheckSquare },
   { id: 'Calendar', label: 'Calendar', icon: Calendar },
   { id: 'Analytics', label: 'Analytics', icon: BarChart3 },
@@ -719,10 +724,13 @@ export default function App() {
         {/* Main Viewport Canvas (Clean #f6f6f5 background, no page-wide texture) */}
         <main
           key={`route-${activeRoute}`}
+          style={{ overscrollBehavior: 'contain' }}
           className="flex-1 contour-surface motion-route px-4 sm:px-6 py-3 overflow-x-hidden overflow-y-auto"
         >
           {activeRoute === 'Dashboard' ? (
             <DashboardScreen />
+          ) : activeRoute === 'Projects' ? (
+            <ProjectsScreen />
           ) : activeRoute === 'Tasks' ? (
             <TasksScreen />
           ) : activeRoute === 'Calendar' ? (
@@ -1058,6 +1066,12 @@ export default function App() {
           )}
         </form>
       </Dialog>
+
+      {/* Global Project Dialog */}
+      <ProjectDialog />
+
+      {/* Global Import Projects Modal */}
+      <ImportProjectsModal />
 
       {/* Global Toast Notification Stack */}
       {toasts.length > 0 && (
