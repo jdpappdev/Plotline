@@ -722,7 +722,7 @@ export default function DashboardScreen() {
                 type="button"
                 onClick={() => {
                   setActiveRoute('Calendar');
-                  window.history.replaceState(null, '', '#/calendar');
+                  window.history.replaceState(null, '', '#calendar');
                 }}
                 style={{ color: 'var(--accent)' }}
                 className="text-xs font-semibold hover:underline cursor-pointer"
