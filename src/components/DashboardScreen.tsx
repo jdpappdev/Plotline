@@ -15,6 +15,7 @@ import {
   formatDuration,
   formatLoggedDuration,
   getProjectStatus,
+  getTodayIsoDate,
   pluralize,
   Project,
   TaskItem,
@@ -269,10 +270,7 @@ export default function DashboardScreen() {
     return { runningCount: running, pendingCount: pending };
   }, [uniqueProjects, tasks]);
   const openTasksCount = uniqueTasks.filter((t) => t.status !== 'Done').length;
-  const today = new Date();
-  const todayIsoDate = new Date(
-    today.getTime() - today.getTimezoneOffset() * 60_000
-  ).toISOString().slice(0, 10);
+  const todayIsoDate = getTodayIsoDate();
   const overdueTasksCount = uniqueTasks.filter(
     (task) => task.status !== 'Done' && task.dueDate < todayIsoDate
   ).length;
@@ -481,7 +479,7 @@ export default function DashboardScreen() {
           type="button"
           onClick={() => {
             setActiveRoute('Tasks');
-            if (typeof window !== 'undefined') window.history.pushState(null, '', '#/tasks');
+            if (typeof window !== 'undefined') window.history.pushState(null, '', '#/tasks?filter=overdue');
           }}
           aria-label={`View ${pluralize(overdueTasksCount, 'overdue task')}`}
           style={{
