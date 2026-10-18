@@ -395,44 +395,119 @@ export default function AnalyticsScreen() {
     };
   }, [normalizedSessions, rangeDays, tasks, uniqueProjects, uniqueTeam]);
 
-  // Real CSV Export matching the visible range data
-  const handleExportCsv = () => {
-    const lines: string[] = [
-      `Plotline Analytics Report (${range} Range)`,
-      'Section,Metric / Item,Value,Comparison / Detail,Extra',
-      `KPI,Tasks Completed,${analyticsData.currentTasksCompleted},${analyticsData.tasksDeltaPct}% vs previous ${range},`,
-      `KPI,Hours Tracked,${analyticsData.currentHours}h,${analyticsData.hoursDeltaPct}% vs previous ${range},`,
-      `KPI,On-Time Delivery,${analyticsData.currentOnTimePct}%,${analyticsData.onTimeDeltaPct}% vs previous ${range},`,
-      `KPI,Average Cycle Time,${analyticsData.currentCycleAvg}d,${analyticsData.cycleDeltaPct}% vs previous ${range},`,
-      ...analyticsData.projectShares.map(
-        (p) =>
-          `Time by Project,"${p.project.name}",${p.hours}h,${p.pct}%,${p.project.code}`
-      ),
-      ...analyticsData.contributors.map(
-        (c) =>
-          `Top Contributor,"${c.member.name}",${c.hours}h,${c.tasksCompleted} tasks completed,${c.member.role}`
-      ),
-      ...analyticsData.chartPoints.map(
-        (pt) =>
-          `Daily Throughput,${pt.date},${pt.hours}h,Prev: ${pt.prevHours}h,7D Avg: ${pt.avg7d}h`
-      ),
-    ];
+  const exportDateEnd = analyticsData.chartPoints.at(-1)?.date ?? getIsoDateOffset(0);
+  const exportDateStart = analyticsData.chartPoints[0]?.date ?? getIsoDateOffset(-(rangeDays - 1));
+  const exportFilenameDate = `${exportDateStart}_${exportDateEnd}`;
 
-    const csvContent = lines.join('\n');
-    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+  const exportRows = useMemo(() => {
+    const kpiRows = [
+      {
+        metric: 'Tasks completed',
+        value: analyticsData.currentTasksCompleted,
+        unit: 'tasks',
+        previous: Number(
+          (analyticsData.currentTasksCompleted / (1 + analyticsData.tasksDeltaPct / 100)).toFixed(1)
+        ),
+        change_pct: analyticsData.tasksDeltaPct,
+      },
+      {
+        metric: 'Hours tracked',
+        value: analyticsData.currentHours,
+        unit: 'hours',
+        previous: Number(
+          (analyticsData.currentHours / (1 + analyticsData.hoursDeltaPct / 100)).toFixed(1)
+        ),
+        change_pct: analyticsData.hoursDeltaPct,
+      },
+      {
+        metric: 'On-time delivery',
+        value: analyticsData.currentOnTimePct,
+        unit: 'share_pct',
+        previous: Number((analyticsData.currentOnTimePct - analyticsData.onTimeDeltaPct).toFixed(1)),
+        change_pct: analyticsData.onTimeDeltaPct,
+      },
+      {
+        metric: 'Average cycle time',
+        value: analyticsData.currentCycleAvg,
+        unit: 'days',
+        previous: Number(
+          (analyticsData.currentCycleAvg / (1 + analyticsData.cycleDeltaPct / 100)).toFixed(1)
+        ),
+        change_pct: analyticsData.cycleDeltaPct,
+      },
+    ];
+    return {
+      kpi: kpiRows,
+      projects: analyticsData.projectShares.map((p) => ({
+        code: p.project.code,
+        name: p.project.name,
+        hours: p.hours,
+        share_pct: p.pct,
+      })),
+      contributors: analyticsData.contributors.map((c) => ({
+        name: c.member.name,
+        role: c.member.role,
+        hours: c.hours,
+        tasks_completed: c.tasksCompleted,
+      })),
+      daily: analyticsData.chartPoints.map((pt) => ({
+        date: pt.date,
+        current: pt.hours,
+        previous: pt.prevHours,
+        avg_7d: pt.avg7d,
+      })),
+    };
+  }, [analyticsData]);
+
+  const downloadCsv = (filename: string, rows: Array<Record<string, string | number>>) => {
+    if (rows.length === 0) return;
+    const headers = Object.keys(rows[0]);
+    const escapeCsv = (value: string | number) => {
+      const text = String(value ?? '');
+      return /[",\r\n]/.test(text) ? `"${text.replace(/"/g, '""')}"` : text;
+    };
+    const csv = [headers.join(','), ...rows.map((row) => headers.map((header) => escapeCsv(row[header])).join(','))].join('\r\n');
+    const blob = new Blob([new Uint8Array([0xef, 0xbb, 0xbf]), csv], { type: 'text/csv;charset=utf-8' });
     const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
     link.href = url;
-    link.setAttribute('download', `plotline-analytics-${range.toLowerCase()}.csv`);
+    link.download = filename;
     document.body.appendChild(link);
     link.click();
-    document.body.removeChild(link);
+    link.remove();
     URL.revokeObjectURL(url);
+    pushToast(`Exported ${filename}`, 'UTF-8 CSV with typed numeric columns.');
+  };
 
-    pushToast(
-      `Exported plotline-analytics-${range.toLowerCase()}.csv`,
-      `${lines.length - 2} data rows matching the ${range} view.`
-    );
+  const handleExportXlsx = async () => {
+    const XLSX = await import('xlsx');
+    const workbook = XLSX.utils.book_new();
+    Object.entries(exportRows).forEach(([name, rawRows]) => {
+      const rows = rawRows as Array<Record<string, string | number>>;
+      const sheet = XLSX.utils.json_to_sheet(rows);
+      const range = XLSX.utils.decode_range(sheet['!ref'] ?? 'A1');
+      for (let col = range.s.c; col <= range.e.c; col += 1) {
+        const cell = sheet[XLSX.utils.encode_cell({ r: range.s.r, c: col })];
+        if (cell) cell.s = { font: { bold: true } };
+      }
+      sheet['!freeze'] = { xSplit: 0, ySplit: 1 };
+      sheet['!cols'] = Object.keys(rows[0] ?? {}).map((header) => ({
+        wch: Math.max(header.length, ...rows.map((row) => String(row[header] ?? '').length)) + 2,
+      }));
+      XLSX.utils.book_append_sheet(workbook, sheet, name.charAt(0).toUpperCase() + name.slice(1));
+    });
+    XLSX.writeFile(workbook, `plotline-full-report-${exportFilenameDate}.xlsx`);
+    pushToast('Exported full report workbook', 'Four fitted sheets with frozen headers.');
+  };
+
+  const handleExport = (kind: keyof typeof exportRows) => {
+    const filenames = {
+      kpi: `plotline-kpi-${exportFilenameDate}.csv`,
+      projects: `plotline-projects-${exportFilenameDate}.csv`,
+      contributors: `plotline-contributors-${exportFilenameDate}.csv`,
+      daily: `plotline-daily-${exportFilenameDate}.csv`,
+    };
+    downloadCsv(filenames[kind], exportRows[kind]);
   };
 
   // Throughput SVG geometry
@@ -540,15 +615,37 @@ export default function AnalyticsScreen() {
             })}
           </div>
 
-          {/* Export CSV Button */}
-          <button
-            type="button"
-            onClick={handleExportCsv}
-            className="inline-flex items-center gap-1.5 px-4 py-2 rounded-full text-xs sm:text-sm font-semibold bg-[var(--surface-elevated)] text-[var(--ink-primary)] border border-[var(--border-strong)] hover:bg-[var(--surface-sunken)] transition-colors cursor-pointer"
-          >
-            <Download className="w-3.5 h-3.5 text-[var(--ink-secondary)]" />
-            <span>Export CSV</span>
-          </button>
+          <details className="relative">
+            <summary className="list-none inline-flex items-center gap-1.5 px-4 py-2 rounded-full text-xs sm:text-sm font-semibold bg-[var(--surface-elevated)] text-[var(--ink-primary)] border border-[var(--border-strong)] hover:bg-[var(--surface-sunken)] transition-colors cursor-pointer">
+              <Download className="w-3.5 h-3.5 text-[var(--ink-secondary)]" />
+              <span>Export</span>
+            </summary>
+            <div className="absolute right-0 top-full z-20 mt-2 w-52 rounded-[var(--radius-md)] border border-[var(--border-strong)] bg-[var(--surface-elevated)] p-1.5 shadow-lg">
+              {([
+                ['kpi', 'KPI summary (.csv)'],
+                ['projects', 'Projects (.csv)'],
+                ['contributors', 'Contributors (.csv)'],
+                ['daily', 'Daily series (.csv)'],
+              ] as const).map(([kind, label]) => (
+                <button
+                  key={kind}
+                  type="button"
+                  onClick={() => handleExport(kind)}
+                  className="block w-full rounded-[var(--radius-sm)] px-3 py-2 text-left text-xs font-medium text-[var(--ink-primary)] hover:bg-[var(--surface-sunken)] cursor-pointer"
+                >
+                  {label}
+                </button>
+              ))}
+              <div className="my-1 border-t border-[var(--border-hairline)]" />
+              <button
+                type="button"
+                onClick={() => void handleExportXlsx()}
+                className="block w-full rounded-[var(--radius-sm)] px-3 py-2 text-left text-xs font-semibold text-[var(--ink-primary)] hover:bg-[var(--surface-sunken)] cursor-pointer"
+              >
+                Full report (.xlsx)
+              </button>
+            </div>
+          </details>
         </div>
       </div>
 

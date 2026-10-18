@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { Component, type ErrorInfo, useEffect, useState } from 'react';
 import {
   ChevronDown,
   Compass,
@@ -50,7 +50,7 @@ const FAQ_ITEMS = [
 export interface TourStepConfig {
   step: number;
   targetSelector: string;
-  route?: RouteId;
+  route: RouteId;
   title: string;
   description: string;
 }
@@ -59,6 +59,7 @@ export const TOUR_STEPS: TourStepConfig[] = [
   {
     step: 1,
     targetSelector: '[data-tour="sidebar"]',
+    route: 'Dashboard',
     title: '1. Collapsing Navigation Sidebar',
     description:
       'Switch between Dashboard, Tasks, Calendar, Analytics, Team, Settings, and Help, or collapse the rail for maximum drafting space.',
@@ -66,6 +67,7 @@ export const TOUR_STEPS: TourStepConfig[] = [
   {
     step: 2,
     targetSelector: '[data-tour="search"]',
+    route: 'Dashboard',
     title: '2. Workspace Search & ⌘K Command Palette',
     description:
       'Filter projects, tasks, and specialists live, or press ⌘K / Ctrl+K to run instant actions from anywhere.',
@@ -88,49 +90,91 @@ export const TOUR_STEPS: TourStepConfig[] = [
   },
 ];
 
-export function TourOverlay({ onNavigate }: { onNavigate: (route: RouteId) => void }) {
+class TourErrorBoundary extends Component<React.PropsWithChildren, { hasError: boolean }> {
+  state = { hasError: false };
+
+  static getDerivedStateFromError() {
+    return { hasError: true };
+  }
+
+  componentDidCatch(_error: Error, _info: ErrorInfo) {
+    // Keep tour failures isolated without surfacing a console error to users.
+  }
+
+  render() {
+    return this.state.hasError ? null : this.props.children;
+  }
+}
+
+function findTourTarget(selector: string): Element | null {
+  try {
+    return document.querySelector(selector);
+  } catch {
+    return null;
+  }
+}
+
+function TourOverlayContent({ onNavigate }: { onNavigate: (route: RouteId) => void }) {
   const { tourStep, setTourStep } = usePlotlineStore();
   const [rect, setRect] = useState<DOMRect | null>(null);
-
-  const currentConfig =
-    tourStep !== null ? TOUR_STEPS.find((s) => s.step === tourStep) || null : null;
+  const currentConfig = tourStep !== null ? TOUR_STEPS.find((s) => s.step === tourStep) || null : null;
 
   useEffect(() => {
     if (!currentConfig) {
       setRect(null);
+      document.body.style.removeProperty('overflow');
       return;
     }
 
-    if (currentConfig.route) {
-      onNavigate(currentConfig.route);
+    onNavigate(currentConfig.route);
+    document.body.style.overflow = 'hidden';
+    let cancelled = false;
+    let timeoutId = 0;
+    let observer: MutationObserver | null = null;
+
+    const finishIfFound = () => {
+      if (cancelled) return;
+      const element = findTourTarget(currentConfig.targetSelector);
+      if (!element) return false;
+      const reduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+      element.scrollIntoView({ block: 'nearest', behavior: reduced ? 'auto' : 'smooth' });
+      setRect(element.getBoundingClientRect());
+      observer?.disconnect();
+      window.clearTimeout(timeoutId);
+      return true;
+    };
+
+    if (!finishIfFound()) {
+      observer = new MutationObserver(() => finishIfFound());
+      observer.observe(document.body, { childList: true, subtree: true });
+      timeoutId = window.setTimeout(() => {
+        if (!cancelled && !finishIfFound()) {
+          setRect(null);
+          setTourStep(currentConfig.step === TOUR_STEPS.length ? null : currentConfig.step + 1);
+        }
+      }, 1500);
     }
 
     const updateRect = () => {
-      const el = document.querySelector(currentConfig.targetSelector);
-      if (el) {
-        const reduced =
-          typeof window !== 'undefined' &&
-          window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-        el.scrollIntoView({
-          block: 'nearest',
-          behavior: reduced ? 'auto' : 'smooth',
-        });
-        setRect(el.getBoundingClientRect());
-      } else {
-        setRect(null);
-      }
+      if (findTourTarget(currentConfig.targetSelector)) finishIfFound();
     };
-
-    const timer = window.setTimeout(updateRect, 80);
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') setTourStep(null);
+    };
     window.addEventListener('resize', updateRect);
     window.addEventListener('scroll', updateRect, true);
+    window.addEventListener('keydown', onKeyDown);
 
     return () => {
-      window.clearTimeout(timer);
+      cancelled = true;
+      observer?.disconnect();
+      window.clearTimeout(timeoutId);
       window.removeEventListener('resize', updateRect);
       window.removeEventListener('scroll', updateRect, true);
+      window.removeEventListener('keydown', onKeyDown);
+      document.body.style.removeProperty('overflow');
     };
-  }, [currentConfig, onNavigate]);
+  }, [tourStep]);
 
   if (!currentConfig) return null;
 
@@ -243,6 +287,14 @@ export function TourOverlay({ onNavigate }: { onNavigate: (route: RouteId) => vo
         </div>
       </div>
     </div>
+  );
+}
+
+export function TourOverlay({ onNavigate }: { onNavigate: (route: RouteId) => void }) {
+  return (
+    <TourErrorBoundary>
+      <TourOverlayContent onNavigate={onNavigate} />
+    </TourErrorBoundary>
   );
 }
 

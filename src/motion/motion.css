@@ -1,0 +1,39 @@
+.motion-card {
+  will-change: transform, box-shadow;
+}
+
+.motion-route {
+  animation: motion-route-enter 320ms cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+@keyframes motion-route-enter {
+  from { opacity: 0; transform: translateY(8px); filter: blur(4px); }
+  to { opacity: 1; transform: translateY(0); filter: blur(0); }
+}
+
+.motion-bar {
+  transform-origin: bottom;
+  animation: motion-bar-rise 700ms cubic-bezier(0.22, 1, 0.36, 1) both;
+  animation-delay: calc(var(--bar-index, 0) * 50ms);
+}
+
+@keyframes motion-bar-rise {
+  from { transform: scaleY(0); opacity: 0; }
+  to { transform: scaleY(1); opacity: 1; }
+}
+
+.motion-contour path {
+  stroke-dasharray: 280;
+  stroke-dashoffset: 280;
+  animation: motion-contour-draw 900ms cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+@keyframes motion-contour-draw { to { stroke-dashoffset: 0; } }
+
+@media (prefers-reduced-motion: reduce) {
+  .motion-route, .motion-bar, .motion-contour path {
+    animation: none;
+    filter: none;
+    transform: none;
+  }
+}
