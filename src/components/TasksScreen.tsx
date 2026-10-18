@@ -41,7 +41,7 @@ import { MotionCard, PLOTLINE_DURATION, PLOTLINE_EASE } from '../motion/primitiv
 import { DeleteButton } from './DeleteButton';
 import { AnchoredPopover } from '../ui/Popover';
 
-type FilterCriterion = 'my' | 'high' | 'week';
+type FilterCriterion = 'my' | 'high' | 'week' | 'overdue';
 
 interface StageColumn {
   id: TaskItem['status'];
@@ -574,8 +574,18 @@ export default function TasksScreen() {
 
   const reducedMotion = useReducedMotion();
 
-  // Combinable filter tabs: All (clears filters) or any combination of My tasks / High priority / Due this week
+  // Filters can be combined; the dashboard can open this screen with overdue tasks preselected.
   const [activeFilters, setActiveFilters] = useState<FilterCriterion[]>([]);
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const queryIndex = window.location.hash.indexOf('?');
+    if (queryIndex === -1) return;
+    const params = new URLSearchParams(window.location.hash.slice(queryIndex));
+    if (params.get('filter') === 'overdue') {
+      setActiveFilters(['overdue']);
+    }
+  }, []);
   const [activeDragTaskId, setActiveDragTaskId] = useState<string | null>(null);
   const [highlightedTaskId, setHighlightedTaskId] = useState<string | null>(null);
   const [activeMobileStage, setActiveMobileStage] = useState<TaskItem['status']>('Backlog');
@@ -674,6 +684,7 @@ export default function TasksScreen() {
     );
   };
 
+  const todayIsoDate = getTodayIsoDate();
   const filteredTasks = useMemo(() => {
     const q = searchQuery.trim().toLowerCase();
     return tasks.filter((task) => {
@@ -693,9 +704,15 @@ export default function TasksScreen() {
       if (activeFilters.includes('week') && !isDueWithinWeek(task.dueDate)) {
         return false;
       }
+      if (
+        activeFilters.includes('overdue') &&
+        (task.status === 'Done' || task.dueDate >= todayIsoDate)
+      ) {
+        return false;
+      }
       return true;
     });
-  }, [tasks, activeFilters, currentUser.id, searchQuery]);
+  }, [tasks, activeFilters, currentUser.id, searchQuery, todayIsoDate]);
 
   const handleDragStart = (event: DragStartEvent) => {
     setActiveDragTaskId(String(event.active.id));
@@ -850,6 +867,24 @@ export default function TasksScreen() {
             }`}
           >
             Due this week
+          </button>
+
+          <button
+            type="button"
+            onClick={() => toggleFilter('overdue')}
+            aria-pressed={activeFilters.includes('overdue')}
+            style={
+              activeFilters.includes('overdue')
+                ? { backgroundColor: 'var(--status-critical)', color: '#ffffff' }
+                : undefined
+            }
+            className={`px-3 py-1.5 min-h-[44px] sm:min-h-0 rounded-[var(--radius-sm)] text-xs font-semibold transition-colors cursor-pointer whitespace-nowrap ${
+              activeFilters.includes('overdue')
+                ? ''
+                : 'text-[var(--ink-secondary)] hover:text-[var(--ink-primary)] hover:bg-[var(--surface-sunken)]'
+            }`}
+          >
+            Overdue
           </button>
         </div>
 
