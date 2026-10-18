@@ -21,6 +21,7 @@ import {
 } from '../store';
 import { ContourGlyph } from '../utils/contourGlyph';
 import { AnimatedNumber } from '../motion/primitives';
+import { DeleteButton } from './DeleteButton';
 
 interface CountUpNumeralProps {
   value: number;
@@ -137,6 +138,7 @@ export default function DashboardScreen() {
     toggleTimer,
     resetTimer,
     setTimerTask,
+    deleteProject,
   } = usePlotlineStore();
 
   // Task selector popover inside Focus card
@@ -778,24 +780,30 @@ export default function DashboardScreen() {
                 return (
                   <li
                     key={project.id}
-                    className={`flex items-center gap-2.5 py-0.5 rounded-[var(--radius-sm)] ${
+                    className={`flex items-center justify-between gap-2.5 py-0.5 rounded-[var(--radius-sm)] ${
                       isNew ? 'plotline-row-new' : ''
                     }`}
                   >
-                    <span
-                      className="w-9 h-9 rounded-[var(--radius-sm)] bg-[var(--accent-soft)] flex items-center justify-center shrink-0"
-                      title={`Contour glyph for ${project.name}`}
-                    >
-                      <ContourGlyph seed={project.id} size={36} />
-                    </span>
-                    <div className="min-w-0 flex-1">
-                      <p className="text-xs font-semibold text-[var(--ink-primary)] truncate leading-tight">
-                        {project.name}
-                      </p>
-                      <p className="text-[10px] text-[var(--ink-muted)] truncate leading-tight">
-                        Due date: {formatShortDate(project.targetDate)}
-                      </p>
+                    <div className="flex items-center gap-2.5 min-w-0 flex-1">
+                      <span
+                        className="w-9 h-9 rounded-[var(--radius-sm)] bg-[var(--accent-soft)] flex items-center justify-center shrink-0"
+                        title={`Contour glyph for ${project.name}`}
+                      >
+                        <ContourGlyph seed={project.id} size={36} />
+                      </span>
+                      <div className="min-w-0 flex-1">
+                        <p className="text-xs font-semibold text-[var(--ink-primary)] truncate leading-tight">
+                          {project.name}
+                        </p>
+                        <p className="text-[10px] text-[var(--ink-muted)] truncate leading-tight">
+                          Due date: {formatShortDate(project.targetDate)}
+                        </p>
+                      </div>
                     </div>
+                    <DeleteButton
+                      name={project.name}
+                      onDelete={() => deleteProject(project.id)}
+                    />
                   </li>
                 );
               })}

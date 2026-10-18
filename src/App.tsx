@@ -1068,12 +1068,10 @@ export default function App() {
           {toasts.map((toast) => (
             <div
               key={toast.id}
-              className="pointer-events-auto surface-accent-fill text-white border border-white/10 rounded-[var(--radius-md)] p-3.5 shadow-md flex items-start justify-between gap-3 plotline-enter"
+              className="pointer-events-auto surface-accent-fill text-white border border-white/10 rounded-[var(--radius-md)] p-3.5 shadow-md flex items-center justify-between gap-3 plotline-enter"
             >
-              <div className="flex items-start gap-2.5 min-w-0">
-                <CheckCircle2
-                  className="w-4 h-4 shrink-0 mt-0.5 text-white"
-                />
+              <div className="flex items-center gap-2.5 min-w-0">
+                <CheckCircle2 className="w-4 h-4 shrink-0 text-white" />
                 <div className="min-w-0 text-xs">
                   <p className="font-semibold text-white truncate">{toast.title}</p>
                   {toast.detail && (
@@ -1081,14 +1079,28 @@ export default function App() {
                   )}
                 </div>
               </div>
-              <button
-                type="button"
-                onClick={() => dismissToast(toast.id)}
-                aria-label="Dismiss notification"
-                className="text-white/75 hover:text-white shrink-0"
-              >
-                <X className="w-3.5 h-3.5" />
-              </button>
+              <div className="flex items-center gap-2 shrink-0">
+                {toast.undoAction && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      toast.undoAction?.();
+                      dismissToast(toast.id);
+                    }}
+                    className="px-2.5 py-1 rounded-full text-xs font-bold bg-white text-[var(--ink-primary)] hover:bg-white/90 cursor-pointer shadow-xs transition-colors"
+                  >
+                    Undo
+                  </button>
+                )}
+                <button
+                  type="button"
+                  onClick={() => dismissToast(toast.id)}
+                  aria-label="Dismiss notification"
+                  className="text-white/75 hover:text-white shrink-0 p-1 cursor-pointer"
+                >
+                  <X className="w-3.5 h-3.5" />
+                </button>
+              </div>
             </div>
           ))}
         </div>

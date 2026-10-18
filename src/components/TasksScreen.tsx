@@ -38,6 +38,7 @@ import {
 } from '../store';
 import { ContourGlyph } from '../utils/contourGlyph';
 import { MotionCard, PLOTLINE_DURATION, PLOTLINE_EASE } from '../motion/primitives';
+import { DeleteButton } from './DeleteButton';
 
 type FilterCriterion = 'my' | 'high' | 'week';
 
@@ -175,6 +176,7 @@ function TaskCardContent({
   onSelectFocusTask,
   isOverlay = false,
 }: TaskCardViewProps) {
+  const { deleteTask } = usePlotlineStore();
   const [menuOpen, setMenuOpen] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
 
@@ -291,7 +293,7 @@ function TaskCardContent({
                 );
               })}
               {onSelectFocusTask && (
-                <div className="mt-1 pt-1 border-t border-[var(--border-hairline)]">
+                <div className="mt-1 pt-1 border-t border-[var(--border-hairline)] space-y-0.5">
                   <button
                     type="button"
                     onClick={() => {
@@ -303,6 +305,17 @@ function TaskCardContent({
                     <Timer className="w-3.5 h-3.5" style={{ color: 'var(--accent)' }} />
                     <span>Set as Focus task</span>
                   </button>
+
+                  <div className="flex items-center justify-between px-2 py-1 rounded-[var(--radius-xs)] hover:bg-[var(--surface-sunken)]">
+                    <span className="text-xs text-[var(--ink-secondary)]">Delete task</span>
+                    <DeleteButton
+                      name={task.code}
+                      onDelete={() => {
+                        deleteTask(task.id);
+                        setMenuOpen(false);
+                      }}
+                    />
+                  </div>
                 </div>
               )}
             </div>

@@ -20,6 +20,7 @@ export interface DialogProps {
     meta: string;
   };
   maxWidthClass?: string;
+  size?: 'sm' | 'md' | 'lg';
   closeOnBackdropClick?: boolean;
 }
 
@@ -47,7 +48,8 @@ export function Dialog({
   footer,
   variant = 'default',
   heroData,
-  maxWidthClass = 'max-w-md',
+  maxWidthClass,
+  size = 'sm',
   closeOnBackdropClick = true,
 }: DialogProps) {
   const prefersReducedMotion = useReducedMotion();
@@ -125,11 +127,18 @@ export function Dialog({
 
   const titleId = title ? `dialog-title-${title.replace(/\s+/g, '-').toLowerCase()}` : undefined;
 
+  // Resolve sizing tokens: sm = 440px, md = 560px
+  const resolvedWidthClass =
+    maxWidthClass ||
+    (variant === 'hero' || size === 'md'
+      ? 'sm:max-w-[560px]'
+      : 'sm:max-w-[440px]');
+
   return createPortal(
     <AnimatePresence>
       {isOpen && (
         <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4 overflow-hidden">
-          {/* Full Viewport Scrim */}
+          {/* Full Viewport Scrim: Neutral dark with hint of accent at 38% opacity + 6px blur */}
           <motion.div
             initial={prefersReducedMotion ? false : { opacity: 0 }}
             animate={{ opacity: 1 }}
@@ -138,7 +147,11 @@ export function Dialog({
             onClick={() => {
               if (closeOnBackdropClick) onClose();
             }}
-            className="absolute inset-0 bg-[#132852]/80 bg-[color-mix(in_srgb,var(--accent-deep)_35%,rgba(19,40,82,0.35))] cursor-pointer"
+            style={{
+              backgroundColor:
+                'color-mix(in oklab, color-mix(in oklab, #0b1220 82%, var(--accent) 18%), transparent 62%)',
+            }}
+            className="absolute inset-0 backdrop-blur-[6px] cursor-pointer"
           />
 
           {/* Dialog Container */}
@@ -156,21 +169,19 @@ export function Dialog({
             animate={{ opacity: 1, scale: 1, y: 0 }}
             exit={{ opacity: 0, scale: 0.96, y: 12 }}
             transition={{ duration: 0.24, ease: [0.16, 1, 0.3, 1] }}
-            className={`relative w-full ${
-              variant === 'hero'
-                ? 'sm:w-[min(600px,92vw)]'
-                : maxWidthClass
-            } max-h-[90vh] sm:max-h-[85vh] rounded-t-[20px] sm:rounded-[20px] bg-[var(--surface-elevated)] border border-[var(--border-hairline)] shadow-[0_2px_6px_rgba(0,0,0,.06),0_24px_60px_-12px_rgba(0,0,0,.28)] flex flex-col overflow-hidden z-10 outline-none`}
+            className={`relative w-full ${resolvedWidthClass} max-h-[90vh] sm:max-h-[85vh] rounded-t-[20px] sm:rounded-[20px] bg-[var(--surface-elevated)] border border-[var(--border-hairline)] shadow-[0_2px_6px_rgba(0,0,0,.06),0_24px_60px_-12px_rgba(0,0,0,.28)] flex flex-col overflow-hidden z-10 outline-none`}
           >
-            {/* Variant = Hero Header (96px Banner + ContourGlyph white 18–22% opacity + Overlapping Avatar) */}
+            {/* Variant = Hero Header */}
             {variant === 'hero' && heroData ? (
               <>
-                <div className="h-[96px] relative shrink-0 overflow-hidden surface-accent-fill flex items-center justify-between px-6">
-                  <div className="absolute -top-6 -right-6 text-white pointer-events-none">
+                {/* 96px Banner with inner highlight & scaled ContourGlyph showing >=4 rings */}
+                <div className="h-[96px] relative shrink-0 overflow-hidden surface-accent-fill flex items-center justify-between px-6 shadow-[inset_0_1px_0_rgba(255,255,255,0.18)]">
+                  <div className="absolute inset-0 text-white pointer-events-none flex items-center justify-center overflow-hidden">
                     <ContourGlyph
                       seed={heroData.glyphSeed}
-                      size={180}
-                      className="opacity-[0.22]"
+                      size={440}
+                      strokeWidth={1.25}
+                      className="opacity-[0.24] w-full h-[220px] object-cover"
                     />
                   </div>
 
@@ -184,6 +195,7 @@ export function Dialog({
                   </button>
                 </div>
 
+                {/* Avatar Overlap + Eyebrow, Title, Subtitle, Meta */}
                 <div className="px-6 pb-2 shrink-0 relative bg-[var(--surface-elevated)]">
                   <div className="flex items-end justify-between gap-4">
                     {/* Avatar Overlapping Banner by 32px */}
@@ -201,15 +213,17 @@ export function Dialog({
                         className="absolute bottom-1 right-1 w-4 h-4 rounded-full border-2 border-[var(--surface-elevated)]"
                       />
                     </div>
+                  </div>
 
+                  <div className="mt-3 space-y-0.5">
                     {eyebrow && (
-                      <span className="px-2.5 py-0.5 rounded-full text-xs font-medium bg-[var(--surface-sunken)] text-[var(--ink-secondary)] border border-[var(--border-hairline)] whitespace-nowrap mb-1">
+                      <span
+                        className="block text-xs font-semibold uppercase tracking-wider mb-0.5"
+                        style={{ color: 'var(--accent)' }}
+                      >
                         {eyebrow}
                       </span>
                     )}
-                  </div>
-
-                  <div className="mt-2 space-y-0.5">
                     {title && (
                       <h2
                         id={titleId}
@@ -224,7 +238,7 @@ export function Dialog({
                       </p>
                     )}
                     {heroData.meta && (
-                      <p className="text-xs text-[var(--ink-muted)]">
+                      <p className="text-xs text-[var(--ink-muted)] mt-0.5">
                         {heroData.meta}
                       </p>
                     )}

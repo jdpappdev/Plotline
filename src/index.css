@@ -169,6 +169,25 @@ body {
   overflow-x: hidden;
 }
 
+/* Date & Time form inputs styling */
+input[type="date"],
+input[type="time"] {
+  color-scheme: light dark;
+  accent-color: var(--accent);
+}
+
+input[type="date"]::-webkit-calendar-picker-indicator,
+input[type="time"]::-webkit-calendar-picker-indicator {
+  cursor: pointer;
+  filter: opacity(0.7);
+  transition: filter 160ms var(--ease-plotline);
+}
+
+input[type="date"]::-webkit-calendar-picker-indicator:hover,
+input[type="time"]::-webkit-calendar-picker-indicator:hover {
+  filter: opacity(1);
+}
+
 /* Serif Display Numerals with Tabular Alignment */
 .font-display-num {
   font-family: var(--font-display-num);

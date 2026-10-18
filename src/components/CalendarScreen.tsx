@@ -18,6 +18,7 @@ import {
 } from '../store';
 import { ContourGlyph } from '../utils/contourGlyph';
 import { Dialog } from '../ui/Dialog';
+import { DeleteButton } from './DeleteButton';
 
 const EVENT_CATEGORIES: EventCategory[] = [
   'Meeting',
@@ -569,16 +570,22 @@ export default function CalendarScreen() {
                         <h3 className="text-xs sm:text-sm font-semibold text-[var(--ink-primary)] leading-snug">
                           {evt.title}
                         </h3>
-                        <span
-                          style={{
-                            backgroundColor: chip.bg,
-                            color: chip.fg,
-                            borderColor: chip.border,
-                          }}
-                          className="px-2 py-0.5 rounded-[var(--radius-xs)] border text-[10px] font-semibold shrink-0"
-                        >
-                          {evt.category || 'Meeting'}
-                        </span>
+                        <div className="flex items-center gap-1 shrink-0">
+                          <span
+                            style={{
+                              backgroundColor: chip.bg,
+                              color: chip.fg,
+                              borderColor: chip.border,
+                            }}
+                            className="px-2 py-0.5 rounded-[var(--radius-xs)] border text-[10px] font-semibold"
+                          >
+                            {evt.category || 'Meeting'}
+                          </span>
+                          <DeleteButton
+                            name={evt.title}
+                            onDelete={() => deleteEvent(evt.id)}
+                          />
+                        </div>
                       </div>
 
                       <div className="flex items-center justify-between gap-2 text-[11px] text-[var(--ink-secondary)]">
@@ -682,16 +689,22 @@ export default function CalendarScreen() {
                           <p className="text-xs font-semibold text-[var(--ink-primary)] truncate">
                             {evt.title}
                           </p>
-                          <span
-                            style={{
-                              backgroundColor: chip.bg,
-                              color: chip.fg,
-                              borderColor: chip.border,
-                            }}
-                            className="px-1.5 py-0.5 rounded-[var(--radius-xs)] border text-[9px] font-semibold shrink-0"
-                          >
-                            {evt.category || 'Meeting'}
-                          </span>
+                          <div className="flex items-center gap-1 shrink-0">
+                            <span
+                              style={{
+                                backgroundColor: chip.bg,
+                                color: chip.fg,
+                                borderColor: chip.border,
+                              }}
+                              className="px-1.5 py-0.5 rounded-[var(--radius-xs)] border text-[9px] font-semibold"
+                            >
+                              {evt.category || 'Meeting'}
+                            </span>
+                            <DeleteButton
+                              name={evt.title}
+                              onDelete={() => deleteEvent(evt.id)}
+                            />
+                          </div>
                         </div>
                         <div className="mt-1 flex items-center justify-between gap-2 text-[11px] text-[var(--ink-muted)]">
                           <span className="font-ui-tabular">
@@ -734,14 +747,10 @@ export default function CalendarScreen() {
         footer={
           <div className="flex items-center justify-between w-full">
             {editingEventId ? (
-              <button
-                type="button"
-                onClick={handleDeleteCurrentEvent}
-                className="inline-flex items-center gap-1.5 px-3 py-2 rounded-full text-xs font-semibold text-[#C9352B] hover:bg-[#FBECEE] transition-colors cursor-pointer"
-              >
-                <Trash2 className="w-3.5 h-3.5" />
-                <span>Delete</span>
-              </button>
+              <DeleteButton
+                name={evtTitle}
+                onDelete={handleDeleteCurrentEvent}
+              />
             ) : (
               <span />
             )}

@@ -173,6 +173,18 @@ export interface ToastNotice {
   id: string;
   title: string;
   detail?: string;
+  undoAction?: () => void;
+}
+
+export interface StoreSnapshot {
+  projects: Project[];
+  tasks: TaskItem[];
+  team: TeamMember[];
+  events: CalendarEvent[];
+  focusSessions: FocusSession[];
+  timerRunning: boolean;
+  timerSeconds: number;
+  timerTaskId: string;
 }
 
 export interface NewProjectInput {
@@ -1218,13 +1230,18 @@ export interface PlotlineState {
   addTeamMember: (input: NewMemberInput) => TeamMember;
   addEvent: (input: NewEventInput) => CalendarEvent;
   updateEvent: (eventId: string, input: Partial<NewEventInput>) => void;
+  deleteProject: (projectId: string) => void;
+  deleteMember: (memberId: string) => void;
   deleteEvent: (eventId: string) => void;
+  deleteTask: (taskId: string) => void;
+  restoreSnapshot: (snapshot: StoreSnapshot) => void;
   toggleEventCheckIn: (eventId: string) => void;
   toggleTimer: () => void;
   resetTimer: () => void;
   tickTimer: () => void;
   setTimerTask: (taskId: string) => void;
   pushToast: (title: string, detail?: string) => void;
+  pushToastWithUndo: (title: string, detail?: string, undoAction?: () => void) => void;
   dismissToast: (id: string) => void;
 }
 
@@ -1694,15 +1711,226 @@ export const usePlotlineStore = create<PlotlineState>((set, get) => ({
     get().pushToast('Event updated');
   },
 
-  deleteEvent: (eventId) => {
-    const state = get();
-    const target = state.events.find((e) => e.id === eventId);
-    const nextEvents = state.events.filter((e) => e.id !== eventId);
-    savePersistedEvents(nextEvents);
-    set({ events: nextEvents });
-    if (target) {
-      get().pushToast(`Deleted "${target.title}"`);
+  deleteProject: (projectId) => {
+    const snapshot = get();
+    const target = snapshot.projects.find((p) => p.id === projectId);
+    if (!target) return;
+
+    const savedSnapshot: StoreSnapshot = {
+      projects: [...snapshot.projects],
+      tasks: [...snapshot.tasks],
+      team: [...snapshot.team],
+      events: [...snapshot.events],
+      focusSessions: [...snapshot.focusSessions],
+      timerRunning: snapshot.timerRunning,
+      timerSeconds: snapshot.timerSeconds,
+      timerTaskId: snapshot.timerTaskId,
+    };
+
+    const nextProjects = snapshot.projects.filter((p) => p.id !== projectId);
+    const deletedTaskIds = new Set(
+      snapshot.tasks.filter((t) => t.projectId === projectId).map((t) => t.id)
+    );
+    const nextTasks = snapshot.tasks.filter((t) => t.projectId !== projectId);
+
+    let nextTimerRunning = snapshot.timerRunning;
+    let nextTimerSeconds = snapshot.timerSeconds;
+    if (deletedTaskIds.has(snapshot.timerTaskId)) {
+      nextTimerRunning = false;
+      nextTimerSeconds = 0;
+      try {
+        window.localStorage.setItem(TIMER_RUNNING_STORAGE_KEY, 'false');
+        window.localStorage.setItem(TIMER_SECONDS_STORAGE_KEY, '0');
+      } catch {
+        // Ignore
+      }
     }
+
+    savePersistedProjects(nextProjects);
+    savePersistedTasks(nextTasks);
+
+    set({
+      projects: nextProjects,
+      tasks: nextTasks,
+      timerRunning: nextTimerRunning,
+      timerSeconds: nextTimerSeconds,
+    });
+
+    get().pushToastWithUndo(
+      `Project "${target.name}" deleted`,
+      'Associated tasks removed',
+      () => get().restoreSnapshot(savedSnapshot)
+    );
+  },
+
+  deleteMember: (memberId) => {
+    const snapshot = get();
+    if (memberId === snapshot.currentUser.id) return;
+    const target = snapshot.team.find((m) => m.id === memberId);
+    if (!target) return;
+
+    const savedSnapshot: StoreSnapshot = {
+      projects: [...snapshot.projects],
+      tasks: [...snapshot.tasks],
+      team: [...snapshot.team],
+      events: [...snapshot.events],
+      focusSessions: [...snapshot.focusSessions],
+      timerRunning: snapshot.timerRunning,
+      timerSeconds: snapshot.timerSeconds,
+      timerTaskId: snapshot.timerTaskId,
+    };
+
+    const nextTeam = snapshot.team.filter((m) => m.id !== memberId);
+    const nextTasks = snapshot.tasks.map((t) => {
+      let updated = false;
+      let nextAssignee = t.assigneeId;
+      let nextCoAssignee = t.coAssigneeId;
+
+      if (t.assigneeId === memberId) {
+        nextAssignee = '';
+        updated = true;
+      }
+      if (t.coAssigneeId === memberId) {
+        nextCoAssignee = undefined;
+        updated = true;
+      }
+
+      return updated
+        ? { ...t, assigneeId: nextAssignee, coAssigneeId: nextCoAssignee }
+        : t;
+    });
+
+    savePersistedTeam(nextTeam);
+    savePersistedTasks(nextTasks);
+
+    const nextProfileId =
+      snapshot.selectedProfileMemberId === memberId
+        ? null
+        : snapshot.selectedProfileMemberId;
+
+    set({
+      team: nextTeam,
+      tasks: nextTasks,
+      selectedProfileMemberId: nextProfileId,
+    });
+
+    get().pushToastWithUndo(
+      `Specialist "${target.name}" deleted`,
+      'Assigned tasks moved to Unassigned',
+      () => get().restoreSnapshot(savedSnapshot)
+    );
+  },
+
+  deleteEvent: (eventId) => {
+    const snapshot = get();
+    const target = snapshot.events.find((e) => e.id === eventId);
+    if (!target) return;
+
+    const savedSnapshot: StoreSnapshot = {
+      projects: [...snapshot.projects],
+      tasks: [...snapshot.tasks],
+      team: [...snapshot.team],
+      events: [...snapshot.events],
+      focusSessions: [...snapshot.focusSessions],
+      timerRunning: snapshot.timerRunning,
+      timerSeconds: snapshot.timerSeconds,
+      timerTaskId: snapshot.timerTaskId,
+    };
+
+    const nextEvents = snapshot.events.filter((e) => e.id !== eventId);
+    savePersistedEvents(nextEvents);
+
+    set({ events: nextEvents });
+
+    get().pushToastWithUndo(
+      `Event "${target.title}" deleted`,
+      `${target.date} · ${target.startTime}–${target.endTime}`,
+      () => get().restoreSnapshot(savedSnapshot)
+    );
+  },
+
+  deleteTask: (taskId) => {
+    const snapshot = get();
+    const target = snapshot.tasks.find((t) => t.id === taskId);
+    if (!target) return;
+
+    const savedSnapshot: StoreSnapshot = {
+      projects: [...snapshot.projects],
+      tasks: [...snapshot.tasks],
+      team: [...snapshot.team],
+      events: [...snapshot.events],
+      focusSessions: [...snapshot.focusSessions],
+      timerRunning: snapshot.timerRunning,
+      timerSeconds: snapshot.timerSeconds,
+      timerTaskId: snapshot.timerTaskId,
+    };
+
+    const nextTasks = snapshot.tasks.filter((t) => t.id !== taskId);
+
+    let nextTimerRunning = snapshot.timerRunning;
+    let nextTimerSeconds = snapshot.timerSeconds;
+    if (snapshot.timerTaskId === taskId) {
+      nextTimerRunning = false;
+      nextTimerSeconds = 0;
+      try {
+        window.localStorage.setItem(TIMER_RUNNING_STORAGE_KEY, 'false');
+        window.localStorage.setItem(TIMER_SECONDS_STORAGE_KEY, '0');
+      } catch {
+        // Ignore
+      }
+    }
+
+    savePersistedTasks(nextTasks);
+
+    set({
+      tasks: nextTasks,
+      timerRunning: nextTimerRunning,
+      timerSeconds: nextTimerSeconds,
+    });
+
+    get().pushToastWithUndo(
+      `Task "${target.code}" deleted`,
+      target.title,
+      () => get().restoreSnapshot(savedSnapshot)
+    );
+  },
+
+  restoreSnapshot: (snapshot) => {
+    savePersistedProjects(snapshot.projects);
+    savePersistedTasks(snapshot.tasks);
+    savePersistedTeam(snapshot.team);
+    savePersistedEvents(snapshot.events);
+    savePersistedFocusSessions(snapshot.focusSessions);
+
+    try {
+      window.localStorage.setItem(
+        TIMER_RUNNING_STORAGE_KEY,
+        String(snapshot.timerRunning)
+      );
+      window.localStorage.setItem(
+        TIMER_SECONDS_STORAGE_KEY,
+        String(snapshot.timerSeconds)
+      );
+      window.localStorage.setItem(
+        TIMER_TASK_STORAGE_KEY,
+        snapshot.timerTaskId
+      );
+    } catch {
+      // Ignore
+    }
+
+    set({
+      projects: snapshot.projects,
+      tasks: snapshot.tasks,
+      team: snapshot.team,
+      events: snapshot.events,
+      focusSessions: snapshot.focusSessions,
+      timerRunning: snapshot.timerRunning,
+      timerSeconds: snapshot.timerSeconds,
+      timerTaskId: snapshot.timerTaskId,
+    });
+
+    get().pushToast('Deletion undone', 'Restored record and all cascaded changes.');
   },
 
   toggleEventCheckIn: (eventId) => {
@@ -1852,6 +2080,16 @@ export const usePlotlineStore = create<PlotlineState>((set, get) => ({
     setTimeout(() => {
       get().dismissToast(id);
     }, 4200);
+  },
+
+  pushToastWithUndo: (title, detail, undoAction) => {
+    const id = `tst-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
+    set((state) => ({
+      toasts: [...state.toasts, { id, title, detail, undoAction }],
+    }));
+    setTimeout(() => {
+      get().dismissToast(id);
+    }, 6000);
   },
 
   dismissToast: (id) => {
