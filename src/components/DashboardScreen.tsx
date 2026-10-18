@@ -258,19 +258,24 @@ export default function DashboardScreen() {
 
   // --- Store-Derived Metrics ---
   const totalCount = uniqueProjects.length;
-  const { endedCount, runningCount, pendingCount } = useMemo(() => {
-    let ended = 0;
+  const { runningCount, pendingCount } = useMemo(() => {
     let running = 0;
     let pending = 0;
     uniqueProjects.forEach((p) => {
-      const st = getProjectStatus(p, tasks);
-      if (st === 'Ended') ended++;
-      else if (st === 'Pending') pending++;
-      else running++;
+      const status = getProjectStatus(p, tasks);
+      if (status === 'Pending') pending++;
+      else if (status !== 'Ended') running++;
     });
-    return { endedCount: ended, runningCount: running, pendingCount: pending };
+    return { runningCount: running, pendingCount: pending };
   }, [uniqueProjects, tasks]);
   const openTasksCount = uniqueTasks.filter((t) => t.status !== 'Done').length;
+  const today = new Date();
+  const todayIsoDate = new Date(
+    today.getTime() - today.getTimezoneOffset() * 60_000
+  ).toISOString().slice(0, 10);
+  const overdueTasksCount = uniqueTasks.filter(
+    (task) => task.status !== 'Done' && task.dueDate < todayIsoDate
+  ).length;
 
   // Weekly output — 7 slim columns, segmented by project with 2px gaps
   const todayWeekdayIndex = new Date().getDay();
@@ -471,29 +476,39 @@ export default function DashboardScreen() {
           </p>
         </button>
 
-        {/* Card 2: Ended */}
+        {/* Card 2: Overdue tasks */}
         <button
           type="button"
           onClick={() => {
-            setActiveRoute('Projects');
-            if (typeof window !== 'undefined') window.history.pushState(null, '', '#/projects?status=ended');
+            setActiveRoute('Tasks');
+            if (typeof window !== 'undefined') window.history.pushState(null, '', '#/tasks');
           }}
-          aria-label={`View ${pluralize(endedCount, 'ended project')}`}
-          style={{ '--stagger-index': 2 } as React.CSSProperties}
+          aria-label={`View ${pluralize(overdueTasksCount, 'overdue task')}`}
+          style={{
+            '--stagger-index': 2,
+            borderColor: overdueTasksCount > 0 ? 'var(--status-critical)' : undefined,
+          } as React.CSSProperties}
           className="plotline-enter group text-left col-span-1 sm:col-span-1 xl:col-span-3 sm:order-2 bg-[var(--surface-elevated)] border border-[var(--border-hairline)] rounded-[var(--radius-lg)] p-3.5 sm:p-4 flex flex-col justify-between focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)] cursor-pointer hover:border-[var(--border-strong)] transition-all"
         >
           <div className="flex items-center justify-between gap-2">
-            <span className="text-sm font-semibold text-[var(--ink-primary)]">Ended</span>
+            <span
+              className={`text-sm font-semibold ${overdueTasksCount > 0 ? 'text-[var(--status-critical)]' : 'text-[var(--ink-primary)]'}`}
+            >
+              Overdue
+            </span>
             <span className="w-7 h-7 rounded-full border border-[var(--border-strong)] text-[var(--ink-primary)] flex items-center justify-center shrink-0 group-hover:-translate-y-0.5 group-hover:translate-x-0.5 transition-transform">
               <ArrowUpRight className="w-4 h-4" />
             </span>
           </div>
           <CountUpNumeral
-            value={endedCount}
+            value={overdueTasksCount}
+            style={overdueTasksCount > 0 ? { color: 'var(--status-critical)' } : undefined}
             className="text-3xl sm:text-4xl font-semibold leading-none tracking-tight text-[var(--ink-primary)] my-1"
           />
           <p className="text-[11px] sm:text-xs text-[var(--ink-secondary)] max-h-[2.5rem] overflow-hidden leading-snug">
-            {pluralize(endedCount, 'project')} · {pluralize(openTasksCount, 'open task')}
+            {overdueTasksCount === 0
+              ? 'No tasks past their due date'
+              : `${pluralize(overdueTasksCount, 'task')} past their due date`}
           </p>
         </button>
 
