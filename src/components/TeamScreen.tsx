@@ -1,5 +1,5 @@
-import React, { useMemo, useRef, useState } from 'react';
-import { AnimatePresence, motion } from 'motion/react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
+import { AnimatePresence, motion, useReducedMotion } from 'motion/react';
 import {
   Mail,
   MapPin,
@@ -16,6 +16,8 @@ import {
   usePlotlineStore,
 } from '../store';
 import { ContourGlyph } from '../utils/contourGlyph';
+import { Dialog } from '../ui/Dialog';
+import { priorityChipStyle } from './TasksScreen';
 
 const DEPARTMENT_FILTERS: Array<'All' | Department> = [
   'All',
@@ -49,6 +51,60 @@ function presenceTextLabel(presence: PresenceStatus): string {
   }
 }
 
+function categoryDotColor(category: string): string {
+  switch (category.toLowerCase()) {
+    case 'engineering':
+      return 'var(--accent)';
+    case 'design':
+      return '#5B43B8';
+    case 'marketing':
+      return '#BE3A15';
+    case 'management':
+      return '#2E6B47';
+    default:
+      return '#7A7873';
+  }
+}
+
+function UtilizationRingInline({ pct }: { pct: number }) {
+  const normalizedPct = Math.min(100, Math.max(0, pct));
+  const strokeColor =
+    normalizedPct >= 100
+      ? '#DC2626'
+      : normalizedPct >= 85
+      ? '#D97706'
+      : 'var(--accent)';
+
+  const radius = 8;
+  const circumference = 2 * Math.PI * radius;
+  const strokeDashoffset = circumference * (1 - normalizedPct / 100);
+
+  return (
+    <svg className="w-5 h-5 -rotate-90 shrink-0" viewBox="0 0 20 20">
+      <circle
+        cx="10"
+        cy="10"
+        r={radius}
+        fill="none"
+        stroke="var(--border-hairline)"
+        strokeWidth="2.5"
+      />
+      <circle
+        cx="10"
+        cy="10"
+        r={radius}
+        fill="none"
+        stroke={strokeColor}
+        strokeWidth="2.5"
+        strokeLinecap="round"
+        strokeDasharray={circumference}
+        strokeDashoffset={strokeDashoffset}
+        className="transition-all duration-300 ease-out"
+      />
+    </svg>
+  );
+}
+
 export default function TeamScreen() {
   const {
     team,
@@ -62,9 +118,11 @@ export default function TeamScreen() {
   } = usePlotlineStore();
 
   const [selectedDept, setSelectedDept] = useState<'All' | Department>('All');
-  const prefersReducedMotion =
-    typeof window !== 'undefined' &&
-    window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  const prefersReducedMotion = useReducedMotion();
+
+  // References for Focus Restoration & Focus Trap
+  const triggerElementRef = useRef<HTMLElement | null>(null);
+  const modalRef = useRef<HTMLDivElement | null>(null);
 
   // Invite Member Modal State
   const [inviteOpen, setInviteOpen] = useState(false);
@@ -135,6 +193,80 @@ export default function TeamScreen() {
     [enrichedMembers, selectedProfileMemberId]
   );
 
+  // Lock body scroll, handle Esc, manage Focus Trapping & Restoration
+  useEffect(() => {
+    if (!activeProfileData) {
+      if (triggerElementRef.current) {
+        triggerElementRef.current.focus();
+        triggerElementRef.current = null;
+      }
+      return;
+    }
+
+    const originalOverflow = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+
+    // Focus modal container or first focusable element
+    const timer = setTimeout(() => {
+      const focusables = modalRef.current?.querySelectorAll<HTMLElement>(
+        'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])'
+      );
+      if (focusables && focusables.length > 0) {
+        focusables[0].focus();
+      } else {
+        modalRef.current?.focus();
+      }
+    }, 40);
+
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        setSelectedProfileMemberId(null);
+        return;
+      }
+
+      if (e.key === 'Tab' && modalRef.current) {
+        const focusables = Array.from(
+          modalRef.current.querySelectorAll<HTMLElement>(
+            'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])'
+          )
+        ).filter((el) => !el.hasAttribute('disabled') && el.offsetParent !== null);
+
+        if (focusables.length === 0) return;
+
+        const first = focusables[0];
+        const last = focusables[focusables.length - 1];
+
+        if (e.shiftKey) {
+          if (document.activeElement === first) {
+            e.preventDefault();
+            last.focus();
+          }
+        } else {
+          if (document.activeElement === last) {
+            e.preventDefault();
+            first.focus();
+          }
+        }
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+
+    return () => {
+      document.body.style.overflow = originalOverflow;
+      clearTimeout(timer);
+      window.removeEventListener('keydown', handleKeyDown);
+    };
+  }, [activeProfileData, setSelectedProfileMemberId]);
+
+  const handleOpenProfile = (
+    memberId: string,
+    e: React.MouseEvent<HTMLButtonElement>
+  ) => {
+    triggerElementRef.current = e.currentTarget;
+    setSelectedProfileMemberId(memberId);
+  };
+
   const handleInviteSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!inviteName.trim()) {
@@ -160,7 +292,16 @@ export default function TeamScreen() {
   };
 
   return (
-    <div className="max-w-[1360px] mx-auto space-y-5 pb-6 min-w-0">
+    <div
+      style={{
+        transform: activeProfileData ? 'scale(0.98)' : 'scale(1)',
+        transition: prefersReducedMotion
+          ? 'none'
+          : 'transform 280ms cubic-bezier(0.16, 1, 0.3, 1)',
+        transformOrigin: 'center center',
+      }}
+      className="max-w-[1360px] mx-auto space-y-5 pb-6 min-w-0"
+    >
       {/* Header Row: Title, Subtitle, "N online now", "Invite member" button */}
       <div
         style={{ '--stagger-index': 0 } as React.CSSProperties}
@@ -289,253 +430,249 @@ export default function TeamScreen() {
                   style={{ '--stagger-index': idx + 2 } as React.CSSProperties}
                   className="plotline-enter bg-[var(--surface-elevated)] border border-[var(--border-hairline)] rounded-[var(--radius-lg)] p-5 flex flex-col justify-between gap-4"
                 >
-                {/* Top: Initials Avatar with Presence Dot + Name, Role, Department Chip */}
-                <div className="flex items-start justify-between gap-3">
-                  <div className="flex items-center gap-3 min-w-0">
-                    <div className="relative shrink-0">
-                      <span
-                        style={{ backgroundColor: 'var(--accent)' }}
-                        className="w-11 h-11 rounded-full flex items-center justify-center text-sm font-semibold text-white"
-                      >
-                        {member.initials}
-                      </span>
-                      <span
-                        title={presenceTextLabel(member.presence)}
-                        style={{
-                          backgroundColor: presenceDotColor(member.presence),
-                        }}
-                        className="absolute bottom-0 right-0 w-3 h-3 rounded-full border-2 border-[var(--surface-elevated)]"
-                      />
+                  {/* Top: Initials Avatar with Presence Dot + Name, Role, Department Chip */}
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="flex items-center gap-3 min-w-0">
+                      <div className="relative shrink-0">
+                        <span
+                          style={{ backgroundColor: 'var(--accent)' }}
+                          className="w-11 h-11 rounded-full flex items-center justify-center text-sm font-semibold text-white"
+                        >
+                          {member.initials}
+                        </span>
+                        <span
+                          title={presenceTextLabel(member.presence)}
+                          style={{
+                            backgroundColor: presenceDotColor(member.presence),
+                          }}
+                          className="absolute bottom-0 right-0 w-3 h-3 rounded-full border-2 border-[var(--surface-elevated)]"
+                        />
+                      </div>
+
+                      <div className="min-w-0">
+                        <h2 className="text-sm sm:text-base font-semibold text-[var(--ink-primary)] truncate">
+                          {member.name}
+                        </h2>
+                        <p className="text-xs text-[var(--ink-secondary)] truncate">
+                          {member.role}
+                        </p>
+                      </div>
                     </div>
 
-                    <div className="min-w-0">
-                      <h2 className="text-sm sm:text-base font-semibold text-[var(--ink-primary)] truncate">
-                        {member.name}
-                      </h2>
-                      <p className="text-xs text-[var(--ink-secondary)] truncate">
-                        {member.role}
-                      </p>
+                    <span className="px-2.5 py-0.5 rounded-full text-[11px] font-medium bg-[var(--surface-sunken)] text-[var(--ink-secondary)] border border-[var(--border-hairline)] whitespace-nowrap shrink-0">
+                      {member.department}
+                    </span>
+                  </div>
+
+                  {/* Middle: Open vs Completed Counts + Workload Bar with % */}
+                  <div className="space-y-3 pt-1">
+                    <div className="grid grid-cols-2 gap-2.5">
+                      <div className="p-2.5 rounded-[var(--radius-sm)] bg-[var(--surface-canvas)] border border-[var(--border-hairline)] flex items-center justify-between">
+                        <span className="text-xs text-[var(--ink-secondary)]">
+                          Open
+                        </span>
+                        <span className="text-sm font-semibold font-ui-tabular text-[var(--ink-primary)]">
+                          {openCount}
+                        </span>
+                      </div>
+                      <div className="p-2.5 rounded-[var(--radius-sm)] bg-[var(--surface-canvas)] border border-[var(--border-hairline)] flex items-center justify-between">
+                        <span className="text-xs text-[var(--ink-secondary)]">
+                          Completed
+                        </span>
+                        <span className="text-sm font-semibold font-ui-tabular text-[var(--ink-primary)]">
+                          {completedCount}
+                        </span>
+                      </div>
+                    </div>
+
+                    <div className="space-y-1.5">
+                      <div className="flex items-center justify-between text-xs">
+                        <span className="text-[var(--ink-secondary)]">Workload</span>
+                        <span
+                          data-testid={`workload-pct-${member.id}`}
+                          className="font-semibold font-ui-tabular text-[var(--ink-primary)]"
+                        >
+                          {workloadPct}%
+                        </span>
+                      </div>
+                      <div className="h-2 w-full rounded-full bg-[var(--surface-sunken)] overflow-hidden">
+                        <div
+                          style={{
+                            width: `${workloadPct}%`,
+                            backgroundColor: 'var(--accent)',
+                          }}
+                          className="h-full rounded-full transition-all duration-300 ease-plotline"
+                        />
+                      </div>
                     </div>
                   </div>
 
-                  <span className="px-2.5 py-0.5 rounded-full text-[11px] font-medium bg-[var(--surface-sunken)] text-[var(--ink-secondary)] border border-[var(--border-hairline)] whitespace-nowrap shrink-0">
-                    {member.department}
-                  </span>
-                </div>
+                  {/* Footer: Message & Profile Buttons */}
+                  <div className="pt-2 border-t border-[var(--border-hairline)] flex items-center gap-2.5">
+                    <button
+                      type="button"
+                      onClick={() =>
+                        pushToast(
+                          `Direct dispatch opened for ${member.name}`,
+                          `${member.email} · ${member.timezone}`
+                        )
+                      }
+                      className="flex-1 py-2 px-3 rounded-[var(--radius-sm)] border border-[var(--border-strong)] bg-[var(--surface-elevated)] hover:bg-[var(--surface-sunken)] text-xs font-semibold text-[var(--ink-primary)] inline-flex items-center justify-center gap-1.5 transition-colors cursor-pointer"
+                    >
+                      <MessageSquare className="w-3.5 h-3.5 text-[var(--ink-secondary)]" />
+                      <span>Message</span>
+                    </button>
 
-                {/* Middle: Open vs Completed Counts + Workload Bar with % */}
-                <div className="space-y-3 pt-1">
-                  <div className="grid grid-cols-2 gap-2.5">
-                    <div className="p-2.5 rounded-[var(--radius-sm)] bg-[var(--surface-canvas)] border border-[var(--border-hairline)] flex items-center justify-between">
-                      <span className="text-xs text-[var(--ink-secondary)]">
-                        Open
-                      </span>
-                      <span className="text-sm font-semibold font-ui-tabular text-[var(--ink-primary)]">
-                        {openCount}
-                      </span>
-                    </div>
-                    <div className="p-2.5 rounded-[var(--radius-sm)] bg-[var(--surface-canvas)] border border-[var(--border-hairline)] flex items-center justify-between">
-                      <span className="text-xs text-[var(--ink-secondary)]">
-                        Completed
-                      </span>
-                      <span className="text-sm font-semibold font-ui-tabular text-[var(--ink-primary)]">
-                        {completedCount}
-                      </span>
-                    </div>
+                    <button
+                      type="button"
+                      onClick={(e) => handleOpenProfile(member.id, e)}
+                      style={{
+                        backgroundColor: 'var(--accent-soft)',
+                        color: 'var(--accent)',
+                        borderColor: 'var(--accent-border)',
+                      }}
+                      className="flex-1 py-2 px-3 rounded-[var(--radius-sm)] border text-xs font-semibold inline-flex items-center justify-center gap-1.5 hover:opacity-90 transition-opacity cursor-pointer"
+                    >
+                      <User className="w-3.5 h-3.5" />
+                      <span>Profile</span>
+                    </button>
                   </div>
-
-                  <div className="space-y-1.5">
-                    <div className="flex items-center justify-between text-xs">
-                      <span className="text-[var(--ink-secondary)]">Workload</span>
-                      <span
-                        data-testid={`workload-pct-${member.id}`}
-                        className="font-semibold font-ui-tabular text-[var(--ink-primary)]"
-                      >
-                        {workloadPct}%
-                      </span>
-                    </div>
-                    <div className="h-2 w-full rounded-full bg-[var(--surface-sunken)] overflow-hidden">
-                      <div
-                        style={{
-                          width: `${workloadPct}%`,
-                          backgroundColor: 'var(--accent)',
-                        }}
-                        className="h-full rounded-full transition-all duration-300 ease-plotline"
-                      />
-                    </div>
-                  </div>
-                </div>
-
-                {/* Footer: Message & Profile Buttons */}
-                <div className="pt-2 border-t border-[var(--border-hairline)] flex items-center gap-2.5">
-                  <button
-                    type="button"
-                    onClick={() =>
-                      pushToast(
-                        `Direct dispatch opened for ${member.name}`,
-                        `${member.email} · ${member.timezone}`
-                      )
-                    }
-                    className="flex-1 py-2 px-3 rounded-[var(--radius-sm)] border border-[var(--border-strong)] bg-[var(--surface-elevated)] hover:bg-[var(--surface-sunken)] text-xs font-semibold text-[var(--ink-primary)] inline-flex items-center justify-center gap-1.5 transition-colors cursor-pointer"
-                  >
-                    <MessageSquare className="w-3.5 h-3.5 text-[var(--ink-secondary)]" />
-                    <span>Message</span>
-                  </button>
-
-                  <button
-                    type="button"
-                    onClick={() => setSelectedProfileMemberId(member.id)}
-                    style={{
-                      backgroundColor: 'var(--accent-soft)',
-                      color: 'var(--accent)',
-                      borderColor: 'var(--accent-border)',
-                    }}
-                    className="flex-1 py-2 px-3 rounded-[var(--radius-sm)] border text-xs font-semibold inline-flex items-center justify-center gap-1.5 hover:opacity-90 transition-opacity cursor-pointer"
-                  >
-                    <User className="w-3.5 h-3.5" />
-                    <span>Profile</span>
-                  </button>
-                </div>
-              </motion.article>
-            )
-          )}
-        </AnimatePresence>
-      </motion.div>
+                </motion.article>
+              )
+            )}
+          </AnimatePresence>
+        </motion.div>
       )}
 
-      {/* Right-Side Profile Drawer */}
-      {activeProfileData && (
-        <div
-          role="dialog"
-          aria-modal="true"
-          aria-labelledby="profile-drawer-name"
-          className="fixed inset-0 z-50 flex justify-end bg-black/35"
-          onClick={(e) => {
-            if (e.target === e.currentTarget) setSelectedProfileMemberId(null);
-          }}
-        >
-          <aside className="w-full max-w-md h-full bg-[var(--surface-elevated)] border-l border-[var(--border-hairline)] p-6 flex flex-col justify-between overflow-y-auto shadow-xl plotline-enter">
-            <div className="space-y-6">
-              {/* Drawer Header */}
-              <div className="flex items-start justify-between gap-4 border-b border-[var(--border-hairline)] pb-5">
-                <div className="flex items-center gap-3.5 min-w-0">
-                  <div className="relative shrink-0">
-                    <span
-                      style={{ backgroundColor: 'var(--accent)' }}
-                      className="w-14 h-14 rounded-full flex items-center justify-center text-lg font-semibold text-white"
-                    >
-                      {activeProfileData.member.initials}
-                    </span>
-                    <span
-                      style={{
-                        backgroundColor: presenceDotColor(
-                          activeProfileData.member.presence
-                        ),
-                      }}
-                      className="absolute bottom-0 right-0 w-3.5 h-3.5 rounded-full border-2 border-[var(--surface-elevated)]"
-                    />
-                  </div>
-                  <div className="min-w-0">
-                    <h2
-                      id="profile-drawer-name"
-                      className="text-lg font-bold text-[var(--ink-primary)] truncate"
-                    >
-                      {activeProfileData.member.name}
-                    </h2>
-                    <p className="text-xs sm:text-sm text-[var(--ink-secondary)] truncate">
-                      {activeProfileData.member.role}
-                    </p>
-                    <p className="text-xs text-[var(--ink-muted)] mt-1">
-                      {activeProfileData.member.location} ·{' '}
-                      {activeProfileData.member.department} ·{' '}
-                      {presenceTextLabel(activeProfileData.member.presence)}
-                    </p>
-                  </div>
-                </div>
+      {/* Team Member Profile Dialog (Hero Variant) */}
+      <Dialog
+        isOpen={!!activeProfileData}
+        onClose={() => setSelectedProfileMemberId(null)}
+        variant="hero"
+        eyebrow={activeProfileData?.member.department}
+        title={activeProfileData?.member.name}
+        subtitle={activeProfileData?.member.role}
+        heroData={
+          activeProfileData
+            ? {
+                glyphSeed: activeProfileData.member.id,
+                avatarInitials: activeProfileData.member.initials,
+                presence: activeProfileData.member.presence,
+                meta: `${activeProfileData.member.location} · ${presenceTextLabel(
+                  activeProfileData.member.presence
+                )}`,
+              }
+            : undefined
+        }
+        footer={
+          activeProfileData ? (
+            <div className="flex flex-col sm:flex-row items-center justify-between gap-3 w-full">
+              <div className="flex items-center gap-2 w-full sm:w-auto">
+                <button
+                  type="button"
+                  onClick={() =>
+                    pushToast(
+                      `Direct dispatch opened for ${activeProfileData.member.name}`,
+                      `${activeProfileData.member.email} · ${activeProfileData.member.timezone}`
+                    )
+                  }
+                  style={{ backgroundColor: 'var(--accent)' }}
+                  className="flex-1 sm:flex-initial py-2 px-4 rounded-full text-xs font-semibold text-white hover:opacity-95 inline-flex items-center justify-center gap-1.5 transition-opacity cursor-pointer shadow-2xs"
+                >
+                  <MessageSquare className="w-3.5 h-3.5" />
+                  <span>Message</span>
+                </button>
 
                 <button
                   type="button"
-                  onClick={() => setSelectedProfileMemberId(null)}
-                  aria-label="Close profile drawer"
-                  className="p-1.5 rounded-[var(--radius-sm)] text-[var(--ink-muted)] hover:text-[var(--ink-primary)] hover:bg-[var(--surface-sunken)] cursor-pointer"
+                  onClick={() => {
+                    window.location.href = `mailto:${activeProfileData.member.email}`;
+                  }}
+                  className="flex-1 sm:flex-initial py-2 px-4 rounded-full border border-[var(--border-strong)] bg-[var(--surface-elevated)] hover:bg-[var(--surface-sunken)] text-xs font-semibold text-[var(--ink-primary)] inline-flex items-center justify-center gap-1.5 transition-colors cursor-pointer"
                 >
-                  <X className="w-4 h-4" />
+                  <Mail className="w-3.5 h-3.5 text-[var(--ink-secondary)]" />
+                  <span>Email</span>
                 </button>
               </div>
 
-              {/* Three Stats: Open, Done, Utilization */}
-              <div className="grid grid-cols-3 gap-3">
-                <div className="p-3.5 rounded-[var(--radius-md)] bg-[var(--surface-canvas)] border border-[var(--border-hairline)] text-center">
-                  <span className="block text-2xl font-display-num font-semibold text-[var(--ink-primary)]">
-                    {activeProfileData.openCount}
-                  </span>
-                  <span className="block text-[11px] text-[var(--ink-secondary)] mt-0.5">
-                    Open
-                  </span>
-                </div>
-
-                <div className="p-3.5 rounded-[var(--radius-md)] bg-[var(--surface-canvas)] border border-[var(--border-hairline)] text-center">
-                  <span className="block text-2xl font-display-num font-semibold text-[var(--ink-primary)]">
-                    {activeProfileData.completedCount}
-                  </span>
-                  <span className="block text-[11px] text-[var(--ink-secondary)] mt-0.5">
-                    Done
-                  </span>
-                </div>
-
-                <div className="p-3.5 rounded-[var(--radius-md)] bg-[var(--surface-canvas)] border border-[var(--border-hairline)] text-center">
-                  <span
-                    className="block text-2xl font-display-num font-semibold"
-                    style={{ color: 'var(--accent)' }}
-                  >
-                    {activeProfileData.workloadPct}%
-                  </span>
-                  <span className="block text-[11px] text-[var(--ink-secondary)] mt-0.5">
-                    Utilization
-                  </span>
-                </div>
+              <span className="text-xs text-[var(--ink-muted)] inline-flex items-center gap-1 self-start sm:self-auto">
+                <MapPin className="w-3.5 h-3.5 text-[var(--ink-secondary)]" />
+                <span>{activeProfileData.member.timezone}</span>
+              </span>
+            </div>
+          ) : undefined
+        }
+      >
+        {activeProfileData && (
+          <div className="flex flex-col h-full">
+            {/* Stats: Three identical tiles using dashboard stat-card style at compact size */}
+            <div className="grid grid-cols-3 gap-2.5 sm:gap-3 px-6 pt-4 pb-3 shrink-0">
+              <div className="bg-[var(--surface-elevated)] border border-[var(--border-hairline)] rounded-[var(--radius-lg)] p-3 text-center shadow-2xs flex flex-col items-center justify-center">
+                <span className="text-2xl font-semibold font-display-num text-[var(--ink-primary)] leading-none">
+                  {activeProfileData.openCount}
+                </span>
+                <span className="text-xs font-medium text-[var(--ink-secondary)] mt-1">
+                  Open tasks
+                </span>
               </div>
 
-              {/* Assigned Tasks List */}
-              <div className="space-y-3">
-                <div className="flex items-center justify-between">
-                  <h3 className="text-sm font-semibold text-[var(--ink-primary)]">
-                    Assigned Tasks ({activeProfileData.memberTasks.length})
-                  </h3>
-                  <span className="text-xs text-[var(--ink-muted)]">
-                    Live from store
-                  </span>
-                </div>
+              <div className="bg-[var(--surface-elevated)] border border-[var(--border-hairline)] rounded-[var(--radius-lg)] p-3 text-center shadow-2xs flex flex-col items-center justify-center">
+                <span className="text-2xl font-semibold font-display-num text-[var(--ink-primary)] leading-none">
+                  {activeProfileData.completedCount}
+                </span>
+                <span className="text-xs font-medium text-[var(--ink-secondary)] mt-1">
+                  Completed
+                </span>
+              </div>
 
-                {activeProfileData.memberTasks.length === 0 ? (
-                  <div className="py-6 flex flex-col items-center justify-center text-center bg-[var(--surface-canvas)] rounded-[var(--radius-md)] border border-[var(--border-hairline)] gap-2">
-                    <ContourGlyph
-                      seed={`empty-member-${activeProfileData.member.id}`}
-                      size={44}
-                    />
-                    <p className="text-xs text-[var(--ink-secondary)]">
-                      No tasks currently assigned to this specialist.
-                    </p>
-                  </div>
-                ) : (
-                  <ul className="space-y-2.5">
-                    {activeProfileData.memberTasks.map((t) => (
+              <div className="bg-[var(--surface-elevated)] border border-[var(--border-hairline)] rounded-[var(--radius-lg)] p-3 text-center shadow-2xs flex flex-col items-center justify-center">
+                <div className="inline-flex items-center justify-center gap-1.5">
+                  <span className="text-2xl font-semibold font-display-num text-[var(--ink-primary)] leading-none">
+                    {activeProfileData.workloadPct}%
+                  </span>
+                  <UtilizationRingInline pct={activeProfileData.workloadPct} />
+                </div>
+                <span className="text-xs font-medium text-[var(--ink-secondary)] mt-1">
+                  Utilization
+                </span>
+              </div>
+            </div>
+
+            {/* Task rows: reuse Tasks board card chip styles with padding-top and fade mask */}
+            <div className="px-6 pt-2 pb-6 flex-1 overflow-y-auto min-h-0 [mask-image:linear-gradient(to_bottom,transparent,black_16px,black_calc(100%-16px),transparent)]">
+              <div className="flex items-center justify-between pb-2">
+                <h3 className="text-xs sm:text-sm font-semibold text-[var(--ink-primary)]">
+                  Assigned Tasks ({activeProfileData.memberTasks.length})
+                </h3>
+                <span className="text-[11px] text-[var(--ink-muted)]">
+                  Live store sync
+                </span>
+              </div>
+
+              {activeProfileData.memberTasks.length === 0 ? (
+                <div className="py-8 flex flex-col items-center justify-center text-center bg-[var(--surface-canvas)] rounded-[var(--radius-md)] border border-[var(--border-hairline)] gap-2 my-2">
+                  <p className="text-xs text-[var(--ink-secondary)]">
+                    No tasks currently assigned to this specialist.
+                  </p>
+                </div>
+              ) : (
+                <ul className="space-y-2.5 pb-2">
+                  {activeProfileData.memberTasks.map((t) => {
+                    const prioStyle = priorityChipStyle(t.priority);
+                    return (
                       <li
                         key={t.id}
-                        className="p-3 rounded-[var(--radius-md)] bg-[var(--surface-canvas)] border border-[var(--border-hairline)] space-y-2"
+                        className="p-3.5 rounded-[var(--radius-md)] bg-[var(--surface-canvas)] border border-[var(--border-hairline)] hover:border-[var(--border-strong)] transition-colors space-y-2.5"
                       >
-                        <div className="flex items-start justify-between gap-2">
-                          <p className="text-xs sm:text-sm font-semibold text-[var(--ink-primary)] leading-snug">
+                        <div className="flex items-start justify-between gap-2.5">
+                          <p className="text-xs sm:text-sm font-semibold text-[var(--ink-primary)] leading-snug line-clamp-2 min-w-0">
                             {t.title}
                           </p>
                           <select
                             aria-label={`Change stage for ${t.title}`}
                             value={t.status}
                             onChange={(e) =>
-                              moveTask(
-                                t.id,
-                                e.target.value as TaskItem['status']
-                              )
+                              moveTask(t.id, e.target.value as TaskItem['status'])
                             }
                             className="px-2 py-1 rounded-[var(--radius-xs)] border border-[var(--border-strong)] bg-[var(--surface-elevated)] text-[11px] font-medium text-[var(--ink-primary)] shrink-0 cursor-pointer"
                           >
@@ -546,179 +683,158 @@ export default function TeamScreen() {
                           </select>
                         </div>
 
-                        <div className="flex items-center justify-between text-[11px] text-[var(--ink-muted)]">
-                          <span>
-                            {t.category} · {t.priority} Priority
+                        <div className="flex items-center justify-between flex-wrap gap-2 text-[11px]">
+                          <div className="flex items-center gap-1.5">
+                            <span className="px-2 py-0.5 rounded-[var(--radius-xs)] text-[11px] font-medium bg-[var(--surface-sunken)] text-[var(--ink-secondary)]">
+                              {t.category || 'Engineering'}
+                            </span>
+                            <span
+                              style={{
+                                backgroundColor: prioStyle.bg,
+                                color: prioStyle.fg,
+                                borderColor: prioStyle.border,
+                              }}
+                              className="px-2 py-0.5 rounded-[var(--radius-xs)] text-[11px] font-medium border"
+                            >
+                              {t.priority}
+                            </span>
+                          </div>
+                          <span className="text-[var(--ink-muted)]">
+                            Due {t.dueDate}
                           </span>
-                          <span>Due {t.dueDate}</span>
                         </div>
                       </li>
-                    ))}
-                  </ul>
-                )}
-              </div>
-            </div>
-
-            <div className="pt-4 border-t border-[var(--border-hairline)] flex items-center justify-between text-xs text-[var(--ink-secondary)]">
-              <span className="inline-flex items-center gap-1.5">
-                <Mail className="w-3.5 h-3.5" />
-                <span>{activeProfileData.member.email}</span>
-              </span>
-              <span className="inline-flex items-center gap-1">
-                <MapPin className="w-3.5 h-3.5" />
-                <span>{activeProfileData.member.timezone}</span>
-              </span>
-            </div>
-          </aside>
-        </div>
-      )}
-
-      {/* Invite Member Modal */}
-      {inviteOpen && (
-        <div
-          role="dialog"
-          aria-modal="true"
-          aria-labelledby="invite-member-title"
-          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40"
-          onClick={(e) => {
-            if (e.target === e.currentTarget) setInviteOpen(false);
-          }}
-        >
-          <div className="w-full max-w-md bg-[var(--surface-elevated)] border border-[var(--border-hairline)] rounded-[var(--radius-lg)] p-6 shadow-lg space-y-4">
-            <div className="flex items-start justify-between gap-4 border-b border-[var(--border-hairline)] pb-3">
-              <div>
-                <span
-                  className="text-xs font-semibold"
-                  style={{ color: 'var(--accent)' }}
-                >
-                  Studio Roster
-                </span>
-                <h2
-                  id="invite-member-title"
-                  className="text-lg font-semibold text-[var(--ink-primary)] mt-0.5"
-                >
-                  Invite member
-                </h2>
-              </div>
-              <button
-                type="button"
-                onClick={() => setInviteOpen(false)}
-                aria-label="Close modal"
-                className="p-1.5 rounded-[var(--radius-sm)] text-[var(--ink-muted)] hover:text-[var(--ink-primary)] hover:bg-[var(--surface-sunken)]"
-              >
-                <X className="w-4 h-4" />
-              </button>
-            </div>
-
-            <form onSubmit={handleInviteSubmit} className="space-y-3.5" noValidate>
-              <div>
-                <label
-                  htmlFor="invite-name"
-                  className="block text-xs font-medium text-[var(--ink-primary)] mb-1"
-                >
-                  Full name <span style={{ color: 'var(--accent)' }}>*</span>
-                </label>
-                <input
-                  ref={inviteNameRef}
-                  id="invite-name"
-                  type="text"
-                  required
-                  value={inviteName}
-                  onChange={(e) => {
-                    setInviteName(e.target.value);
-                    if (inviteError) setInviteError('');
-                  }}
-                  placeholder="e.g. Astrid Lindholm"
-                  className="w-full h-10 px-3 rounded-[var(--radius-sm)] bg-[var(--surface-sunken)] border border-[var(--border-strong)] text-sm text-[var(--ink-primary)] focus:outline-2 focus:outline-[var(--accent)]"
-                />
-              </div>
-
-              <div>
-                <label
-                  htmlFor="invite-role"
-                  className="block text-xs font-medium text-[var(--ink-primary)] mb-1"
-                >
-                  Role <span style={{ color: 'var(--accent)' }}>*</span>
-                </label>
-                <input
-                  id="invite-role"
-                  type="text"
-                  required
-                  value={inviteRole}
-                  onChange={(e) => {
-                    setInviteRole(e.target.value);
-                    if (inviteError) setInviteError('');
-                  }}
-                  placeholder="e.g. Senior Hydrographic Analyst"
-                  className="w-full h-10 px-3 rounded-[var(--radius-sm)] bg-[var(--surface-sunken)] border border-[var(--border-strong)] text-sm text-[var(--ink-primary)] focus:outline-2 focus:outline-[var(--accent)]"
-                />
-              </div>
-
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label
-                    htmlFor="invite-dept"
-                    className="block text-xs font-medium text-[var(--ink-primary)] mb-1"
-                  >
-                    Department
-                  </label>
-                  <select
-                    id="invite-dept"
-                    value={inviteDept}
-                    onChange={(e) => setInviteDept(e.target.value as Department)}
-                    className="w-full h-10 px-2.5 rounded-[var(--radius-sm)] bg-[var(--surface-sunken)] border border-[var(--border-strong)] text-xs sm:text-sm text-[var(--ink-primary)] focus:outline-2 focus:outline-[var(--accent)]"
-                  >
-                    <option value="Engineering">Engineering</option>
-                    <option value="Design">Design</option>
-                    <option value="Marketing">Marketing</option>
-                    <option value="Management">Management</option>
-                  </select>
-                </div>
-
-                <div>
-                  <label
-                    htmlFor="invite-location"
-                    className="block text-xs font-medium text-[var(--ink-primary)] mb-1"
-                  >
-                    Location
-                  </label>
-                  <input
-                    id="invite-location"
-                    type="text"
-                    value={inviteLocation}
-                    onChange={(e) => setInviteLocation(e.target.value)}
-                    placeholder="e.g. Oslo, NO"
-                    className="w-full h-10 px-3 rounded-[var(--radius-sm)] bg-[var(--surface-sunken)] border border-[var(--border-strong)] text-xs sm:text-sm text-[var(--ink-primary)] focus:outline-2 focus:outline-[var(--accent)]"
-                  />
-                </div>
-              </div>
-
-              {inviteError && (
-                <p role="alert" className="text-xs font-medium text-[var(--status-critical)]">
-                  {inviteError}
-                </p>
+                    );
+                  })}
+                </ul>
               )}
-
-              <div className="pt-2 border-t border-[var(--border-hairline)] flex items-center justify-end gap-2.5">
-                <button
-                  type="button"
-                  onClick={() => setInviteOpen(false)}
-                  className="px-4 py-2 rounded-full text-xs font-medium text-[var(--ink-secondary)] hover:text-[var(--ink-primary)] hover:bg-[var(--surface-sunken)] cursor-pointer"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="submit"
-                  style={{ backgroundColor: 'var(--accent)' }}
-                  className="px-4 py-2 rounded-full text-xs font-semibold text-white hover:opacity-95 cursor-pointer"
-                >
-                  Send invite
-                </button>
-              </div>
-            </form>
+            </div>
           </div>
-        </div>
-      )}
+        )}
+      </Dialog>
+
+      {/* Invite Member Dialog */}
+      <Dialog
+        isOpen={inviteOpen}
+        onClose={() => setInviteOpen(false)}
+        eyebrow="Studio Roster"
+        title="Invite member"
+        maxWidthClass="max-w-md"
+        footer={
+          <>
+            <button
+              type="button"
+              onClick={() => setInviteOpen(false)}
+              className="px-4 py-2 rounded-full text-xs font-medium text-[var(--ink-secondary)] hover:text-[var(--ink-primary)] hover:bg-[var(--surface-sunken)] cursor-pointer"
+            >
+              Cancel
+            </button>
+            <button
+              type="submit"
+              form="invite-member-form"
+              style={{ backgroundColor: 'var(--accent)' }}
+              className="px-4 py-2 rounded-full text-xs font-semibold text-white hover:opacity-95 cursor-pointer"
+            >
+              Send invite
+            </button>
+          </>
+        }
+      >
+        <form
+          id="invite-member-form"
+          onSubmit={handleInviteSubmit}
+          className="p-6 space-y-3.5"
+          noValidate
+        >
+          <div>
+            <label
+              htmlFor="invite-name"
+              className="block text-xs font-medium text-[var(--ink-primary)] mb-1"
+            >
+              Full name <span style={{ color: 'var(--accent)' }}>*</span>
+            </label>
+            <input
+              ref={inviteNameRef}
+              id="invite-name"
+              type="text"
+              required
+              value={inviteName}
+              onChange={(e) => {
+                setInviteName(e.target.value);
+                if (inviteError) setInviteError('');
+              }}
+              placeholder="e.g. Astrid Lindholm"
+              className="w-full h-10 px-3 rounded-[var(--radius-sm)] bg-[var(--surface-sunken)] border border-[var(--border-strong)] text-sm text-[var(--ink-primary)] focus:outline-2 focus:outline-[var(--accent)]"
+            />
+          </div>
+
+          <div>
+            <label
+              htmlFor="invite-role"
+              className="block text-xs font-medium text-[var(--ink-primary)] mb-1"
+            >
+              Role <span style={{ color: 'var(--accent)' }}>*</span>
+            </label>
+            <input
+              id="invite-role"
+              type="text"
+              required
+              value={inviteRole}
+              onChange={(e) => {
+                setInviteRole(e.target.value);
+                if (inviteError) setInviteError('');
+              }}
+              placeholder="e.g. Senior Hydrographic Analyst"
+              className="w-full h-10 px-3 rounded-[var(--radius-sm)] bg-[var(--surface-sunken)] border border-[var(--border-strong)] text-sm text-[var(--ink-primary)] focus:outline-2 focus:outline-[var(--accent)]"
+            />
+          </div>
+
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label
+                htmlFor="invite-dept"
+                className="block text-xs font-medium text-[var(--ink-primary)] mb-1"
+              >
+                Department
+              </label>
+              <select
+                id="invite-dept"
+                value={inviteDept}
+                onChange={(e) => setInviteDept(e.target.value as Department)}
+                className="w-full h-10 px-2.5 rounded-[var(--radius-sm)] bg-[var(--surface-sunken)] border border-[var(--border-strong)] text-xs sm:text-sm text-[var(--ink-primary)] focus:outline-2 focus:outline-[var(--accent)]"
+              >
+                <option value="Engineering">Engineering</option>
+                <option value="Design">Design</option>
+                <option value="Marketing">Marketing</option>
+                <option value="Management">Management</option>
+              </select>
+            </div>
+
+            <div>
+              <label
+                htmlFor="invite-location"
+                className="block text-xs font-medium text-[var(--ink-primary)] mb-1"
+              >
+                Location
+              </label>
+              <input
+                id="invite-location"
+                type="text"
+                value={inviteLocation}
+                onChange={(e) => setInviteLocation(e.target.value)}
+                placeholder="e.g. Oslo, NO"
+                className="w-full h-10 px-3 rounded-[var(--radius-sm)] bg-[var(--surface-sunken)] border border-[var(--border-strong)] text-xs sm:text-sm text-[var(--ink-primary)] focus:outline-2 focus:outline-[var(--accent)]"
+              />
+            </div>
+          </div>
+
+          {inviteError && (
+            <p role="alert" className="text-xs font-medium text-[var(--status-critical)]">
+              {inviteError}
+            </p>
+          )}
+        </form>
+      </Dialog>
     </div>
   );
 }

@@ -1,16 +1,27 @@
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import {
+  closestCorners,
+  CollisionDetection,
   DndContext,
+  DragCancelEvent,
   DragEndEvent,
   DragOverlay,
   DragStartEvent,
+  KeyboardCode,
+  KeyboardCoordinateGetter,
   KeyboardSensor,
-  PointerSensor,
+  MeasuringStrategy,
+  MouseSensor,
+  pointerWithin,
+  TouchSensor,
   useDraggable,
   useDroppable,
   useSensor,
   useSensors,
 } from '@dnd-kit/core';
+import { CSS } from '@dnd-kit/utilities';
+import { motion, useReducedMotion } from 'motion/react';
 import {
   CheckSquare,
   Clock,
@@ -26,6 +37,7 @@ import {
   usePlotlineStore,
 } from '../store';
 import { ContourGlyph } from '../utils/contourGlyph';
+import { MotionCard, PLOTLINE_DURATION, PLOTLINE_EASE } from '../motion/primitives';
 
 type FilterCriterion = 'my' | 'high' | 'week';
 
@@ -40,6 +52,76 @@ const STAGE_COLUMNS: StageColumn[] = [
   { id: 'In Review', title: 'In review' },
   { id: 'Done', title: 'Done' },
 ];
+
+const STAGE_IDS: TaskItem['status'][] = STAGE_COLUMNS.map((col) => col.id);
+
+const stageKeyboardCoordinateGetter: KeyboardCoordinateGetter = (
+  event,
+  { active, context, currentCoordinates }
+) => {
+  const { code } = event;
+  if (
+    code !== KeyboardCode.Right &&
+    code !== KeyboardCode.Left &&
+    code !== KeyboardCode.Down &&
+    code !== KeyboardCode.Up
+  ) {
+    return undefined;
+  }
+
+  let currentStageId = context.over?.id as TaskItem['status'] | undefined;
+  if (!currentStageId || !STAGE_IDS.includes(currentStageId)) {
+    let bestDist = Infinity;
+    for (const stageId of STAGE_IDS) {
+      const rect = context.droppableRects.get(stageId);
+      if (!rect) continue;
+      const dx = rect.left - currentCoordinates.x;
+      const dy = rect.top - currentCoordinates.y;
+      const dist = dx * dx + dy * dy;
+      if (dist < bestDist) {
+        bestDist = dist;
+        currentStageId = stageId;
+      }
+    }
+  }
+
+  if (!currentStageId || !STAGE_IDS.includes(currentStageId)) {
+    const taskData = context.active?.data?.current?.task as TaskItem | undefined;
+    currentStageId = taskData?.status ?? 'Backlog';
+  }
+
+  const currentIndex = STAGE_IDS.indexOf(currentStageId);
+  const delta =
+    code === KeyboardCode.Right || code === KeyboardCode.Down ? 1 : -1;
+  const nextIndex = Math.max(
+    0,
+    Math.min(STAGE_IDS.length - 1, currentIndex + delta)
+  );
+  const targetStageId = STAGE_IDS[nextIndex];
+  const targetRect = context.droppableRects.get(targetStageId);
+
+  if (!targetRect) {
+    return undefined;
+  }
+
+  const activeWidth = context.collisionRect?.width ?? 240;
+  const activeHeight = context.collisionRect?.height ?? 140;
+
+  let nextX =
+    targetRect.left + Math.max(8, (targetRect.width - activeWidth) / 2);
+  const nextY =
+    targetRect.top +
+    Math.max(36, Math.min(80, (targetRect.height - activeHeight) / 2));
+
+  if (Math.abs(nextX - currentCoordinates.x) < 1) {
+    nextX += delta;
+  }
+
+  return {
+    x: nextX,
+    y: nextY,
+  };
+};
 
 function computeDaysLeftLabel(dueDateIso: string, status: TaskItem['status']): string {
   if (status === 'Done') return 'Completed';
@@ -60,7 +142,7 @@ function isDueWithinWeek(dueDateIso: string): boolean {
   return diffDays >= 0 && diffDays <= 7;
 }
 
-function priorityChipStyle(priority: TaskItem['priority']): {
+export function priorityChipStyle(priority: TaskItem['priority']): {
   bg: string;
   fg: string;
   border: string;
@@ -114,10 +196,11 @@ function TaskCardContent({
 
   return (
     <div
-      data-testid={`task-card-${task.id}`}
-      className={`motion-card bg-[var(--surface-elevated)] border rounded-[var(--radius-md)] p-3.5 space-y-3 select-none transition-shadow ${
+      data-testid={isOverlay ? `task-card-overlay-${task.id}` : `task-card-${task.id}`}
+      style={{ touchAction: 'manipulation' }}
+      className={`touch-manipulation bg-[var(--surface-elevated)] border rounded-[var(--radius-md)] p-3.5 space-y-3 select-none transition-shadow ${
         isOverlay
-          ? 'shadow-xl border-[var(--accent)] scale-[1.02] cursor-grabbing'
+          ? 'shadow-xl border-[var(--accent)] cursor-grabbing'
           : isRunningFocus
           ? 'border-[var(--accent)] shadow-xs'
           : 'border-[var(--border-hairline)] hover:border-[var(--border-strong)]'
@@ -160,6 +243,9 @@ function TaskCardContent({
           <button
             type="button"
             onPointerDown={(e) => e.stopPropagation()}
+            onMouseDown={(e) => e.stopPropagation()}
+            onTouchStart={(e) => e.stopPropagation()}
+            onKeyDown={(e) => e.stopPropagation()}
             onClick={(e) => {
               e.stopPropagation();
               setMenuOpen((prev) => !prev);
@@ -174,6 +260,9 @@ function TaskCardContent({
           {menuOpen && onMoveTask && (
             <div
               onPointerDown={(e) => e.stopPropagation()}
+              onMouseDown={(e) => e.stopPropagation()}
+              onTouchStart={(e) => e.stopPropagation()}
+              onKeyDown={(e) => e.stopPropagation()}
               className="absolute right-0 top-7 w-44 bg-[var(--surface-elevated)] border border-[var(--border-strong)] rounded-[var(--radius-md)] shadow-md p-1.5 z-40 text-xs"
             >
               <span className="block px-2 py-1 text-[10px] font-semibold text-[var(--ink-muted)] uppercase">
@@ -313,11 +402,11 @@ function DraggableTaskCard({
     data: { task },
   });
 
-  const style: React.CSSProperties | undefined = transform
-    ? {
-        transform: `translate3d(${transform.x}px, ${transform.y}px, 0)`,
-      }
-    : undefined;
+  // Outer element receiving dnd-kit's ref/transform has NO Motion layout, animate, or whileHover.
+  const style: React.CSSProperties = {
+    transform: CSS.Translate.toString(transform),
+    touchAction: 'manipulation',
+  };
 
   return (
     <div
@@ -325,17 +414,26 @@ function DraggableTaskCard({
       style={style}
       {...listeners}
       {...attributes}
-      className={`cursor-grab active:cursor-grabbing focus-visible:outline-2 focus-visible:outline-[var(--accent)] rounded-[var(--radius-md)] ${
+      className={`touch-manipulation cursor-grab active:cursor-grabbing focus-visible:outline-2 focus-visible:outline-[var(--accent)] rounded-[var(--radius-md)] ${
         isDragging ? 'opacity-35' : ''
       }`}
     >
-      <TaskCardContent
-        task={task}
-        teamMap={teamMap}
-        isRunningFocus={isRunningFocus}
-        onMoveTask={onMoveTask}
-        onSelectFocusTask={onSelectFocusTask}
-      />
+      <MotionCard
+        whileHover={
+          isDragging
+            ? undefined
+            : { y: -2, boxShadow: '0 10px 24px rgba(22, 22, 21, 0.08)' }
+        }
+        className="rounded-[var(--radius-md)]"
+      >
+        <TaskCardContent
+          task={task}
+          teamMap={teamMap}
+          isRunningFocus={isRunningFocus}
+          onMoveTask={onMoveTask}
+          onSelectFocusTask={onSelectFocusTask}
+        />
+      </MotionCard>
     </div>
   );
 }
@@ -363,11 +461,11 @@ function DroppableStageColumn({
 }: DroppableStageColumnProps) {
   const { isOver, setNodeRef } = useDroppable({
     id: column.id,
+    data: { stage: column.id },
   });
 
   return (
     <section
-      ref={setNodeRef}
       aria-label={`${column.title} column`}
       style={
         {
@@ -381,39 +479,45 @@ function DroppableStageColumn({
             : {}),
         } as React.CSSProperties
       }
-      className="plotline-enter bg-[var(--surface-sunken)]/70 border border-[var(--border-hairline)] rounded-[var(--radius-lg)] p-3 flex flex-col gap-3 min-h-[420px] min-w-0 transition-colors duration-160 ease-plotline"
+      className="plotline-enter bg-[var(--surface-sunken)]/70 border border-[var(--border-hairline)] rounded-[var(--radius-lg)] flex flex-col min-h-[160px] lg:min-h-[420px] overflow-y-auto overflow-x-hidden min-w-0 transition-colors duration-160 ease-plotline"
     >
-      {/* Column Header + Count */}
-      <div className="flex items-center justify-between px-1 pt-0.5 shrink-0">
-        <h2 className="text-sm font-semibold text-[var(--ink-primary)]">
-          {column.title}
-        </h2>
-        <span className="px-2 py-0.5 rounded-full text-xs font-semibold font-ui-tabular bg-[var(--surface-elevated)] border border-[var(--border-hairline)] text-[var(--ink-secondary)]">
-          {tasks.length}
-        </span>
-      </div>
+      <div
+        ref={setNodeRef}
+        data-droppable-stage={column.id}
+        className="flex-1 flex flex-col gap-3 p-3 min-h-[120px]"
+      >
+        {/* Column Header + Count */}
+        <div className="flex items-center justify-between px-1 pt-0.5 shrink-0">
+          <h2 className="text-sm font-semibold text-[var(--ink-primary)]">
+            {column.title}
+          </h2>
+          <span className="px-2 py-0.5 rounded-full text-xs font-semibold font-ui-tabular bg-[var(--surface-elevated)] border border-[var(--border-hairline)] text-[var(--ink-secondary)]">
+            {tasks.length}
+          </span>
+        </div>
 
-      {/* Cards Stack */}
-      <div className="flex-1 flex flex-col gap-2.5">
-        {tasks.length === 0 ? (
-          <div className="flex-1 rounded-[var(--radius-md)] border border-dashed border-[var(--border-strong)] flex flex-col items-center justify-center p-4 text-center gap-2">
-            <ContourGlyph seed={`empty-col-${column.id}`} size={44} />
-            <span className="text-xs text-[var(--ink-muted)]">
-              Drop a task card here
-            </span>
-          </div>
-        ) : (
-          tasks.map((task) => (
-            <DraggableTaskCard
-              key={task.id}
-              task={task}
-              teamMap={teamMap}
-              isRunningFocus={timerRunning && task.id === timerTaskId}
-              onMoveTask={onMoveTask}
-              onSelectFocusTask={onSelectFocusTask}
-            />
-          ))
-        )}
+        {/* Cards Stack */}
+        <div className="flex-1 flex flex-col gap-2.5 min-h-[120px]">
+          {tasks.length === 0 ? (
+            <div className="flex-1 min-h-[120px] rounded-[var(--radius-md)] border border-dashed border-[var(--border-strong)] flex flex-col items-center justify-center p-4 text-center gap-2">
+              <ContourGlyph seed={`empty-col-${column.id}`} size={44} />
+              <span className="text-xs text-[var(--ink-muted)]">
+                Drop a task card here
+              </span>
+            </div>
+          ) : (
+            tasks.map((task) => (
+              <DraggableTaskCard
+                key={task.id}
+                task={task}
+                teamMap={teamMap}
+                isRunningFocus={timerRunning && task.id === timerTaskId}
+                onMoveTask={onMoveTask}
+                onSelectFocusTask={onSelectFocusTask}
+              />
+            ))
+          )}
+        </div>
       </div>
     </section>
   );
@@ -433,16 +537,50 @@ export default function TasksScreen() {
     pushToast,
   } = usePlotlineStore();
 
+  const reducedMotion = useReducedMotion();
+
   // Combinable filter tabs: All (clears filters) or any combination of My tasks / High priority / Due this week
   const [activeFilters, setActiveFilters] = useState<FilterCriterion[]>([]);
   const [activeDragTaskId, setActiveDragTaskId] = useState<string | null>(null);
 
   const sensors = useSensors(
-    useSensor(PointerSensor, {
-      activationConstraint: { distance: 5 },
+    useSensor(MouseSensor, {
+      activationConstraint: { distance: 6 },
     }),
-    useSensor(KeyboardSensor)
+    useSensor(TouchSensor, {
+      activationConstraint: { delay: 180, tolerance: 8 },
+    }),
+    useSensor(KeyboardSensor, {
+      coordinateGetter: stageKeyboardCoordinateGetter,
+    })
   );
+
+  // Prevent native touch page scrolling once the long-press drag activates
+  useEffect(() => {
+    if (!activeDragTaskId) return;
+    const handleTouchMove = (e: TouchEvent) => {
+      if (e.cancelable) {
+        e.preventDefault();
+      }
+    };
+    document.addEventListener('touchmove', handleTouchMove, {
+      passive: false,
+      capture: true,
+    });
+    return () => {
+      document.removeEventListener('touchmove', handleTouchMove, {
+        capture: true,
+      });
+    };
+  }, [activeDragTaskId]);
+
+  const collisionDetectionStrategy: CollisionDetection = useCallback((args) => {
+    const pointerCollisions = pointerWithin(args);
+    if (pointerCollisions.length > 0) {
+      return pointerCollisions;
+    }
+    return closestCorners(args);
+  }, []);
 
   const teamMap = useMemo(() => {
     const map = new Map<string, TeamMember>();
@@ -487,14 +625,25 @@ export default function TasksScreen() {
     setActiveDragTaskId(String(event.active.id));
   };
 
+  const handleDragCancel = (_event: DragCancelEvent) => {
+    setActiveDragTaskId(null);
+  };
+
   const handleDragEnd = (event: DragEndEvent) => {
     setActiveDragTaskId(null);
     const { active, over } = event;
     if (!over) return;
     const taskId = String(active.id);
-    const targetStage = String(over.id) as TaskItem['status'];
-    if (STAGE_COLUMNS.some((col) => col.id === targetStage)) {
-      moveTask(taskId, targetStage);
+    const overId = String(over.id);
+
+    if (STAGE_COLUMNS.some((col) => col.id === overId)) {
+      moveTask(taskId, overId as TaskItem['status']);
+      return;
+    }
+
+    const overTask = tasks.find((t) => t.id === overId);
+    if (overTask) {
+      moveTask(taskId, overTask.status);
     }
   };
 
@@ -671,7 +820,20 @@ export default function TasksScreen() {
       {/* Four Stage Columns with @dnd-kit Drag and Drop */}
       <DndContext
         sensors={sensors}
+        collisionDetection={collisionDetectionStrategy}
+        autoScroll={{
+          enabled: true,
+          acceleration: 10,
+          interval: 5,
+          threshold: { x: 0.2, y: 0.2 },
+        }}
+        measuring={{
+          droppable: {
+            strategy: MeasuringStrategy.Always,
+          },
+        }}
         onDragStart={handleDragStart}
+        onDragCancel={handleDragCancel}
         onDragEnd={handleDragEnd}
       >
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3.5 min-w-0">
@@ -693,16 +855,40 @@ export default function TasksScreen() {
           })}
         </div>
 
-        <DragOverlay>
-          {draggedTask ? (
-            <TaskCardContent
-              task={draggedTask}
-              teamMap={teamMap}
-              isRunningFocus={timerRunning && draggedTask.id === timerTaskId}
-              isOverlay={true}
-            />
-          ) : null}
-        </DragOverlay>
+        {typeof document !== 'undefined' &&
+          createPortal(
+            <DragOverlay>
+              {draggedTask ? (
+                <div className="w-full h-full">
+                  <motion.div
+                    initial={reducedMotion ? false : { scale: 1, y: 0 }}
+                    animate={
+                      reducedMotion
+                        ? { scale: 1, y: 0 }
+                        : {
+                            scale: 1.02,
+                            y: -2,
+                            boxShadow: '0 16px 32px rgba(22, 22, 21, 0.16)',
+                          }
+                    }
+                    transition={{
+                      duration: reducedMotion ? 0 : PLOTLINE_DURATION.fast,
+                      ease: PLOTLINE_EASE,
+                    }}
+                    className="rounded-[var(--radius-md)] cursor-grabbing"
+                  >
+                    <TaskCardContent
+                      task={draggedTask}
+                      teamMap={teamMap}
+                      isRunningFocus={timerRunning && draggedTask.id === timerTaskId}
+                      isOverlay={true}
+                    />
+                  </motion.div>
+                </div>
+              ) : null}
+            </DragOverlay>,
+            document.body
+          )}
       </DndContext>
     </div>
   );

@@ -24,6 +24,7 @@ import HelpScreen, { TourOverlay } from './components/HelpScreen';
 import SettingsScreen from './components/SettingsScreen';
 import TasksScreen from './components/TasksScreen';
 import TeamScreen from './components/TeamScreen';
+import { Dialog } from './ui/Dialog';
 import {
   ACCENT_THEMES,
   applyAccentCssVariables,
@@ -787,345 +788,276 @@ export default function App() {
       <TourOverlay onNavigate={handleNavigate} />
 
       {/* Confirm Logout Dialog */}
-      {logoutConfirmOpen && (
-        <div
-          role="dialog"
-          aria-modal="true"
-          aria-labelledby="logout-confirm-title"
-          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40"
-          onClick={(e) => {
-            if (e.target === e.currentTarget) setLogoutConfirmOpen(false);
-          }}
-        >
-          <div className="w-full max-w-sm bg-[var(--surface-elevated)] border border-[var(--border-hairline)] rounded-[var(--radius-lg)] p-6 shadow-xl space-y-4">
-            <div className="space-y-1.5">
-              <h2
-                id="logout-confirm-title"
-                className="text-base font-bold text-[var(--ink-primary)]"
+      <Dialog
+        isOpen={logoutConfirmOpen}
+        onClose={() => setLogoutConfirmOpen(false)}
+        eyebrow="Studio Account"
+        title="Log out of Plotline?"
+        maxWidthClass="max-w-sm"
+        footer={
+          <>
+            <button
+              type="button"
+              onClick={() => setLogoutConfirmOpen(false)}
+              className="px-4 py-2 rounded-full text-xs font-medium text-[var(--ink-secondary)] hover:text-[var(--ink-primary)] hover:bg-[var(--surface-sunken)] cursor-pointer"
+            >
+              Cancel
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                setLogoutConfirmOpen(false);
+                setSignedOut(true);
+              }}
+              className="px-4 py-2 rounded-full text-xs font-semibold bg-[#DC2626] text-white hover:opacity-95 cursor-pointer"
+            >
+              Log out
+            </button>
+          </>
+        }
+      >
+        <div className="p-6">
+          <p className="text-xs text-[var(--ink-secondary)] leading-relaxed">
+            Your projects, tasks, events, and focus sessions remain saved in local storage and will be restored when you sign back in.
+          </p>
+        </div>
+      </Dialog>
+
+      {/* Global "New project" Dialog */}
+      <Dialog
+        isOpen={newProjectModalOpen}
+        onClose={() => setNewProjectModalOpen(false)}
+        eyebrow="Charter Stream"
+        title="New project"
+        maxWidthClass="max-w-md"
+        footer={
+          <>
+            <button
+              type="button"
+              onClick={() => setNewProjectModalOpen(false)}
+              className="px-4 py-2 rounded-full text-xs font-medium text-[var(--ink-secondary)] hover:text-[var(--ink-primary)] hover:bg-[var(--surface-sunken)] transition-colors cursor-pointer"
+            >
+              Cancel
+            </button>
+            <button
+              type="submit"
+              form="new-project-form"
+              disabled={isSavingProject}
+              style={{ backgroundColor: 'var(--accent)' }}
+              className="px-4 py-2 rounded-full text-xs font-semibold text-white hover:opacity-95 disabled:opacity-50 disabled:cursor-not-allowed transition-opacity cursor-pointer"
+            >
+              {isSavingProject ? 'Creating…' : 'Create project'}
+            </button>
+          </>
+        }
+      >
+        <form id="new-project-form" onSubmit={handleCreateProject} className="p-6 space-y-4" noValidate>
+          <div>
+            <label
+              htmlFor="new-project-name"
+              className="block text-xs font-medium text-[var(--ink-primary)] mb-1.5"
+            >
+              Project name <span style={{ color: 'var(--accent)' }}>*</span>
+            </label>
+            <input
+              ref={projectNameInputRef}
+              id="new-project-name"
+              type="text"
+              required
+              value={projectName}
+              onChange={(e) => {
+                setProjectName(e.target.value);
+                if (projectFormError) setProjectFormError('');
+              }}
+              placeholder="e.g. Borealis Magnetometer Array"
+              className="w-full h-10 px-3 rounded-[var(--radius-sm)] bg-[var(--surface-sunken)] border border-[var(--border-strong)] text-sm text-[var(--ink-primary)] placeholder:text-[var(--ink-muted)] focus:outline-2 focus:outline-[var(--accent)] focus:bg-[var(--surface-elevated)]"
+            />
+          </div>
+
+          <div>
+            <label
+              htmlFor="new-project-client"
+              className="block text-xs font-medium text-[var(--ink-primary)] mb-1.5"
+            >
+              Client organization
+            </label>
+            <input
+              id="new-project-client"
+              type="text"
+              value={projectClient}
+              onChange={(e) => setProjectClient(e.target.value)}
+              placeholder="e.g. Tromsø Geophysical Observatory"
+              className="w-full h-10 px-3 rounded-[var(--radius-sm)] bg-[var(--surface-sunken)] border border-[var(--border-hairline)] text-sm text-[var(--ink-primary)] placeholder:text-[var(--ink-muted)] focus:outline-2 focus:outline-[var(--accent)] focus:bg-[var(--surface-elevated)]"
+            />
+          </div>
+
+          <div>
+            <label
+              htmlFor="new-project-due"
+              className="block text-xs font-medium text-[var(--ink-primary)] mb-1.5"
+            >
+              Target due date <span style={{ color: 'var(--accent)' }}>*</span>
+            </label>
+            <input
+              id="new-project-due"
+              type="date"
+              required
+              value={projectDueDate}
+              onChange={(e) => setProjectDueDate(e.target.value)}
+              className="w-full h-10 px-3 rounded-[var(--radius-sm)] bg-[var(--surface-sunken)] border border-[var(--border-strong)] text-sm text-[var(--ink-primary)] focus:outline-2 focus:outline-[var(--accent)] focus:bg-[var(--surface-elevated)]"
+            />
+          </div>
+
+          {projectFormError && (
+            <p role="alert" className="text-xs font-medium text-[var(--status-critical)]">
+              {projectFormError}
+            </p>
+          )}
+        </form>
+      </Dialog>
+
+      {/* Global "New task" Dialog */}
+      <Dialog
+        isOpen={newTaskModalOpen}
+        onClose={() => setNewTaskModalOpen(false)}
+        eyebrow="Task Dispatch"
+        title="New task"
+        maxWidthClass="max-w-md"
+        footer={
+          <>
+            <button
+              type="button"
+              onClick={() => setNewTaskModalOpen(false)}
+              className="px-4 py-2 rounded-full text-xs font-medium text-[var(--ink-secondary)] hover:text-[var(--ink-primary)] hover:bg-[var(--surface-sunken)] cursor-pointer"
+            >
+              Cancel
+            </button>
+            <button
+              type="submit"
+              form="new-task-form"
+              disabled={isSavingTask}
+              style={{ backgroundColor: 'var(--accent)' }}
+              className="px-4 py-2 rounded-full text-xs font-semibold text-white hover:opacity-95 disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
+            >
+              {isSavingTask ? 'Creating…' : 'Create task'}
+            </button>
+          </>
+        }
+      >
+        <form id="new-task-form" onSubmit={handleCreateTask} className="p-6 space-y-3.5" noValidate>
+          <div>
+            <label
+              htmlFor="new-task-title"
+              className="block text-xs font-medium text-[var(--ink-primary)] mb-1"
+            >
+              Title <span style={{ color: 'var(--accent)' }}>*</span>
+            </label>
+            <input
+              ref={taskTitleInputRef}
+              id="new-task-title"
+              type="text"
+              required
+              value={taskTitle}
+              onChange={(e) => {
+                setTaskTitle(e.target.value);
+                if (taskFormError) setTaskFormError('');
+              }}
+              placeholder="e.g. Verify sonar transducer calibration curve"
+              className="w-full h-10 px-3 rounded-[var(--radius-sm)] bg-[var(--surface-sunken)] border border-[var(--border-strong)] text-sm text-[var(--ink-primary)] placeholder:text-[var(--ink-muted)] focus:outline-2 focus:outline-[var(--accent)] focus:bg-[var(--surface-elevated)]"
+            />
+          </div>
+
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label
+                htmlFor="new-task-category"
+                className="block text-xs font-medium text-[var(--ink-primary)] mb-1"
               >
-                Log out of Plotline?
-              </h2>
-              <p className="text-xs text-[var(--ink-secondary)] leading-relaxed">
-                Your projects, tasks, events, and focus sessions remain saved in local storage and will be restored when you sign back in.
-              </p>
+                Category
+              </label>
+              <select
+                id="new-task-category"
+                value={taskCategory}
+                onChange={(e) => setTaskCategory(e.target.value)}
+                className="w-full h-10 px-2.5 rounded-[var(--radius-sm)] bg-[var(--surface-sunken)] border border-[var(--border-strong)] text-xs sm:text-sm text-[var(--ink-primary)] focus:outline-2 focus:outline-[var(--accent)]"
+              >
+                {TASK_CATEGORIES.map((cat) => (
+                  <option key={cat} value={cat}>
+                    {cat}
+                  </option>
+                ))}
+              </select>
             </div>
 
-            <div className="pt-2 border-t border-[var(--border-hairline)] flex items-center justify-end gap-2">
-              <button
-                type="button"
-                onClick={() => setLogoutConfirmOpen(false)}
-                className="px-4 py-2 rounded-full text-xs font-medium text-[var(--ink-secondary)] hover:text-[var(--ink-primary)] hover:bg-[var(--surface-sunken)] cursor-pointer"
+            <div>
+              <label
+                htmlFor="new-task-priority"
+                className="block text-xs font-medium text-[var(--ink-primary)] mb-1"
               >
-                Cancel
-              </button>
-              <button
-                type="button"
-                onClick={() => {
-                  setLogoutConfirmOpen(false);
-                  setSignedOut(true);
-                }}
-                className="px-4 py-2 rounded-full text-xs font-semibold bg-[#DC2626] text-white hover:opacity-95 cursor-pointer"
+                Priority
+              </label>
+              <select
+                id="new-task-priority"
+                value={taskPriority}
+                onChange={(e) =>
+                  setTaskPriority(e.target.value as TaskItem['priority'])
+                }
+                className="w-full h-10 px-2.5 rounded-[var(--radius-sm)] bg-[var(--surface-sunken)] border border-[var(--border-strong)] text-xs sm:text-sm text-[var(--ink-primary)] focus:outline-2 focus:outline-[var(--accent)]"
               >
-                Log out
-              </button>
+                <option value="High">High</option>
+                <option value="Medium">Medium</option>
+                <option value="Low">Low</option>
+              </select>
             </div>
           </div>
-        </div>
-      )}
 
-      {/* Global "New project" Modal */}
-      {newProjectModalOpen && (
-        <div
-          role="dialog"
-          aria-modal="true"
-          aria-labelledby="new-project-modal-title"
-          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40"
-          onClick={(e) => {
-            if (e.target === e.currentTarget) setNewProjectModalOpen(false);
-          }}
-        >
-          <div className="motion-card w-full max-w-md bg-[var(--surface-elevated)] border border-[var(--border-hairline)] rounded-[var(--radius-lg)] p-6 shadow-lg space-y-5">
-            <div className="flex items-start justify-between gap-4 border-b border-[var(--border-hairline)] pb-4">
-              <div>
-                <span
-                  className="text-xs font-semibold"
-                  style={{ color: 'var(--accent)' }}
-                >
-                  Charter Stream
-                </span>
-                <h2
-                  id="new-project-modal-title"
-                  className="text-lg font-semibold text-[var(--ink-primary)] mt-0.5"
-                >
-                  New project
-                </h2>
-              </div>
-              <button
-                type="button"
-                onClick={() => setNewProjectModalOpen(false)}
-                aria-label="Close modal"
-                className="p-1.5 rounded-[var(--radius-sm)] text-[var(--ink-muted)] hover:text-[var(--ink-primary)] hover:bg-[var(--surface-sunken)]"
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label
+                htmlFor="new-task-assignee"
+                className="block text-xs font-medium text-[var(--ink-primary)] mb-1"
               >
-                <X className="w-4 h-4" />
-              </button>
+                Assignee
+              </label>
+              <select
+                id="new-task-assignee"
+                value={taskAssigneeId}
+                onChange={(e) => setTaskAssigneeId(e.target.value)}
+                className="w-full h-10 px-2.5 rounded-[var(--radius-sm)] bg-[var(--surface-sunken)] border border-[var(--border-strong)] text-xs sm:text-sm text-[var(--ink-primary)] focus:outline-2 focus:outline-[var(--accent)]"
+              >
+                {team.map((m) => (
+                  <option key={m.id} value={m.id}>
+                    {m.name}
+                  </option>
+                ))}
+              </select>
             </div>
 
-            <form onSubmit={handleCreateProject} className="space-y-4" noValidate>
-              <div>
-                <label
-                  htmlFor="new-project-name"
-                  className="block text-xs font-medium text-[var(--ink-primary)] mb-1.5"
-                >
-                  Project name <span style={{ color: 'var(--accent)' }}>*</span>
-                </label>
-                <input
-                  ref={projectNameInputRef}
-                  id="new-project-name"
-                  type="text"
-                  required
-                  value={projectName}
-                  onChange={(e) => {
-                    setProjectName(e.target.value);
-                    if (projectFormError) setProjectFormError('');
-                  }}
-                  placeholder="e.g. Borealis Magnetometer Array"
-                  className="w-full h-10 px-3 rounded-[var(--radius-sm)] bg-[var(--surface-sunken)] border border-[var(--border-strong)] text-sm text-[var(--ink-primary)] placeholder:text-[var(--ink-muted)] focus:outline-2 focus:outline-[var(--accent)] focus:bg-[var(--surface-elevated)]"
-                />
-              </div>
-
-              <div>
-                <label
-                  htmlFor="new-project-client"
-                  className="block text-xs font-medium text-[var(--ink-primary)] mb-1.5"
-                >
-                  Client organization
-                </label>
-                <input
-                  id="new-project-client"
-                  type="text"
-                  value={projectClient}
-                  onChange={(e) => setProjectClient(e.target.value)}
-                  placeholder="e.g. Tromsø Geophysical Observatory"
-                  className="w-full h-10 px-3 rounded-[var(--radius-sm)] bg-[var(--surface-sunken)] border border-[var(--border-hairline)] text-sm text-[var(--ink-primary)] placeholder:text-[var(--ink-muted)] focus:outline-2 focus:outline-[var(--accent)] focus:bg-[var(--surface-elevated)]"
-                />
-              </div>
-
-              <div>
-                <label
-                  htmlFor="new-project-due"
-                  className="block text-xs font-medium text-[var(--ink-primary)] mb-1.5"
-                >
-                  Target due date <span style={{ color: 'var(--accent)' }}>*</span>
-                </label>
-                <input
-                  id="new-project-due"
-                  type="date"
-                  required
-                  value={projectDueDate}
-                  onChange={(e) => setProjectDueDate(e.target.value)}
-                  className="w-full h-10 px-3 rounded-[var(--radius-sm)] bg-[var(--surface-sunken)] border border-[var(--border-strong)] text-sm text-[var(--ink-primary)] focus:outline-2 focus:outline-[var(--accent)] focus:bg-[var(--surface-elevated)]"
-                />
-              </div>
-
-              {projectFormError && (
-                <p role="alert" className="text-xs font-medium text-[var(--status-critical)]">
-                  {projectFormError}
-                </p>
-              )}
-
-              <div className="pt-2 border-t border-[var(--border-hairline)] flex items-center justify-end gap-2.5">
-                <button
-                  type="button"
-                  onClick={() => setNewProjectModalOpen(false)}
-                  className="px-4 py-2 rounded-full text-xs font-medium text-[var(--ink-secondary)] hover:text-[var(--ink-primary)] hover:bg-[var(--surface-sunken)] transition-colors cursor-pointer"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="submit"
-                  disabled={isSavingProject}
-                  style={{ backgroundColor: 'var(--accent)' }}
-                  className="px-4 py-2 rounded-full text-xs font-semibold text-white hover:opacity-95 disabled:opacity-50 disabled:cursor-not-allowed transition-opacity cursor-pointer"
-                >
-                  {isSavingProject ? 'Creating…' : 'Create project'}
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
-
-      {/* Global "New task" Modal */}
-      {newTaskModalOpen && (
-        <div
-          role="dialog"
-          aria-modal="true"
-          aria-labelledby="new-task-modal-title"
-          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40"
-          onClick={(e) => {
-            if (e.target === e.currentTarget) setNewTaskModalOpen(false);
-          }}
-        >
-          <div className="motion-card w-full max-w-md bg-[var(--surface-elevated)] border border-[var(--border-hairline)] rounded-[var(--radius-lg)] p-6 shadow-lg space-y-4">
-            <div className="flex items-start justify-between gap-4 border-b border-[var(--border-hairline)] pb-3">
-              <div>
-                <span
-                  className="text-xs font-semibold"
-                  style={{ color: 'var(--accent)' }}
-                >
-                  Task Dispatch
-                </span>
-                <h2
-                  id="new-task-modal-title"
-                  className="text-lg font-semibold text-[var(--ink-primary)] mt-0.5"
-                >
-                  New task
-                </h2>
-              </div>
-              <button
-                type="button"
-                onClick={() => setNewTaskModalOpen(false)}
-                aria-label="Close modal"
-                className="p-1.5 rounded-[var(--radius-sm)] text-[var(--ink-muted)] hover:text-[var(--ink-primary)] hover:bg-[var(--surface-sunken)]"
+            <div>
+              <label
+                htmlFor="new-task-due"
+                className="block text-xs font-medium text-[var(--ink-primary)] mb-1"
               >
-                <X className="w-4 h-4" />
-              </button>
+                Due date <span style={{ color: 'var(--accent)' }}>*</span>
+              </label>
+              <input
+                id="new-task-due"
+                type="date"
+                required
+                value={taskDueDate}
+                onChange={(e) => setTaskDueDate(e.target.value)}
+                className="w-full h-10 px-2.5 rounded-[var(--radius-sm)] bg-[var(--surface-sunken)] border border-[var(--border-strong)] text-xs sm:text-sm text-[var(--ink-primary)] focus:outline-2 focus:outline-[var(--accent)]"
+              />
             </div>
-
-            <form onSubmit={handleCreateTask} className="space-y-3.5" noValidate>
-              <div>
-                <label
-                  htmlFor="new-task-title"
-                  className="block text-xs font-medium text-[var(--ink-primary)] mb-1"
-                >
-                  Title <span style={{ color: 'var(--accent)' }}>*</span>
-                </label>
-                <input
-                  ref={taskTitleInputRef}
-                  id="new-task-title"
-                  type="text"
-                  required
-                  value={taskTitle}
-                  onChange={(e) => {
-                    setTaskTitle(e.target.value);
-                    if (taskFormError) setTaskFormError('');
-                  }}
-                  placeholder="e.g. Verify sonar transducer calibration curve"
-                  className="w-full h-10 px-3 rounded-[var(--radius-sm)] bg-[var(--surface-sunken)] border border-[var(--border-strong)] text-sm text-[var(--ink-primary)] placeholder:text-[var(--ink-muted)] focus:outline-2 focus:outline-[var(--accent)] focus:bg-[var(--surface-elevated)]"
-                />
-              </div>
-
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label
-                    htmlFor="new-task-category"
-                    className="block text-xs font-medium text-[var(--ink-primary)] mb-1"
-                  >
-                    Category
-                  </label>
-                  <select
-                    id="new-task-category"
-                    value={taskCategory}
-                    onChange={(e) => setTaskCategory(e.target.value)}
-                    className="w-full h-10 px-2.5 rounded-[var(--radius-sm)] bg-[var(--surface-sunken)] border border-[var(--border-strong)] text-xs sm:text-sm text-[var(--ink-primary)] focus:outline-2 focus:outline-[var(--accent)]"
-                  >
-                    {TASK_CATEGORIES.map((cat) => (
-                      <option key={cat} value={cat}>
-                        {cat}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-
-                <div>
-                  <label
-                    htmlFor="new-task-priority"
-                    className="block text-xs font-medium text-[var(--ink-primary)] mb-1"
-                  >
-                    Priority
-                  </label>
-                  <select
-                    id="new-task-priority"
-                    value={taskPriority}
-                    onChange={(e) =>
-                      setTaskPriority(e.target.value as TaskItem['priority'])
-                    }
-                    className="w-full h-10 px-2.5 rounded-[var(--radius-sm)] bg-[var(--surface-sunken)] border border-[var(--border-strong)] text-xs sm:text-sm text-[var(--ink-primary)] focus:outline-2 focus:outline-[var(--accent)]"
-                  >
-                    <option value="High">High</option>
-                    <option value="Medium">Medium</option>
-                    <option value="Low">Low</option>
-                  </select>
-                </div>
-              </div>
-
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label
-                    htmlFor="new-task-assignee"
-                    className="block text-xs font-medium text-[var(--ink-primary)] mb-1"
-                  >
-                    Assignee
-                  </label>
-                  <select
-                    id="new-task-assignee"
-                    value={taskAssigneeId}
-                    onChange={(e) => setTaskAssigneeId(e.target.value)}
-                    className="w-full h-10 px-2.5 rounded-[var(--radius-sm)] bg-[var(--surface-sunken)] border border-[var(--border-strong)] text-xs sm:text-sm text-[var(--ink-primary)] focus:outline-2 focus:outline-[var(--accent)]"
-                  >
-                    {team.map((m) => (
-                      <option key={m.id} value={m.id}>
-                        {m.name}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-
-                <div>
-                  <label
-                    htmlFor="new-task-due"
-                    className="block text-xs font-medium text-[var(--ink-primary)] mb-1"
-                  >
-                    Due date <span style={{ color: 'var(--accent)' }}>*</span>
-                  </label>
-                  <input
-                    id="new-task-due"
-                    type="date"
-                    required
-                    value={taskDueDate}
-                    onChange={(e) => setTaskDueDate(e.target.value)}
-                    className="w-full h-10 px-2.5 rounded-[var(--radius-sm)] bg-[var(--surface-sunken)] border border-[var(--border-strong)] text-xs sm:text-sm text-[var(--ink-primary)] focus:outline-2 focus:outline-[var(--accent)]"
-                  />
-                </div>
-              </div>
-
-              {taskFormError && (
-                <p role="alert" className="text-xs font-medium text-[var(--status-critical)]">
-                  {taskFormError}
-                </p>
-              )}
-
-              <div className="pt-2 border-t border-[var(--border-hairline)] flex items-center justify-end gap-2.5">
-                <button
-                  type="button"
-                  onClick={() => setNewTaskModalOpen(false)}
-                  className="px-4 py-2 rounded-full text-xs font-medium text-[var(--ink-secondary)] hover:text-[var(--ink-primary)] hover:bg-[var(--surface-sunken)] cursor-pointer"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="submit"
-                  disabled={isSavingTask}
-                  style={{ backgroundColor: 'var(--accent)' }}
-                  className="px-4 py-2 rounded-full text-xs font-semibold text-white hover:opacity-95 disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
-                >
-                  {isSavingTask ? 'Creating…' : 'Create task'}
-                </button>
-              </div>
-            </form>
           </div>
-        </div>
-      )}
+
+          {taskFormError && (
+            <p role="alert" className="text-xs font-medium text-[var(--status-critical)]">
+              {taskFormError}
+            </p>
+          )}
+        </form>
+      </Dialog>
 
       {/* Global Toast Notification Stack */}
       {toasts.length > 0 && (

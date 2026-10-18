@@ -17,6 +17,7 @@ import {
   usePlotlineStore,
 } from '../store';
 import { ContourGlyph } from '../utils/contourGlyph';
+import { Dialog } from '../ui/Dialog';
 
 const EVENT_CATEGORIES: EventCategory[] = [
   'Meeting',
@@ -723,239 +724,210 @@ export default function CalendarScreen() {
         </aside>
       </div>
 
-      {/* New / Edit Event Modal */}
-      {modalOpen && (
-        <div
-          role="dialog"
-          aria-modal="true"
-          aria-labelledby="calendar-event-modal-title"
-          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40"
-          onClick={(e) => {
-            if (e.target === e.currentTarget) setModalOpen(false);
-          }}
-        >
-          <div className="w-full max-w-md bg-[var(--surface-elevated)] border border-[var(--border-hairline)] rounded-[var(--radius-lg)] p-6 shadow-lg space-y-4">
-            <div className="flex items-start justify-between gap-4 border-b border-[var(--border-hairline)] pb-3">
-              <div>
-                <span
-                  className="text-xs font-semibold"
-                  style={{ color: 'var(--accent)' }}
-                >
-                  {editingEventId ? 'Modify Schedule' : 'Schedule Dispatch'}
-                </span>
-                <h2
-                  id="calendar-event-modal-title"
-                  className="text-lg font-semibold text-[var(--ink-primary)] mt-0.5"
-                >
-                  {editingEventId ? 'Edit event' : 'New event'}
-                </h2>
-              </div>
+      {/* Global Event Dialog */}
+      <Dialog
+        isOpen={modalOpen}
+        onClose={() => setModalOpen(false)}
+        eyebrow={editingEventId ? 'Modify Schedule' : 'Schedule Dispatch'}
+        title={editingEventId ? 'Edit event' : 'New event'}
+        maxWidthClass="max-w-md"
+        footer={
+          <div className="flex items-center justify-between w-full">
+            {editingEventId ? (
+              <button
+                type="button"
+                onClick={handleDeleteCurrentEvent}
+                className="inline-flex items-center gap-1.5 px-3 py-2 rounded-full text-xs font-semibold text-[#C9352B] hover:bg-[#FBECEE] transition-colors cursor-pointer"
+              >
+                <Trash2 className="w-3.5 h-3.5" />
+                <span>Delete</span>
+              </button>
+            ) : (
+              <span />
+            )}
+
+            <div className="flex items-center gap-2">
               <button
                 type="button"
                 onClick={() => setModalOpen(false)}
-                aria-label="Close modal"
-                className="p-1.5 rounded-[var(--radius-sm)] text-[var(--ink-muted)] hover:text-[var(--ink-primary)] hover:bg-[var(--surface-sunken)] cursor-pointer"
+                className="px-4 py-2 rounded-full text-xs font-medium text-[var(--ink-secondary)] hover:text-[var(--ink-primary)] hover:bg-[var(--surface-sunken)] cursor-pointer"
               >
-                <X className="w-4 h-4" />
+                Cancel
+              </button>
+              <button
+                type="submit"
+                form="calendar-event-form"
+                disabled={isSavingEvent}
+                style={{ backgroundColor: 'var(--accent)' }}
+                className="px-4 py-2 rounded-full text-xs font-semibold text-white hover:opacity-95 disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
+              >
+                {isSavingEvent
+                  ? 'Saving…'
+                  : editingEventId
+                  ? 'Save changes'
+                  : 'Create event'}
               </button>
             </div>
-
-            <form onSubmit={handleSaveEvent} className="space-y-3.5" noValidate>
-              <div>
-                <label
-                  htmlFor="calendar-event-title"
-                  className="block text-xs font-medium text-[var(--ink-primary)] mb-1"
-                >
-                  Event title <span style={{ color: 'var(--accent)' }}>*</span>
-                </label>
-                <input
-                  ref={titleInputRef}
-                  id="calendar-event-title"
-                  type="text"
-                  required
-                  value={evtTitle}
-                  onChange={(e) => {
-                    setEvtTitle(e.target.value);
-                    if (formError) setFormError('');
-                  }}
-                  placeholder="e.g. Sub-bottom Sonar Calibration Review"
-                  className="w-full h-10 px-3 rounded-[var(--radius-sm)] bg-[var(--surface-sunken)] border border-[var(--border-strong)] text-sm text-[var(--ink-primary)] placeholder:text-[var(--ink-muted)] focus:outline-2 focus:outline-[var(--accent)] focus:bg-[var(--surface-elevated)]"
-                />
-              </div>
-
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label
-                    htmlFor="calendar-event-category"
-                    className="block text-xs font-medium text-[var(--ink-primary)] mb-1"
-                  >
-                    Category
-                  </label>
-                  <select
-                    id="calendar-event-category"
-                    value={evtCategory}
-                    onChange={(e) => setEvtCategory(e.target.value as EventCategory)}
-                    className="w-full h-10 px-2.5 rounded-[var(--radius-sm)] bg-[var(--surface-sunken)] border border-[var(--border-strong)] text-xs sm:text-sm text-[var(--ink-primary)] focus:outline-2 focus:outline-[var(--accent)]"
-                  >
-                    {EVENT_CATEGORIES.map((cat) => (
-                      <option key={cat} value={cat}>
-                        {cat}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-
-                <div>
-                  <label
-                    htmlFor="calendar-event-date"
-                    className="block text-xs font-medium text-[var(--ink-primary)] mb-1"
-                  >
-                    Date <span style={{ color: 'var(--accent)' }}>*</span>
-                  </label>
-                  <input
-                    id="calendar-event-date"
-                    type="date"
-                    required
-                    value={evtDate}
-                    onChange={(e) => setEvtDate(e.target.value)}
-                    className="w-full h-10 px-2.5 rounded-[var(--radius-sm)] bg-[var(--surface-sunken)] border border-[var(--border-strong)] text-xs sm:text-sm text-[var(--ink-primary)] focus:outline-2 focus:outline-[var(--accent)]"
-                  />
-                </div>
-              </div>
-
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label
-                    htmlFor="calendar-event-start"
-                    className="block text-xs font-medium text-[var(--ink-primary)] mb-1"
-                  >
-                    Start time
-                  </label>
-                  <input
-                    id="calendar-event-start"
-                    type="time"
-                    value={evtStart}
-                    onChange={(e) => setEvtStart(e.target.value)}
-                    className="w-full h-10 px-2.5 rounded-[var(--radius-sm)] bg-[var(--surface-sunken)] border border-[var(--border-strong)] text-xs sm:text-sm text-[var(--ink-primary)] focus:outline-2 focus:outline-[var(--accent)]"
-                  />
-                </div>
-
-                <div>
-                  <label
-                    htmlFor="calendar-event-end"
-                    className="block text-xs font-medium text-[var(--ink-primary)] mb-1"
-                  >
-                    End time
-                  </label>
-                  <input
-                    id="calendar-event-end"
-                    type="time"
-                    value={evtEnd}
-                    onChange={(e) => setEvtEnd(e.target.value)}
-                    className="w-full h-10 px-2.5 rounded-[var(--radius-sm)] bg-[var(--surface-sunken)] border border-[var(--border-strong)] text-xs sm:text-sm text-[var(--ink-primary)] focus:outline-2 focus:outline-[var(--accent)]"
-                  />
-                </div>
-              </div>
-
-              <div>
-                <label
-                  htmlFor="calendar-event-location"
-                  className="block text-xs font-medium text-[var(--ink-primary)] mb-1"
-                >
-                  Location
-                </label>
-                <input
-                  id="calendar-event-location"
-                  type="text"
-                  value={evtLocation}
-                  onChange={(e) => setEvtLocation(e.target.value)}
-                  placeholder="e.g. Room 04 · Cartography Lab"
-                  className="w-full h-10 px-3 rounded-[var(--radius-sm)] bg-[var(--surface-sunken)] border border-[var(--border-strong)] text-xs sm:text-sm text-[var(--ink-primary)] placeholder:text-[var(--ink-muted)] focus:outline-2 focus:outline-[var(--accent)]"
-                />
-              </div>
-
-              <div>
-                <label className="block text-xs font-medium text-[var(--ink-primary)] mb-1.5">
-                  Attendees
-                </label>
-                <div className="flex flex-wrap gap-1.5">
-                  {team.map((member) => {
-                    const selected = evtAttendees.includes(member.id);
-                    return (
-                      <button
-                        key={member.id}
-                        type="button"
-                        onClick={() => toggleAttendee(member.id)}
-                        aria-pressed={selected}
-                        style={
-                          selected
-                            ? {
-                                backgroundColor: 'var(--accent-soft)',
-                                color: 'var(--accent)',
-                                borderColor: 'var(--accent-border)',
-                              }
-                            : undefined
-                        }
-                        className={`px-2.5 py-1 rounded-full border text-xs font-medium flex items-center gap-1.5 cursor-pointer transition-colors ${
-                          selected
-                            ? 'font-semibold'
-                            : 'bg-[var(--surface-sunken)] border-[var(--border-hairline)] text-[var(--ink-secondary)] hover:text-[var(--ink-primary)]'
-                        }`}
-                      >
-                        <span>{member.initials}</span>
-                        <span>{member.name.split(' ')[0]}</span>
-                      </button>
-                    );
-                  })}
-                </div>
-              </div>
-
-              {formError && (
-                <p role="alert" className="text-xs font-medium text-[var(--status-critical)]">
-                  {formError}
-                </p>
-              )}
-
-              <div className="pt-2 border-t border-[var(--border-hairline)] flex items-center justify-between gap-2">
-                {editingEventId ? (
-                  <button
-                    type="button"
-                    onClick={handleDeleteCurrentEvent}
-                    className="inline-flex items-center gap-1.5 px-3 py-2 rounded-full text-xs font-semibold text-[#C9352B] hover:bg-[#FBECEE] transition-colors cursor-pointer"
-                  >
-                    <Trash2 className="w-3.5 h-3.5" />
-                    <span>Delete</span>
-                  </button>
-                ) : (
-                  <span />
-                )}
-
-                <div className="flex items-center gap-2">
-                  <button
-                    type="button"
-                    onClick={() => setModalOpen(false)}
-                    className="px-4 py-2 rounded-full text-xs font-medium text-[var(--ink-secondary)] hover:text-[var(--ink-primary)] hover:bg-[var(--surface-sunken)] cursor-pointer"
-                  >
-                    Cancel
-                  </button>
-                  <button
-                    type="submit"
-                    disabled={isSavingEvent}
-                    style={{ backgroundColor: 'var(--accent)' }}
-                    className="px-4 py-2 rounded-full text-xs font-semibold text-white hover:opacity-95 disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
-                  >
-                    {isSavingEvent
-                      ? 'Saving…'
-                      : editingEventId
-                      ? 'Save changes'
-                      : 'Create event'}
-                  </button>
-                </div>
-              </div>
-            </form>
           </div>
-        </div>
-      )}
+        }
+      >
+        <form id="calendar-event-form" onSubmit={handleSaveEvent} className="p-6 space-y-3.5" noValidate>
+          <div>
+            <label
+              htmlFor="calendar-event-title"
+              className="block text-xs font-medium text-[var(--ink-primary)] mb-1"
+            >
+              Event title <span style={{ color: 'var(--accent)' }}>*</span>
+            </label>
+            <input
+              ref={titleInputRef}
+              id="calendar-event-title"
+              type="text"
+              required
+              value={evtTitle}
+              onChange={(e) => {
+                setEvtTitle(e.target.value);
+                if (formError) setFormError('');
+              }}
+              placeholder="e.g. Sub-bottom Sonar Calibration Review"
+              className="w-full h-10 px-3 rounded-[var(--radius-sm)] bg-[var(--surface-sunken)] border border-[var(--border-strong)] text-sm text-[var(--ink-primary)] placeholder:text-[var(--ink-muted)] focus:outline-2 focus:outline-[var(--accent)] focus:bg-[var(--surface-elevated)]"
+            />
+          </div>
+
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label
+                htmlFor="calendar-event-category"
+                className="block text-xs font-medium text-[var(--ink-primary)] mb-1"
+              >
+                Category
+              </label>
+              <select
+                id="calendar-event-category"
+                value={evtCategory}
+                onChange={(e) => setEvtCategory(e.target.value as EventCategory)}
+                className="w-full h-10 px-2.5 rounded-[var(--radius-sm)] bg-[var(--surface-sunken)] border border-[var(--border-strong)] text-xs sm:text-sm text-[var(--ink-primary)] focus:outline-2 focus:outline-[var(--accent)]"
+              >
+                {EVENT_CATEGORIES.map((cat) => (
+                  <option key={cat} value={cat}>
+                    {cat}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            <div>
+              <label
+                htmlFor="calendar-event-date"
+                className="block text-xs font-medium text-[var(--ink-primary)] mb-1"
+              >
+                Date <span style={{ color: 'var(--accent)' }}>*</span>
+              </label>
+              <input
+                id="calendar-event-date"
+                type="date"
+                required
+                value={evtDate}
+                onChange={(e) => setEvtDate(e.target.value)}
+                className="w-full h-10 px-2.5 rounded-[var(--radius-sm)] bg-[var(--surface-sunken)] border border-[var(--border-strong)] text-xs sm:text-sm text-[var(--ink-primary)] focus:outline-2 focus:outline-[var(--accent)]"
+              />
+            </div>
+          </div>
+
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label
+                htmlFor="calendar-event-start"
+                className="block text-xs font-medium text-[var(--ink-primary)] mb-1"
+              >
+                Start time
+              </label>
+              <input
+                id="calendar-event-start"
+                type="time"
+                value={evtStart}
+                onChange={(e) => setEvtStart(e.target.value)}
+                className="w-full h-10 px-2.5 rounded-[var(--radius-sm)] bg-[var(--surface-sunken)] border border-[var(--border-strong)] text-xs sm:text-sm text-[var(--ink-primary)] focus:outline-2 focus:outline-[var(--accent)]"
+              />
+            </div>
+
+            <div>
+              <label
+                htmlFor="calendar-event-end"
+                className="block text-xs font-medium text-[var(--ink-primary)] mb-1"
+              >
+                End time
+              </label>
+              <input
+                id="calendar-event-end"
+                type="time"
+                value={evtEnd}
+                onChange={(e) => setEvtEnd(e.target.value)}
+                className="w-full h-10 px-2.5 rounded-[var(--radius-sm)] bg-[var(--surface-sunken)] border border-[var(--border-strong)] text-xs sm:text-sm text-[var(--ink-primary)] focus:outline-2 focus:outline-[var(--accent)]"
+              />
+            </div>
+          </div>
+
+          <div>
+            <label
+              htmlFor="calendar-event-location"
+              className="block text-xs font-medium text-[var(--ink-primary)] mb-1"
+            >
+              Location
+            </label>
+            <input
+              id="calendar-event-location"
+              type="text"
+              value={evtLocation}
+              onChange={(e) => setEvtLocation(e.target.value)}
+              placeholder="e.g. Room 04 · Cartography Lab"
+              className="w-full h-10 px-3 rounded-[var(--radius-sm)] bg-[var(--surface-sunken)] border border-[var(--border-strong)] text-xs sm:text-sm text-[var(--ink-primary)] placeholder:text-[var(--ink-muted)] focus:outline-2 focus:outline-[var(--accent)]"
+            />
+          </div>
+
+          <div>
+            <label className="block text-xs font-medium text-[var(--ink-primary)] mb-1.5">
+              Attendees
+            </label>
+            <div className="flex flex-wrap gap-1.5">
+              {team.map((member) => {
+                const selected = evtAttendees.includes(member.id);
+                return (
+                  <button
+                    key={member.id}
+                    type="button"
+                    onClick={() => toggleAttendee(member.id)}
+                    aria-pressed={selected}
+                    style={
+                      selected
+                        ? {
+                            backgroundColor: 'var(--accent-soft)',
+                            color: 'var(--accent)',
+                            borderColor: 'var(--accent-border)',
+                          }
+                        : undefined
+                    }
+                    className={`px-2.5 py-1 rounded-full border text-xs font-medium flex items-center gap-1.5 cursor-pointer transition-colors ${
+                      selected
+                        ? 'font-semibold'
+                        : 'bg-[var(--surface-sunken)] border-[var(--border-hairline)] text-[var(--ink-secondary)] hover:text-[var(--ink-primary)]'
+                    }`}
+                  >
+                    <span>{member.initials}</span>
+                    <span>{member.name.split(' ')[0]}</span>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+
+          {formError && (
+            <p role="alert" className="text-xs font-medium text-[var(--status-critical)]">
+              {formError}
+            </p>
+          )}
+        </form>
+      </Dialog>
     </div>
   );
 }

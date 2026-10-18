@@ -8,7 +8,7 @@
 
 @keyframes motion-route-enter {
   from { opacity: 0; transform: translateY(8px); filter: blur(4px); }
-  to { opacity: 1; transform: translateY(0); filter: blur(0); }
+  to { opacity: 1; transform: none; filter: none; }
 }
 
 .motion-bar {
