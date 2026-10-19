@@ -1,17 +1,15 @@
-import React, { Component, type ErrorInfo, useEffect, useState } from 'react';
+import React, { Component, useEffect, useState } from 'react';
 import { createPortal } from 'react-dom';
-import {
-  ChevronDown,
-  HelpCircle,
-  Keyboard,
-  Play,
-  X,
-} from 'lucide-react';
+import { ChevronDown, HelpCircle, Keyboard, Play, X } from 'lucide-react';
 import { RouteId, usePlotlineStore } from '../store';
 import { ContourGlyph } from '../utils/contourGlyph';
 
 const KEYBOARD_SHORTCUTS = [
-  { keys: ['⌘', 'K'], altKeys: ['Ctrl', 'K'], description: 'Open global Command Palette from any screen' },
+  {
+    keys: ['⌘', 'K'],
+    altKeys: ['Ctrl', 'K'],
+    description: 'Open global Command Palette from any screen',
+  },
   { keys: ['↑', '↓'], description: 'Navigate command palette items and task menus' },
   { keys: ['↵'], description: 'Execute highlighted command or submit modal form' },
   { keys: ['Esc'], description: 'Dismiss active modal, command palette, or profile drawer' },
@@ -96,7 +94,7 @@ class TourErrorBoundary extends Component<React.PropsWithChildren, { hasError: b
     return { hasError: true };
   }
 
-  componentDidCatch(_error: Error, _info: ErrorInfo) {
+  componentDidCatch() {
     // Keep tour failures isolated without surfacing a console error to users.
   }
 
@@ -123,7 +121,8 @@ function findTourTarget(selector: string): Element | null {
 function TourOverlayContent({ onNavigate }: { onNavigate: (route: RouteId) => void }) {
   const { tourStep, setTourStep } = usePlotlineStore();
   const [rect, setRect] = useState<DOMRect | null>(null);
-  const currentConfig = tourStep !== null ? TOUR_STEPS.find((s) => s.step === tourStep) || null : null;
+  const currentConfig =
+    tourStep !== null ? TOUR_STEPS.find((s) => s.step === tourStep) || null : null;
 
   useEffect(() => {
     if (!currentConfig) {
@@ -180,7 +179,7 @@ function TourOverlayContent({ onNavigate }: { onNavigate: (route: RouteId) => vo
       window.removeEventListener('keydown', onKeyDown);
       document.body.style.removeProperty('overflow');
     };
-  }, [tourStep]);
+  }, [tourStep, currentConfig, onNavigate, setTourStep]);
 
   if (!currentConfig || typeof document === 'undefined') return null;
 
@@ -260,9 +259,7 @@ function TourOverlayContent({ onNavigate }: { onNavigate: (route: RouteId) => vo
                   aria-label={`Jump to step ${s.step}`}
                   style={{
                     backgroundColor:
-                      s.step === currentConfig.step
-                        ? 'var(--accent)'
-                        : 'var(--border-strong)',
+                      s.step === currentConfig.step ? 'var(--accent)' : 'var(--border-strong)',
                   }}
                   className="w-3 h-3 sm:w-2 sm:h-2 rounded-full transition-colors cursor-pointer"
                 />
@@ -360,10 +357,7 @@ export default function HelpScreen() {
 
           <ul className="divide-y divide-[var(--border-hairline)]">
             {KEYBOARD_SHORTCUTS.map((item, idx) => (
-              <li
-                key={idx}
-                className="py-2.5 flex items-center justify-between gap-3 text-xs"
-              >
+              <li key={idx} className="py-2.5 flex items-center justify-between gap-3 text-xs">
                 <span className="text-[var(--ink-secondary)]">{item.description}</span>
                 <div className="flex items-center gap-1 shrink-0">
                   {item.keys.map((k) => (
@@ -396,7 +390,6 @@ export default function HelpScreen() {
                 Frequently Asked Questions
               </h2>
             </div>
-            <ContourGlyph seed="plotline-help-faq" size={28} />
           </div>
 
           <div className="divide-y divide-[var(--border-hairline)]">
@@ -420,9 +413,25 @@ export default function HelpScreen() {
                     />
                   </button>
                   {isOpen && (
-                    <p className="mt-1 pb-2 text-xs sm:text-sm text-[var(--ink-secondary)] leading-relaxed pr-4">
-                      {faq.answer}
-                    </p>
+                    <div className="mt-1 pb-2 text-xs sm:text-sm text-[var(--ink-secondary)] leading-relaxed pr-2">
+                      {faq.id === 'faq-glyphs' ? (
+                        <div className="flex items-start gap-3 pt-1">
+                          <div className="shrink-0 flex flex-col items-center gap-1 p-2 rounded-lg bg-[var(--surface-sunken)] border border-[var(--border-subtle)]">
+                            <ContourGlyph
+                              seed="plotline-faq-preview"
+                              size={48}
+                              className="w-12 h-12 text-[var(--accent)]"
+                            />
+                            <span className="text-[10px] font-mono font-medium text-[var(--ink-muted)]">
+                              Sample
+                            </span>
+                          </div>
+                          <p className="flex-1 min-w-0 pt-0.5">{faq.answer}</p>
+                        </div>
+                      ) : (
+                        <p>{faq.answer}</p>
+                      )}
+                    </div>
                   )}
                 </div>
               );

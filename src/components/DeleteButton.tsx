@@ -52,7 +52,7 @@ export function DeleteButton({
       </button>
       <AnchoredTooltip
         isOpen={hovered}
-        anchorEl={btnRef.current}
+        anchorRect={btnRef.current?.getBoundingClientRect() || null}
         className="px-2.5 py-1 rounded-[var(--radius-xs)] bg-[var(--surface-elevated)] border border-[var(--border-strong)] shadow-md text-[11px] font-medium text-[var(--ink-primary)] whitespace-nowrap"
       >
         {tooltipText}

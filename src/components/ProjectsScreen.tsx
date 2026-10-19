@@ -1,17 +1,8 @@
 import React, { useMemo, useState } from 'react';
-import {
-  ArrowUpDown,
-  Plus,
-  Search,
-  Trash2,
-  Upload,
-} from 'lucide-react';
-import {
-  getProjectProgress,
-  getProjectStatus,
-  pluralize,
-  usePlotlineStore,
-} from '../store';
+import { ArrowUpDown, Plus, Search, Trash2, Upload } from 'lucide-react';
+import { usePlotlineStore } from '../store'; import { Project, TaskItem, TeamMember, CalendarEvent, EventCategory, AccentName, RouteId } from '../domain/types';;
+import { getProjectProgress, getProjectStatus } from '../domain/derivations/projects';
+import { pluralize } from '../domain/derivations/analytics';
 import { ContourGlyph } from '../utils/contourGlyph';
 
 type StatusFilter = 'all' | 'running' | 'pending' | 'ended';
@@ -184,13 +175,23 @@ export default function ProjectsScreen() {
       {/* Filter Chips & Controls */}
       <div className="plotline-enter flex flex-col md:flex-row md:items-center justify-between gap-3 bg-[var(--surface-elevated)] border border-[var(--border-hairline)] rounded-[var(--radius-lg)] p-2.5">
         {/* Filter Chips */}
-        <div role="group" aria-label="Status filters" className="flex items-center gap-1.5 flex-wrap">
+        <div
+          role="group"
+          aria-label="Status filters"
+          className="flex items-center gap-1.5 flex-wrap"
+        >
           <button
             type="button"
             onClick={() => handleFilterClick('all')}
-            style={activeFilter === 'all' ? { backgroundColor: 'var(--accent)', color: '#ffffff' } : undefined}
+            style={
+              activeFilter === 'all'
+                ? { backgroundColor: 'var(--accent)', color: '#ffffff' }
+                : undefined
+            }
             className={`px-3 py-1.5 min-h-[44px] sm:min-h-0 rounded-[var(--radius-sm)] text-xs font-semibold transition-colors cursor-pointer ${
-              activeFilter === 'all' ? '' : 'text-[var(--ink-secondary)] hover:text-[var(--ink-primary)] hover:bg-[var(--surface-sunken)]'
+              activeFilter === 'all'
+                ? ''
+                : 'text-[var(--ink-secondary)] hover:text-[var(--ink-primary)] hover:bg-[var(--surface-sunken)]'
             }`}
           >
             All ({counts.all})
@@ -199,9 +200,15 @@ export default function ProjectsScreen() {
           <button
             type="button"
             onClick={() => handleFilterClick('running')}
-            style={activeFilter === 'running' ? { backgroundColor: 'var(--accent)', color: '#ffffff' } : undefined}
+            style={
+              activeFilter === 'running'
+                ? { backgroundColor: 'var(--accent)', color: '#ffffff' }
+                : undefined
+            }
             className={`px-3 py-1.5 min-h-[44px] sm:min-h-0 rounded-[var(--radius-sm)] text-xs font-semibold transition-colors cursor-pointer ${
-              activeFilter === 'running' ? '' : 'text-[var(--ink-secondary)] hover:text-[var(--ink-primary)] hover:bg-[var(--surface-sunken)]'
+              activeFilter === 'running'
+                ? ''
+                : 'text-[var(--ink-secondary)] hover:text-[var(--ink-primary)] hover:bg-[var(--surface-sunken)]'
             }`}
           >
             Running ({counts.running})
@@ -210,9 +217,15 @@ export default function ProjectsScreen() {
           <button
             type="button"
             onClick={() => handleFilterClick('pending')}
-            style={activeFilter === 'pending' ? { backgroundColor: 'var(--accent)', color: '#ffffff' } : undefined}
+            style={
+              activeFilter === 'pending'
+                ? { backgroundColor: 'var(--accent)', color: '#ffffff' }
+                : undefined
+            }
             className={`px-3 py-1.5 min-h-[44px] sm:min-h-0 rounded-[var(--radius-sm)] text-xs font-semibold transition-colors cursor-pointer ${
-              activeFilter === 'pending' ? '' : 'text-[var(--ink-secondary)] hover:text-[var(--ink-primary)] hover:bg-[var(--surface-sunken)]'
+              activeFilter === 'pending'
+                ? ''
+                : 'text-[var(--ink-secondary)] hover:text-[var(--ink-primary)] hover:bg-[var(--surface-sunken)]'
             }`}
           >
             Pending ({counts.pending})
@@ -221,9 +234,15 @@ export default function ProjectsScreen() {
           <button
             type="button"
             onClick={() => handleFilterClick('ended')}
-            style={activeFilter === 'ended' ? { backgroundColor: 'var(--accent)', color: '#ffffff' } : undefined}
+            style={
+              activeFilter === 'ended'
+                ? { backgroundColor: 'var(--accent)', color: '#ffffff' }
+                : undefined
+            }
             className={`px-3 py-1.5 min-h-[44px] sm:min-h-0 rounded-[var(--radius-sm)] text-xs font-semibold transition-colors cursor-pointer ${
-              activeFilter === 'ended' ? '' : 'text-[var(--ink-secondary)] hover:text-[var(--ink-primary)] hover:bg-[var(--surface-sunken)]'
+              activeFilter === 'ended'
+                ? ''
+                : 'text-[var(--ink-secondary)] hover:text-[var(--ink-primary)] hover:bg-[var(--surface-sunken)]'
             }`}
           >
             Ended ({counts.ended})
@@ -278,12 +297,12 @@ export default function ProjectsScreen() {
               {searchQuery
                 ? 'No projects match your search query'
                 : activeFilter === 'running'
-                ? 'No running projects found'
-                : activeFilter === 'pending'
-                ? 'No pending projects found'
-                : activeFilter === 'ended'
-                ? 'No ended projects found'
-                : 'No projects in portfolio'}
+                  ? 'No running projects found'
+                  : activeFilter === 'pending'
+                    ? 'No pending projects found'
+                    : activeFilter === 'ended'
+                      ? 'No ended projects found'
+                      : 'No projects in portfolio'}
             </h2>
             <p className="text-xs text-[var(--ink-secondary)]">
               {searchQuery
@@ -349,8 +368,8 @@ export default function ProjectsScreen() {
                       derivedStatus === 'Ended'
                         ? 'bg-[#E8F4EC] text-[#216E3E]'
                         : derivedStatus === 'Running'
-                        ? 'bg-[#FEF5E6] text-[#9B5B0B]'
-                        : 'bg-[#EEEBF9] text-[#5B43B8]'
+                          ? 'bg-[#FEF5E6] text-[#9B5B0B]'
+                          : 'bg-[#EEEBF9] text-[#5B43B8]'
                     }`}
                   >
                     {derivedStatus}
@@ -363,7 +382,9 @@ export default function ProjectsScreen() {
                   <div className="w-full sm:w-28 space-y-1">
                     <div className="flex justify-between text-[11px] font-semibold">
                       <span className="text-[var(--ink-secondary)]">Progress</span>
-                      <span className="tabular-nums text-[var(--ink-primary)]">{derivedProgress}%</span>
+                      <span className="tabular-nums text-[var(--ink-primary)]">
+                        {derivedProgress}%
+                      </span>
                     </div>
                     <div className="h-1.5 w-full bg-[var(--surface-sunken)] rounded-full overflow-hidden">
                       <div
@@ -376,7 +397,9 @@ export default function ProjectsScreen() {
                   <div className="flex items-center justify-between sm:justify-end gap-3 sm:gap-5 w-full sm:w-auto">
                     {/* Due Date */}
                     <div className="text-left sm:text-right">
-                      <div className="text-[10px] text-[var(--ink-muted)] uppercase font-semibold">Due Date</div>
+                      <div className="text-[10px] text-[var(--ink-muted)] uppercase font-semibold">
+                        Due Date
+                      </div>
                       <div className="text-xs font-mono font-medium text-[var(--ink-primary)]">
                         {formatShortDate(project.targetDate)}
                       </div>
@@ -388,8 +411,8 @@ export default function ProjectsScreen() {
                         derivedStatus === 'Ended'
                           ? 'bg-[#E8F4EC] text-[#216E3E]'
                           : derivedStatus === 'Running'
-                          ? 'bg-[#FEF5E6] text-[#9B5B0B]'
-                          : 'bg-[#EEEBF9] text-[#5B43B8]'
+                            ? 'bg-[#FEF5E6] text-[#9B5B0B]'
+                            : 'bg-[#EEEBF9] text-[#5B43B8]'
                       }`}
                     >
                       {derivedStatus}
@@ -403,7 +426,9 @@ export default function ProjectsScreen() {
                         </span>
                       ) : (
                         <div className="flex items-center gap-1.5 shrink-0">
-                          <span className="text-xs text-[var(--ink-muted)] italic hidden md:inline">No tasks yet</span>
+                          <span className="text-xs text-[var(--ink-muted)] italic hidden md:inline">
+                            No tasks yet
+                          </span>
                           <button
                             type="button"
                             onClick={(e) => {

@@ -1,21 +1,13 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { ArrowDownRight, ArrowUpRight, ChevronDown, Download } from 'lucide-react';
+import { usePlotlineStore } from '../store'; import { Project, TaskItem, TeamMember, CalendarEvent, EventCategory, AccentName, RouteId } from '../domain/types';;
+import { computeDaysAgoFromIso, formatDuration } from '../domain/derivations/time';
+import { getIsoDateOffset } from '../lib/clock';
 import {
-  ArrowDownRight,
-  ArrowUpRight,
-  ChevronDown,
-  Download,
-} from 'lucide-react';
-import {
-  computeDaysAgoFromIso,
-  formatDuration,
-  getIsoDateOffset,
   getTaskCycleDays,
   isTaskCompletedInRange,
   isTaskCompletedOnTime,
-  Project,
-  TeamMember,
-  usePlotlineStore,
-} from '../store';
+} from '../domain/derivations/tasks';
 import { AnchorBox, AnchoredPopover, AnchoredTooltip } from '../ui/Popover';
 import { ContourGlyph } from '../utils/contourGlyph';
 
@@ -123,13 +115,7 @@ export function getHeatmapBg(hours: number): string {
 }
 
 export default function AnalyticsScreen() {
-  const {
-    projects,
-    tasks,
-    team,
-    focusSessions,
-    pushToast,
-  } = usePlotlineStore();
+  const { projects, tasks, team, focusSessions, pushToast } = usePlotlineStore();
 
   const [mounted, setMounted] = useState(false);
   const [donutAnimated, setDonutAnimated] = useState(false);
@@ -184,8 +170,7 @@ export default function AnalyticsScreen() {
       return {
         ...s,
         resolvedSeconds,
-        resolvedDaysAgo:
-          typeof s.daysAgo === 'number' ? s.daysAgo : computeDaysAgoFromIso(s.date),
+        resolvedDaysAgo: typeof s.daysAgo === 'number' ? s.daysAgo : computeDaysAgoFromIso(s.date),
       };
     });
   }, [focusSessions]);
@@ -200,9 +185,7 @@ export default function AnalyticsScreen() {
     );
 
     // Strictly count store tasks whose completion date falls in the range
-    const currentCompletedTasks = tasks.filter((t) =>
-      isTaskCompletedInRange(t, 0, rangeDays)
-    );
+    const currentCompletedTasks = tasks.filter((t) => isTaskCompletedInRange(t, 0, rangeDays));
     const prevCompletedTasks = tasks.filter((t) =>
       isTaskCompletedInRange(t, rangeDays, rangeDays * 2)
     );
@@ -211,14 +194,8 @@ export default function AnalyticsScreen() {
     const prevTasksCompleted = prevCompletedTasks.length;
 
     // Sum seconds first, then format
-    const currentTotalSeconds = currentSessions.reduce(
-      (acc, s) => acc + s.resolvedSeconds,
-      0
-    );
-    const prevTotalSeconds = prevSessions.reduce(
-      (acc, s) => acc + s.resolvedSeconds,
-      0
-    );
+    const currentTotalSeconds = currentSessions.reduce((acc, s) => acc + s.resolvedSeconds, 0);
+    const prevTotalSeconds = prevSessions.reduce((acc, s) => acc + s.resolvedSeconds, 0);
 
     const currentHours = Number((currentTotalSeconds / 3600).toFixed(1));
     const prevHours = Number((prevTotalSeconds / 3600).toFixed(1));
@@ -233,9 +210,7 @@ export default function AnalyticsScreen() {
         ? Math.round((currentOnTimeCount / currentTasksCompleted) * 100)
         : 100;
     const prevOnTimePct =
-      prevTasksCompleted > 0
-        ? Math.round((prevOnTimeCount / prevTasksCompleted) * 100)
-        : 100;
+      prevTasksCompleted > 0 ? Math.round((prevOnTimeCount / prevTasksCompleted) * 100) : 100;
 
     const currentCycleAvg =
       currentTasksCompleted > 0
@@ -265,20 +240,12 @@ export default function AnalyticsScreen() {
     const tasksDeltaPct =
       prevTasksCompleted > 0
         ? Number(
-            (
-              ((currentTasksCompleted - prevTasksCompleted) / prevTasksCompleted) *
-              100
-            ).toFixed(1)
+            (((currentTasksCompleted - prevTasksCompleted) / prevTasksCompleted) * 100).toFixed(1)
           )
         : 100;
     const hoursDeltaPct =
       prevTotalSeconds > 0
-        ? Number(
-            (
-              ((currentTotalSeconds - prevTotalSeconds) / prevTotalSeconds) *
-              100
-            ).toFixed(1)
-          )
+        ? Number((((currentTotalSeconds - prevTotalSeconds) / prevTotalSeconds) * 100).toFixed(1))
         : 100;
     const onTimeDeltaPct = Number((currentOnTimePct - prevOnTimePct).toFixed(1));
     const cycleDeltaPct = Number(
@@ -310,12 +277,8 @@ export default function AnalyticsScreen() {
       const dayCurr = currentSessions.filter((s) => s.resolvedDaysAgo === d);
       const dayPrev = prevSessions.filter((s) => s.resolvedDaysAgo === d + rangeDays);
 
-      const dayTasksCurr = currentCompletedTasks.filter(
-        (t) => t.completedDate === dateStr
-      );
-      const dayTasksPrev = prevCompletedTasks.filter(
-        (t) => t.completedDate === prevDateStr
-      );
+      const dayTasksCurr = currentCompletedTasks.filter((t) => t.completedDate === dateStr);
+      const dayTasksPrev = prevCompletedTasks.filter((t) => t.completedDate === prevDateStr);
 
       const sCurr = dayCurr.reduce((a, b) => a + b.resolvedSeconds, 0);
       const hCurr = Number((sCurr / 3600).toFixed(2));
@@ -326,11 +289,7 @@ export default function AnalyticsScreen() {
           : currentOnTimePct;
       const cycCurr =
         tCurr > 0
-          ? Number(
-              (
-                dayTasksCurr.reduce((a, b) => a + getTaskCycleDays(b), 0) / tCurr
-              ).toFixed(1)
-            )
+          ? Number((dayTasksCurr.reduce((a, b) => a + getTaskCycleDays(b), 0) / tCurr).toFixed(1))
           : currentCycleAvg;
 
       dailyCurrent.push({
@@ -357,8 +316,7 @@ export default function AnalyticsScreen() {
     const chartPoints = dailyCurrent.map((pt, idx) => {
       const winStart = Math.max(0, idx - 6);
       const slice = dailyCurrent.slice(winStart, idx + 1);
-      const sliceAvgSeconds =
-        slice.reduce((a, b) => a + b.seconds, 0) / Math.max(1, slice.length);
+      const sliceAvgSeconds = slice.reduce((a, b) => a + b.seconds, 0) / Math.max(1, slice.length);
       const avg7d = Number((sliceAvgSeconds / 3600).toFixed(1));
       const prevHoursPt = dailyPrevious[idx]?.hours ?? 0;
       return {
@@ -381,13 +339,9 @@ export default function AnalyticsScreen() {
       tasksSpark.push(slice.reduce((a, b) => a + b.tasks, 0));
       const sliceSeconds = slice.reduce((a, b) => a + b.seconds, 0);
       hoursSpark.push(Number((sliceSeconds / 3600).toFixed(1)));
-      onTimeSpark.push(
-        Math.round(slice.reduce((a, b) => a + b.onTimePct, 0) / slice.length)
-      );
+      onTimeSpark.push(Math.round(slice.reduce((a, b) => a + b.onTimePct, 0) / slice.length));
       cycleSpark.push(
-        Number(
-          (slice.reduce((a, b) => a + b.cycleDays, 0) / slice.length).toFixed(2)
-        )
+        Number((slice.reduce((a, b) => a + b.cycleDays, 0) / slice.length).toFixed(2))
       );
     }
 
@@ -418,9 +372,7 @@ export default function AnalyticsScreen() {
     );
     const flooredPercentages = rawPercentages.map((p) => Math.floor(p));
     let remainderToDistribute =
-      sortedProjectTotals.length > 0
-        ? 100 - flooredPercentages.reduce((a, b) => a + b, 0)
-        : 0;
+      sortedProjectTotals.length > 0 ? 100 - flooredPercentages.reduce((a, b) => a + b, 0) : 0;
     const indicesByRemainder = rawPercentages
       .map((p, idx) => ({ idx, rem: p - flooredPercentages[idx] }))
       .sort((a, b) => b.rem - a.rem);
@@ -440,14 +392,10 @@ export default function AnalyticsScreen() {
     // Contributors: task counts strictly from store tasks completed in range (by assigneeId)
     const contributors = uniqueTeam
       .map((member) => {
-        const memberSessions = currentSessions.filter(
-          (s) => s.memberId === member.id
-        );
+        const memberSessions = currentSessions.filter((s) => s.memberId === member.id);
         const secs = memberSessions.reduce((a, b) => a + b.resolvedSeconds, 0);
         const hrs = Number((secs / 3600).toFixed(1));
-        const completed = currentCompletedTasks.filter(
-          (t) => t.assigneeId === member.id
-        ).length;
+        const completed = currentCompletedTasks.filter((t) => t.assigneeId === member.id).length;
         return {
           member,
           seconds: secs,
@@ -504,9 +452,8 @@ export default function AnalyticsScreen() {
     const firstRow = getMondayFirstRowIndex(days[0].date);
     const numWeeks = Math.ceil((firstRow + days.length) / 7);
 
-    const matrix: Array<Array<(typeof days)[number] | null>> = Array.from(
-      { length: 7 },
-      () => Array.from({ length: numWeeks }, () => null)
+    const matrix: Array<Array<(typeof days)[number] | null>> = Array.from({ length: 7 }, () =>
+      Array.from({ length: numWeeks }, () => null)
     );
 
     const weekHeaders: string[] = Array.from({ length: numWeeks }, () => '');
@@ -556,7 +503,9 @@ export default function AnalyticsScreen() {
         metric: 'On-time delivery',
         value: analyticsData.currentOnTimePct,
         unit: 'share_pct',
-        previous: Number((analyticsData.currentOnTimePct - analyticsData.onTimeDeltaPct).toFixed(1)),
+        previous: Number(
+          (analyticsData.currentOnTimePct - analyticsData.onTimeDeltaPct).toFixed(1)
+        ),
         change_pct: analyticsData.onTimeDeltaIsNew ? 'New' : analyticsData.onTimeDeltaPct,
       },
       {
@@ -599,8 +548,13 @@ export default function AnalyticsScreen() {
       const text = String(value ?? '');
       return /[",\r\n]/.test(text) ? `"${text.replace(/"/g, '""')}"` : text;
     };
-    const csv = [headers.join(','), ...rows.map((row) => headers.map((header) => escapeCsv(row[header])).join(','))].join('\r\n');
-    const blob = new Blob([new Uint8Array([0xef, 0xbb, 0xbf]), csv], { type: 'text/csv;charset=utf-8' });
+    const csv = [
+      headers.join(','),
+      ...rows.map((row) => headers.map((header) => escapeCsv(row[header])).join(',')),
+    ].join('\r\n');
+    const blob = new Blob([new Uint8Array([0xef, 0xbb, 0xbf]), csv], {
+      type: 'text/csv;charset=utf-8',
+    });
     const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
     link.href = url;
@@ -654,11 +608,7 @@ export default function AnalyticsScreen() {
   const plotH = svgH - padT - padB;
 
   const maxChartVal = useMemo(() => {
-    const vals = analyticsData.chartPoints.flatMap((p) => [
-      p.hours,
-      p.prevHours,
-      p.avg7d,
-    ]);
+    const vals = analyticsData.chartPoints.flatMap((p) => [p.hours, p.prevHours, p.avg7d]);
     return Math.max(9, ...vals);
   }, [analyticsData.chartPoints]);
 
@@ -687,7 +637,10 @@ export default function AnalyticsScreen() {
   const currentLineSolidPoints = solidChartCoords.map((p) => `${p.x},${p.yCurr}`).join(' ');
   const currentLineTodayDashedPoints =
     todayHasHours && chartCoords.length >= 2
-      ? chartCoords.slice(-2).map((p) => `${p.x},${p.yCurr}`).join(' ')
+      ? chartCoords
+          .slice(-2)
+          .map((p) => `${p.x},${p.yCurr}`)
+          .join(' ')
       : '';
   const prevLinePoints = chartCoords.map((p) => `${p.x},${p.yPrev}`).join(' ');
   const avgLinePoints = chartCoords.map((p) => `${p.x},${p.yAvg}`).join(' ');
@@ -698,8 +651,7 @@ export default function AnalyticsScreen() {
           .join(' L ')} L ${chartCoords[chartCoords.length - 1].x},${padT + plotH} Z`
       : '';
 
-  const hoveredPoint =
-    hoveredPointIdx !== null ? chartCoords[hoveredPointIdx] || null : null;
+  const hoveredPoint = hoveredPointIdx !== null ? chartCoords[hoveredPointIdx] || null : null;
 
   const updateThroughputTooltipRect = useCallback(
     (idx: number | null) => {
@@ -778,9 +730,7 @@ export default function AnalyticsScreen() {
         className="plotline-enter flex flex-col sm:flex-row sm:items-center justify-between gap-3"
       >
         <div className="min-w-0">
-          <h1 className="text-2xl font-bold tracking-tight text-[var(--ink-primary)]">
-            Analytics
-          </h1>
+          <h1 className="text-2xl font-bold tracking-tight text-[var(--ink-primary)]">Analytics</h1>
           <p
             data-testid="analytics-subtitle"
             className="text-xs sm:text-sm text-[var(--ink-secondary)] mt-0.5"
@@ -808,9 +758,7 @@ export default function AnalyticsScreen() {
                   }}
                   aria-pressed={active}
                   style={
-                    active
-                      ? { backgroundColor: 'var(--accent)', color: '#ffffff' }
-                      : undefined
+                    active ? { backgroundColor: 'var(--accent)', color: '#ffffff' } : undefined
                   }
                   className={`px-3.5 py-1.5 min-h-[40px] sm:min-h-0 sm:py-1 rounded-full text-xs font-semibold transition-colors cursor-pointer ${
                     active
@@ -850,12 +798,14 @@ export default function AnalyticsScreen() {
             widthClass="w-56"
             dataTestId="analytics-export-menu"
           >
-            {([
-              ['kpi', 'KPI summary (.csv)'],
-              ['projects', 'Projects (.csv)'],
-              ['contributors', 'Contributors (.csv)'],
-              ['daily', 'Daily series (.csv)'],
-            ] as const).map(([kind, label]) => (
+            {(
+              [
+                ['kpi', 'KPI summary (.csv)'],
+                ['projects', 'Projects (.csv)'],
+                ['contributors', 'Contributors (.csv)'],
+                ['daily', 'Daily series (.csv)'],
+              ] as const
+            ).map(([kind, label]) => (
               <button
                 key={kind}
                 type="button"
@@ -910,9 +860,7 @@ export default function AnalyticsScreen() {
               <span
                 data-testid="kpi-delta-tasks"
                 className={`inline-flex items-center gap-0.5 text-[11px] sm:text-xs font-semibold font-ui-tabular shrink-0 ${
-                  analyticsData.tasksDeltaPct >= 0
-                    ? 'text-[#216E3E]'
-                    : 'text-[#B43342]'
+                  analyticsData.tasksDeltaPct >= 0 ? 'text-[#216E3E]' : 'text-[#B43342]'
                 }`}
               >
                 {analyticsData.tasksDeltaPct >= 0 ? (
@@ -965,9 +913,7 @@ export default function AnalyticsScreen() {
               <span
                 data-testid="kpi-delta-hours"
                 className={`inline-flex items-center gap-0.5 text-[11px] sm:text-xs font-semibold font-ui-tabular shrink-0 ${
-                  analyticsData.hoursDeltaPct >= 0
-                    ? 'text-[#216E3E]'
-                    : 'text-[#B43342]'
+                  analyticsData.hoursDeltaPct >= 0 ? 'text-[#216E3E]' : 'text-[#B43342]'
                 }`}
               >
                 {analyticsData.hoursDeltaPct >= 0 ? (
@@ -1018,9 +964,7 @@ export default function AnalyticsScreen() {
               <span
                 data-testid="kpi-delta-ontime"
                 className={`inline-flex items-center gap-0.5 text-[11px] sm:text-xs font-semibold font-ui-tabular shrink-0 ${
-                  analyticsData.onTimeDeltaPct >= 0
-                    ? 'text-[#216E3E]'
-                    : 'text-[#B43342]'
+                  analyticsData.onTimeDeltaPct >= 0 ? 'text-[#216E3E]' : 'text-[#B43342]'
                 }`}
               >
                 {analyticsData.onTimeDeltaPct >= 0 ? (
@@ -1070,9 +1014,7 @@ export default function AnalyticsScreen() {
               <span
                 data-testid="kpi-delta-cycle"
                 className={`inline-flex items-center gap-0.5 text-[11px] sm:text-xs font-semibold font-ui-tabular shrink-0 ${
-                  analyticsData.cycleDeltaPct <= 0
-                    ? 'text-[#216E3E]'
-                    : 'text-[#B43342]'
+                  analyticsData.cycleDeltaPct <= 0 ? 'text-[#216E3E]' : 'text-[#B43342]'
                 }`}
               >
                 {analyticsData.cycleDeltaPct <= 0 ? (
@@ -1166,9 +1108,7 @@ export default function AnalyticsScreen() {
                   <span className="text-[var(--ink-secondary)]">
                     Prev: {hoveredPoint.prevHours}h
                   </span>
-                  <span className="text-[var(--ink-muted)]">
-                    7d Avg: {hoveredPoint.avg7d}h
-                  </span>
+                  <span className="text-[var(--ink-muted)]">7d Avg: {hoveredPoint.avg7d}h</span>
                 </>
               )}
             </AnchoredTooltip>
@@ -1214,9 +1154,7 @@ export default function AnalyticsScreen() {
               })}
 
               {/* Area under current line */}
-              {currentAreaPath && (
-                <path d={currentAreaPath} fill="url(#throughput-area-grad)" />
-              )}
+              {currentAreaPath && <path d={currentAreaPath} fill="url(#throughput-area-grad)" />}
 
               {/* Previous Period Dashed Line */}
               <polyline
@@ -1300,9 +1238,7 @@ export default function AnalyticsScreen() {
                     className="cursor-crosshair"
                     onMouseEnter={() => setHoveredPointIdx(idx)}
                     onTouchStart={() => setHoveredPointIdx(idx)}
-                    onClick={() =>
-                      setHoveredPointIdx((prev) => (prev === idx ? null : idx))
-                    }
+                    onClick={() => setHoveredPointIdx((prev) => (prev === idx ? null : idx))}
                   />
                 );
               })}
@@ -1359,17 +1295,11 @@ export default function AnalyticsScreen() {
             <div className="flex flex-col xl:flex-row items-center gap-4 my-auto">
               {/* Custom SVG Donut — segments sum to 100% with no grey gap */}
               <div className="relative w-36 h-36 flex items-center justify-center shrink-0">
-                <svg
-                  data-testid="donut-svg"
-                  viewBox="0 0 136 136"
-                  className="w-full h-full"
-                >
+                <svg data-testid="donut-svg" viewBox="0 0 136 136" className="w-full h-full">
                   {analyticsData.projectShares.map((item, idx) => {
                     const isLast = idx === analyticsData.projectShares.length - 1;
                     const startPct = cumulativeDonutPct;
-                    const segPct = isLast
-                      ? Math.max(0, 100 - startPct)
-                      : item.pct;
+                    const segPct = isLast ? Math.max(0, 100 - startPct) : item.pct;
                     cumulativeDonutPct += segPct;
                     const startArc = (startPct / 100) * donutCircumference;
                     const targetArc = (segPct / 100) * donutCircumference + 0.35;
@@ -1421,10 +1351,7 @@ export default function AnalyticsScreen() {
               </div>
 
               {/* Project Legend sorted by hours descending */}
-              <div
-                data-testid="donut-project-legend"
-                className="flex-1 w-full space-y-2 min-w-0"
-              >
+              <div data-testid="donut-project-legend" className="flex-1 w-full space-y-2 min-w-0">
                 {analyticsData.projectShares.map((item) => {
                   const isSelected = selectedProjectId === item.project.id;
                   return (
@@ -1437,9 +1364,7 @@ export default function AnalyticsScreen() {
                         )
                       }
                       className={`w-full flex items-center justify-between gap-2 text-xs p-1.5 rounded-[var(--radius-sm)] transition-colors cursor-pointer ${
-                        isSelected
-                          ? 'bg-[var(--accent-soft)]'
-                          : 'hover:bg-[var(--surface-sunken)]'
+                        isSelected ? 'bg-[var(--accent-soft)]' : 'hover:bg-[var(--surface-sunken)]'
                       }`}
                     >
                       <div className="flex items-center gap-2 min-w-0">
@@ -1564,9 +1489,7 @@ export default function AnalyticsScreen() {
                           data-level={shadeLevel}
                           data-hours={day.hours}
                           onClick={() =>
-                            setSelectedHeatmapDate((prev) =>
-                              prev === day.date ? null : day.date
-                            )
+                            setSelectedHeatmapDate((prev) => (prev === day.date ? null : day.date))
                           }
                           title={`${day.label} (${row.label}): ${day.formattedDuration} (${day.tasks} tasks)`}
                           aria-label={`${day.label} (${row.label}): ${day.formattedDuration}, ${day.tasks} tasks`}
@@ -1587,10 +1510,7 @@ export default function AnalyticsScreen() {
 
           <div className="flex items-center justify-between text-[11px] text-[var(--ink-muted)] pt-1 border-t border-[var(--border-hairline)]">
             <span>Lower cadence</span>
-            <div
-              data-testid="heatmap-legend-swatches"
-              className="flex items-center gap-1"
-            >
+            <div data-testid="heatmap-legend-swatches" className="flex items-center gap-1">
               {[0, 2.5, 4.2, 5.8, 7.5].map((h, idx) => (
                 <span
                   key={idx}
@@ -1639,9 +1559,7 @@ export default function AnalyticsScreen() {
                   1,
                   ...analyticsData.contributors.map((c) => c.seconds)
                 );
-                const barPct = Math.round(
-                  (entry.seconds / maxContributorSeconds) * 100
-                );
+                const barPct = Math.round((entry.seconds / maxContributorSeconds) * 100);
                 return (
                   <div
                     key={entry.member.id}
@@ -1690,4 +1608,3 @@ export default function AnalyticsScreen() {
     </div>
   );
 }
-

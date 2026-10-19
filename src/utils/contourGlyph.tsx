@@ -1,219 +1,185 @@
-import React, { useMemo } from 'react';
-
-export interface ContourPathData {
-  d: string;
-  opacity: number;
-}
-
-export interface ContourGlyphOptions {
-  stroke?: string;
-  strokeWidth?: number;
-  minOpacity?: number;
-  maxOpacity?: number;
-}
+import React from 'react';
 
 /**
- * Deterministic 32-bit FNV-1a hash from any string or number seed.
+ * Generates a 32-bit FNV-1a hash of a given seed string.
  */
-export function hashSeed(seed: string | number): number {
-  const str = String(seed || 'plotline-default');
+export function hashSeed(seed: string): number {
+  if (!seed) return 0;
   let h = 2166136261 >>> 0;
-  for (let i = 0; i < str.length; i++) {
-    h ^= str.charCodeAt(i);
-    h = Math.imul(h, 16777619);
+  for (let i = 0; i < seed.length; i++) {
+    h = Math.imul(h ^ seed.charCodeAt(i), 16777619);
   }
   return h >>> 0;
 }
 
 /**
- * Deterministic mulberry32 PRNG seeded with a 32-bit integer.
+ * Mulberry32 PRNG function returning floats in [0, 1).
  */
-export function mulberry32(seedInt: number): () => number {
-  let state = seedInt >>> 0;
+export function mulberry32(a: number): () => number {
   return function () {
-    state = (state + 0x6d2b79f5) >>> 0;
-    let t = Math.imul(state ^ (state >>> 15), 1 | state);
-    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+    let t = (a += 0x6d2b79f5);
+    t = Math.imul(t ^ (t >>> 15), t | 1);
+    t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
     return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
   };
 }
 
-/**
- * Converts a closed loop of 2D points into a smooth closed Catmull-Rom spline
- * expressed as cubic Bezier segments (`M ... C ... Z`).
- */
-function closedCatmullRomSpline(points: Array<{ x: number; y: number }>): string {
-  const n = points.length;
-  if (n < 3) return '';
-
-  const fmt = (val: number) => Number(val.toFixed(2));
-  let path = `M ${fmt(points[0].x)} ${fmt(points[0].y)}`;
-
-  for (let i = 0; i < n; i++) {
-    const p0 = points[(i - 1 + n) % n];
-    const p1 = points[i];
-    const p2 = points[(i + 1) % n];
-    const p3 = points[(i + 2) % n];
-
-    const cp1x = p1.x + (p2.x - p0.x) / 6;
-    const cp1y = p1.y + (p2.y - p0.y) / 6;
-    const cp2x = p2.x - (p3.x - p1.x) / 6;
-    const cp2y = p2.y - (p3.y - p1.y) / 6;
-
-    path += ` C ${fmt(cp1x)} ${fmt(cp1y)}, ${fmt(cp2x)} ${fmt(cp2y)}, ${fmt(p2.x)} ${fmt(p2.y)}`;
-  }
-
-  return `${path} Z`;
+export interface ContourGlyphResult {
+  seed: string;
+  size: number;
+  viewBox: string;
+  paths: string[];
+  svgString: string;
+  toString: () => string;
 }
 
 /**
- * Generates deterministic concentric contour path definitions for a given seed and size.
- * - 4 to 6 closed concentric paths per glyph
- * - Radii perturbed by seeded mulberry32 noise within ±18%
- * - Smoothed with a closed Catmull-Rom spline
- * - Opacity ramping outward
- */
-export function computeContourPaths(
-  seed: string | number,
-  size: number,
-  minOpacity = 0.28,
-  maxOpacity = 0.96
-): ContourPathData[] {
-  const safeSize = Math.max(16, Number(size) || 36);
-  const rand = mulberry32(hashSeed(seed));
-
-  // 4–6 closed concentric paths per glyph
-  const ringCount = 4 + Math.floor(rand() * 3); // 4, 5, or 6
-  const vertexCount = 10;
-
-  // Base angular profile so concentric rings share topographic family character
-  const baseAngles: number[] = [];
-  for (let k = 0; k < vertexCount; k++) {
-    baseAngles.push((rand() * 2 - 1) * 0.18);
-  }
-
-  // Slight peak focal drift for inner rings
-  const driftAngle = rand() * Math.PI * 2;
-  const maxDrift = safeSize * 0.045;
-
-  const minRadius = safeSize * 0.115;
-  const maxRadius = safeSize * 0.405;
-
-  const paths: ContourPathData[] = [];
-
-  for (let rIdx = 0; rIdx < ringCount; rIdx++) {
-    const t = ringCount === 1 ? 1 : rIdx / (ringCount - 1);
-    const baseRadius = minRadius + t * (maxRadius - minRadius);
-
-    // Inner rings drift slightly toward the topographic summit; outer rings center
-    const ringDrift = (1 - t) * maxDrift;
-    const cx = safeSize / 2 + Math.cos(driftAngle) * ringDrift;
-    const cy = safeSize / 2 + Math.sin(driftAngle) * ringDrift;
-
-    const ringPoints: Array<{ x: number; y: number }> = [];
-    for (let k = 0; k < vertexCount; k++) {
-      const theta = (k / vertexCount) * Math.PI * 2;
-      const localNoise = (rand() * 2 - 1) * 0.18;
-      // Blend shared angular profile and per-ring noise, clamped strictly within ±18%
-      const combinedPerturbation = Math.max(
-        -0.18,
-        Math.min(0.18, baseAngles[k] * 0.68 + localNoise * 0.32)
-      );
-      const perturbedRadius = baseRadius * (1 + combinedPerturbation);
-      ringPoints.push({
-        x: cx + Math.cos(theta) * perturbedRadius,
-        y: cy + Math.sin(theta) * perturbedRadius,
-      });
-    }
-
-    const d = closedCatmullRomSpline(ringPoints);
-    // Opacity ramps outward from minOpacity (inner) to maxOpacity (outer)
-    const opacity = Number((minOpacity + t * (maxOpacity - minOpacity)).toFixed(3));
-    paths.push({ d, opacity });
-  }
-
-  return paths;
-}
-
-/**
- * Pure function contourGlyph(seed, size) returning deterministic SVG markup:
- * - 4–6 closed concentric paths per glyph
- * - Radii perturbed by seeded noise (mulberry32 seeded from a hash of the id, ±18%)
- * - Smoothed with a closed Catmull-Rom spline
- * - Stroke var(--accent), 1.25px, opacity ramping outward
+ * Deterministically generates stacked, continuous waved straight lines for a given seed and size.
  */
 export function contourGlyph(
-  seed: string | number,
-  size = 36,
-  options?: ContourGlyphOptions
-): string {
-  const safeSize = Math.max(16, Number(size) || 36);
-  const stroke = options?.stroke ?? 'var(--accent)';
-  const strokeWidth = options?.strokeWidth ?? 1.25;
-  const minOpacity = options?.minOpacity ?? 0.28;
-  const maxOpacity = options?.maxOpacity ?? 0.96;
+  seed: string = 'plotline',
+  size: number = 100,
+  ringsCount: number = 5
+): ContourGlyphResult {
+  const hash = hashSeed(seed || 'plotline');
+  const prng = mulberry32(hash);
+  const numLines = Math.max(3, Math.min(8, ringsCount));
+  const paths: string[] = [];
 
-  const paths = computeContourPaths(seed, safeSize, minOpacity, maxOpacity);
-  const pathsMarkup = paths
-    .map(
-      (p) =>
-        `<path d="${p.d}" fill="none" stroke="${stroke}" stroke-width="${strokeWidth}" stroke-opacity="${p.opacity}" stroke-linecap="round" stroke-linejoin="round" />`
-    )
-    .join('');
+  // Deterministic wave frequencies & phase offsets for stacked horizontal wave lines
+  const freq1 = 2 + Math.floor(prng() * 2); // 2 or 3 wave crests across width
+  const freq2 = 3 + Math.floor(prng() * 2); // 3 or 4 wave crests across width
+  const basePhase1 = prng() * Math.PI * 2;
+  const basePhase2 = prng() * Math.PI * 2;
 
-  return `<svg xmlns="http://www.w3.org/2000/svg" width="${safeSize}" height="${safeSize}" viewBox="0 0 ${safeSize} ${safeSize}" fill="none" data-seed="${String(
-    seed
-  )}">${pathsMarkup}</svg>`;
+  const topMargin = size * 0.15;
+  const bottomMargin = size * 0.15;
+  const usableHeight = size - topMargin - bottomMargin;
+  const lineSpacing = numLines > 1 ? usableHeight / (numLines - 1) : usableHeight / 2;
+
+  const leftMargin = size * 0.08;
+  const rightMargin = size * 0.08;
+  const usableWidth = size - leftMargin - rightMargin;
+  const numSamples = 32;
+
+  for (let lineIdx = 0; lineIdx < numLines; lineIdx++) {
+    const yBase = topMargin + lineIdx * lineSpacing;
+    const phaseShift = (lineIdx * Math.PI) / 4;
+    // Amplitude scales proportionally to line spacing so lines wave gracefully
+    const maxAmp = Math.min(lineSpacing * 0.38, size * 0.08);
+
+    const pts: { x: number; y: number }[] = [];
+
+    for (let i = 0; i < numSamples; i++) {
+      const normX = i / (numSamples - 1); // 0 to 1
+      const x = leftMargin + normX * usableWidth;
+
+      // Calculate continuous wave y displacement
+      const theta = normX * Math.PI * 2;
+      const waveVal =
+        0.65 * Math.sin(freq1 * theta + basePhase1 + phaseShift) +
+        0.35 * Math.cos(freq2 * theta + basePhase2 - phaseShift * 0.5);
+
+      // Dampen wave amplitude near edges (left & right) for smooth line terminations
+      const edgeDamping = Math.sin(normX * Math.PI);
+      const y = yBase + waveVal * maxAmp * (0.4 + 0.6 * edgeDamping);
+
+      pts.push({ x, y });
+    }
+
+    // Convert sample points into open smooth Catmull-Rom cubic bezier SVG path
+    let d = `M ${pts[0].x.toFixed(2)} ${pts[0].y.toFixed(2)}`;
+    for (let i = 0; i < numSamples - 1; i++) {
+      const pPrev = pts[Math.max(0, i - 1)];
+      const pCurr = pts[i];
+      const pNext = pts[i + 1];
+      const pNext2 = pts[Math.min(numSamples - 1, i + 2)];
+
+      const cp1x = pCurr.x + (pNext.x - pPrev.x) / 6;
+      const cp1y = pCurr.y + (pNext.y - pPrev.y) / 6;
+      const cp2x = pNext.x - (pNext2.x - pCurr.x) / 6;
+      const cp2y = pNext.y - (pNext2.y - pCurr.x) / 6;
+
+      d += ` C ${cp1x.toFixed(2)} ${cp1y.toFixed(2)}, ${cp2x.toFixed(2)} ${cp2y.toFixed(2)}, ${pNext.x.toFixed(2)} ${pNext.y.toFixed(2)}`;
+    }
+    paths.push(d);
+  }
+
+  const viewBox = `0 0 ${size} ${size}`;
+  const svgString = `<svg viewBox="${viewBox}" xmlns="http://www.w3.org/2000/svg" fill="none" stroke="currentColor" stroke-width="1.25" stroke-linecap="round" stroke-linejoin="round">${paths.map((p) => `<path d="${p}" stroke-linecap="round" stroke-linejoin="round" />`).join('')}</svg>`;
+
+  return {
+    seed,
+    size,
+    viewBox,
+    paths,
+    svgString,
+    toString: () => svgString,
+  };
 }
 
-export interface ContourGlyphProps {
-  seed: string | number;
-  size?: number;
-  stroke?: string;
+export interface ContourGlyphProps extends Omit<React.SVGProps<SVGSVGElement>, 'size'> {
+  seed?: string;
+  size?: number | string;
   strokeWidth?: number;
+  color?: string;
+  rings?: number;
   minOpacity?: number;
   maxOpacity?: number;
   className?: string;
+  style?: React.CSSProperties;
 }
 
-export function ContourGlyph({
-  seed,
-  size = 36,
-  stroke = 'var(--accent)',
+/**
+ * React SVG component for rendering stacked waved straight line glyphs.
+ */
+export const ContourGlyph: React.FC<ContourGlyphProps> = ({
+  seed = 'plotline',
+  size = 40,
   strokeWidth = 1.25,
-  minOpacity = 0.28,
-  maxOpacity = 0.96,
+  color,
+  rings = 5,
+  minOpacity = 0.35,
+  maxOpacity = 1.0,
   className = '',
-}: ContourGlyphProps) {
-  const safeSize = Math.max(16, Number(size) || 36);
-  const paths = useMemo(
-    () => computeContourPaths(seed, safeSize, minOpacity, maxOpacity),
-    [seed, safeSize, minOpacity, maxOpacity]
+  style,
+  ...svgProps
+}) => {
+  const numericSize = typeof size === 'number' ? size : parseFloat(String(size)) || 100;
+  const glyphData = React.useMemo(
+    () => contourGlyph(seed, numericSize, rings),
+    [seed, numericSize, rings]
   );
 
   return (
     <svg
-      xmlns="http://www.w3.org/2000/svg"
-      width={safeSize}
-      height={safeSize}
-      viewBox={`0 0 ${safeSize} ${safeSize}`}
+      viewBox={glyphData.viewBox}
       fill="none"
-      data-seed={String(seed)}
-      aria-hidden="true"
-      className={`motion-contour ${className}`}
+      stroke={color || 'currentColor'}
+      strokeWidth={strokeWidth}
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      className={`overflow-hidden ${className}`.trim()}
+      style={{ display: 'inline-block', verticalAlign: 'middle', borderRadius: 'inherit', ...style }}
+      {...svgProps}
     >
-      {paths.map((p, idx) => (
-        <path
-          key={idx}
-          d={p.d}
-          fill="none"
-          stroke={stroke}
-          strokeWidth={strokeWidth}
-          strokeOpacity={p.opacity}
-          strokeLinecap="round"
-          strokeLinejoin="round"
-        />
-      ))}
+      {glyphData.paths.map((pathD, idx) => {
+        const pathOpacity =
+          glyphData.paths.length > 1
+            ? minOpacity + (idx / (glyphData.paths.length - 1)) * (maxOpacity - minOpacity)
+            : minOpacity;
+        return (
+          <path
+            key={idx}
+            d={pathD}
+            opacity={pathOpacity}
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          />
+        );
+      })}
     </svg>
   );
-}
+};
+
+export default ContourGlyph;

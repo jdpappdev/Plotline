@@ -13,12 +13,12 @@ import {
 import {
   ACCENT_THEMES,
   AccentName,
-  computeInitials,
   NotificationSettings,
   usePlotlineStore,
   WeekStart,
   WorkspaceValidationReport,
 } from '../store';
+import { computeInitials } from '../utils/string';
 
 type SettingsSection = 'Profile' | 'Notifications' | 'Appearance' | 'Data';
 
@@ -95,15 +95,11 @@ export default function SettingsScreen() {
   return (
     <div className="max-w-[1160px] mx-auto space-y-5 pb-6 min-w-0">
       {/* Header */}
-      <div
-        style={{ '--stagger-index': 0 } as React.CSSProperties}
-        className="plotline-enter"
-      >
-        <h1 className="text-2xl font-bold tracking-tight text-[var(--ink-primary)]">
-          Settings
-        </h1>
+      <div style={{ '--stagger-index': 0 } as React.CSSProperties} className="plotline-enter">
+        <h1 className="text-2xl font-bold tracking-tight text-[var(--ink-primary)]">Settings</h1>
         <p className="text-xs sm:text-sm text-[var(--ink-secondary)] mt-0.5">
-          Manage your specialist profile, notification preferences, studio appearance, and dataset integrity.
+          Manage your specialist profile, notification preferences, studio appearance, and dataset
+          integrity.
         </p>
       </div>
 
@@ -263,7 +259,8 @@ export default function SettingsScreen() {
                   Notifications
                 </h2>
                 <p className="text-xs text-[var(--ink-secondary)] mt-0.5">
-                  Configure how Plotline alerts you about studio activity. Saved automatically to localStorage.
+                  Configure how Plotline alerts you about studio activity. Saved automatically to
+                  localStorage.
                 </p>
               </div>
 
@@ -271,10 +268,7 @@ export default function SettingsScreen() {
                 {NOTIFICATION_ITEMS.map((item) => {
                   const enabled = notifications[item.key];
                   return (
-                    <div
-                      key={item.key}
-                      className="py-3.5 flex items-center justify-between gap-4"
-                    >
+                    <div key={item.key} className="py-3.5 flex items-center justify-between gap-4">
                       <div className="min-w-0">
                         <p className="text-xs sm:text-sm font-semibold text-[var(--ink-primary)]">
                           {item.label}
@@ -294,9 +288,7 @@ export default function SettingsScreen() {
                       >
                         <span
                           style={{
-                            backgroundColor: enabled
-                              ? 'var(--accent)'
-                              : 'var(--border-strong)',
+                            backgroundColor: enabled ? 'var(--accent)' : 'var(--border-strong)',
                           }}
                           className="w-11 h-6 rounded-full transition-colors p-0.5 block"
                         >
@@ -328,7 +320,8 @@ export default function SettingsScreen() {
                   Appearance
                 </h2>
                 <p className="text-xs text-[var(--ink-secondary)] mt-0.5">
-                  Select the primary studio accent palette and calendar week-start day. Changes apply immediately.
+                  Select the primary studio accent palette and calendar week-start day. Changes
+                  apply immediately.
                 </p>
               </div>
 
@@ -349,7 +342,7 @@ export default function SettingsScreen() {
                       <button
                         key={key}
                         type="button"
-                        onClick={() => setAccent(key, true)}
+                        onClick={() => setAccent(key)}
                         aria-pressed={isSelected}
                         className={`p-3.5 min-h-[56px] rounded-[var(--radius-md)] border text-left transition-colors duration-160 ease-plotline cursor-pointer flex items-start justify-between gap-3 ${
                           isSelected
@@ -390,7 +383,8 @@ export default function SettingsScreen() {
                     Calendar Week Start
                   </h3>
                   <p className="text-xs text-[var(--ink-secondary)]">
-                    Controls the starting day column for the Calendar month grid and Dashboard Weekly Output.
+                    Controls the starting day column for the Calendar month grid and Dashboard
+                    Weekly Output.
                   </p>
                 </div>
 
@@ -405,7 +399,7 @@ export default function SettingsScreen() {
                       <button
                         key={day}
                         type="button"
-                        onClick={() => setWeekStart(day, true)}
+                        onClick={() => setWeekStart(day as WeekStart)}
                         aria-pressed={active}
                         style={
                           active
@@ -440,7 +434,8 @@ export default function SettingsScreen() {
                   Dataset Integrity & Benchmark Reset
                 </h2>
                 <p className="text-xs text-[var(--ink-secondary)] mt-0.5">
-                  Verify workspace consistency against benchmark constraints or restore the initial dataset.
+                  Verify workspace consistency against benchmark constraints or restore the initial
+                  dataset.
                 </p>
               </div>
 
@@ -453,7 +448,9 @@ export default function SettingsScreen() {
                     </h3>
                   </div>
                   <p className="text-xs text-[var(--ink-secondary)] leading-relaxed">
-                    Runs 8 integrity checks: ID resolution, task progress alignment, focus sessions timeline, completion dates, assignees, event attendees, stat card totals, and person task counts.
+                    Runs 8 integrity checks: ID resolution, task progress alignment, focus sessions
+                    timeline, completion dates, assignees, event attendees, stat card totals, and
+                    person task counts.
                   </p>
                   <button
                     type="button"
@@ -474,7 +471,8 @@ export default function SettingsScreen() {
                     </h3>
                   </div>
                   <p className="text-xs text-[var(--ink-secondary)] leading-relaxed">
-                    Clears custom entries and restores the exact 6 projects, 22 tasks, 7 team members, 9 events, and focus sessions benchmark dataset.
+                    Clears custom entries and restores the exact 6 projects, 22 tasks, 7 team
+                    members, 9 events, and focus sessions benchmark dataset.
                   </p>
                   <button
                     type="button"
@@ -494,7 +492,8 @@ export default function SettingsScreen() {
                 <div className="pt-4 border-t border-[var(--border-hairline)] space-y-3">
                   <div className="flex items-center justify-between">
                     <h3 className="text-xs font-semibold text-[var(--ink-primary)] uppercase tracking-wider">
-                      Validation Results ({validationReport.passed ? 'ALL PASSED' : 'ISSUES DETECTED'})
+                      Validation Results (
+                      {validationReport.passed ? 'ALL PASSED' : 'ISSUES DETECTED'})
                     </h3>
                     <span className="text-[10px] text-[var(--ink-muted)]">
                       Checked at {new Date(validationReport.timestamp).toLocaleTimeString()}

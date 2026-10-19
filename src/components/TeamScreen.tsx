@@ -1,19 +1,7 @@
 import React, { useMemo, useRef, useState } from 'react';
 import { AnimatePresence, motion, useReducedMotion } from 'motion/react';
-import {
-  Mail,
-  MapPin,
-  MessageSquare,
-  User,
-  UserPlus,
-} from 'lucide-react';
-import {
-  Department,
-  PresenceStatus,
-  TaskItem,
-  TeamMember,
-  usePlotlineStore,
-} from '../store';
+import { Mail, MapPin, MessageSquare, User, UserPlus } from 'lucide-react';
+import { usePlotlineStore } from '../store'; import { Project, TaskItem, TeamMember, CalendarEvent, EventCategory, AccentName, RouteId, Department, PresenceStatus } from '../domain/types';;
 import { ContourGlyph } from '../utils/contourGlyph';
 import { Dialog } from '../ui/Dialog';
 import { priorityChipStyle } from './TasksScreen';
@@ -54,11 +42,7 @@ function presenceTextLabel(presence: PresenceStatus): string {
 function UtilizationRing40({ pct }: { pct: number }) {
   const normalizedPct = Math.min(100, Math.max(0, pct));
   const strokeColor =
-    normalizedPct >= 100
-      ? '#DC2626'
-      : normalizedPct >= 85
-      ? '#D97706'
-      : 'var(--accent)';
+    normalizedPct >= 100 ? '#DC2626' : normalizedPct >= 85 ? '#D97706' : 'var(--accent)';
 
   const radius = 16;
   const circumference = 2 * Math.PI * radius;
@@ -219,9 +203,7 @@ export default function TeamScreen() {
       >
         <div className="min-w-0">
           <div className="flex items-center gap-3 flex-wrap">
-            <h1 className="text-2xl font-bold tracking-tight text-[var(--ink-primary)]">
-              Team
-            </h1>
+            <h1 className="text-2xl font-bold tracking-tight text-[var(--ink-primary)]">Team</h1>
             <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-medium bg-[var(--surface-elevated)] border border-[var(--border-hairline)] text-[var(--ink-secondary)]">
               <span className="w-2 h-2 rounded-full bg-[#16A34A]" />
               <span>{onlineCount} online now</span>
@@ -263,9 +245,7 @@ export default function TeamScreen() {
               onClick={() => setSelectedDept(dept)}
               aria-pressed={isSelected}
               style={
-                isSelected
-                  ? { backgroundColor: 'var(--accent)', color: '#ffffff' }
-                  : undefined
+                isSelected ? { backgroundColor: 'var(--accent)', color: '#ffffff' } : undefined
               }
               className={`px-3.5 py-1.5 min-h-[44px] sm:min-h-0 rounded-[var(--radius-sm)] text-xs font-semibold transition-colors cursor-pointer whitespace-nowrap ${
                 isSelected
@@ -321,143 +301,135 @@ export default function TeamScreen() {
           className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4"
         >
           <AnimatePresence mode="popLayout">
-            {filteredMembers.map(
-              ({ member, openCount, completedCount, workloadPct }, idx) => (
-                <motion.article
-                  layout={!prefersReducedMotion}
-                  key={member.id}
-                  initial={prefersReducedMotion ? false : { opacity: 0, scale: 0.96 }}
-                  animate={{ opacity: 1, scale: 1 }}
-                  exit={prefersReducedMotion ? undefined : { opacity: 0, scale: 0.95 }}
-                  transition={
-                    prefersReducedMotion
-                      ? { duration: 0 }
-                      : {
-                          type: 'spring',
-                          stiffness: 380,
-                          damping: 30,
-                        }
-                  }
-                  style={{ '--stagger-index': idx + 2 } as React.CSSProperties}
-                  className="plotline-enter bg-[var(--surface-elevated)] border border-[var(--border-hairline)] rounded-[var(--radius-lg)] p-4 sm:p-5 flex flex-col justify-between gap-4 min-w-0"
-                >
-                  {/* Top: Initials Avatar with Presence Dot + Name, Role, Department Chip */}
-                  <div className="flex items-start justify-between gap-3">
-                    <div className="flex items-center gap-3 min-w-0">
-                      <div className="relative shrink-0">
-                        <span
-                          style={{ backgroundColor: 'var(--accent)' }}
-                          className="w-11 h-11 rounded-full flex items-center justify-center text-sm font-semibold text-white"
-                        >
-                          {member.initials}
-                        </span>
-                        <span
-                          title={presenceTextLabel(member.presence)}
-                          style={{
-                            backgroundColor: presenceDotColor(member.presence),
-                          }}
-                          className="absolute bottom-0 right-0 w-3 h-3 rounded-full border-2 border-[var(--surface-elevated)]"
-                        />
-                      </div>
-
-                      <div className="min-w-0">
-                        <h2 className="text-sm sm:text-base font-semibold text-[var(--ink-primary)] truncate">
-                          {member.name}
-                        </h2>
-                        <p className="text-xs text-[var(--ink-secondary)] truncate">
-                          {member.role}
-                        </p>
-                      </div>
-                    </div>
-
-                    <span className="px-2.5 py-0.5 rounded-full text-[11px] font-medium bg-[var(--surface-sunken)] text-[var(--ink-secondary)] border border-[var(--border-hairline)] whitespace-nowrap shrink-0">
-                      {member.department}
-                    </span>
-                  </div>
-
-                  {/* Middle: Open vs Completed Counts + Workload Bar with % */}
-                  <div className="space-y-3 pt-1">
-                    <div className="grid grid-cols-2 gap-2.5">
-                      <div className="p-2.5 rounded-[var(--radius-sm)] bg-[var(--surface-canvas)] border border-[var(--border-hairline)] flex items-center justify-between">
-                        <span className="text-xs text-[var(--ink-secondary)]">
-                          Open
-                        </span>
-                        <span className="text-sm font-semibold font-ui-tabular text-[var(--ink-primary)]">
-                          {openCount}
-                        </span>
-                      </div>
-                      <div className="p-2.5 rounded-[var(--radius-sm)] bg-[var(--surface-canvas)] border border-[var(--border-hairline)] flex items-center justify-between">
-                        <span className="text-xs text-[var(--ink-secondary)]">
-                          Completed
-                        </span>
-                        <span className="text-sm font-semibold font-ui-tabular text-[var(--ink-primary)]">
-                          {completedCount}
-                        </span>
-                      </div>
-                    </div>
-
-                    <div className="space-y-1.5">
-                      <div className="flex items-center justify-between text-xs">
-                        <span className="text-[var(--ink-secondary)]">Workload</span>
-                        <span
-                          data-testid={`workload-pct-${member.id}`}
-                          className="font-semibold font-ui-tabular text-[var(--ink-primary)]"
-                        >
-                          {workloadPct}%
-                        </span>
-                      </div>
-                      <div className="h-2 w-full rounded-full bg-[var(--surface-sunken)] overflow-hidden">
-                        <div
-                          style={{
-                            width: `${workloadPct}%`,
-                            backgroundColor: 'var(--accent)',
-                          }}
-                          className="h-full rounded-full transition-all duration-300 ease-plotline"
-                        />
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Footer: Message & Profile & Delete Buttons */}
-                  <div className="pt-2 border-t border-[var(--border-hairline)] flex items-center gap-2">
-                    <button
-                      type="button"
-                      onClick={() =>
-                        pushToast(
-                          `Direct dispatch opened for ${member.name}`,
-                          `${member.email} · ${member.timezone}`
-                        )
+            {filteredMembers.map(({ member, openCount, completedCount, workloadPct }, idx) => (
+              <motion.article
+                layout={!prefersReducedMotion}
+                key={member.id}
+                initial={prefersReducedMotion ? false : { opacity: 0, scale: 0.96 }}
+                animate={{ opacity: 1, scale: 1 }}
+                exit={prefersReducedMotion ? undefined : { opacity: 0, scale: 0.95 }}
+                transition={
+                  prefersReducedMotion
+                    ? { duration: 0 }
+                    : {
+                        type: 'spring',
+                        stiffness: 380,
+                        damping: 30,
                       }
-                      className="flex-1 min-h-[44px] sm:min-h-0 py-2 px-2.5 rounded-[var(--radius-sm)] border border-[var(--border-strong)] bg-[var(--surface-elevated)] hover:bg-[var(--surface-sunken)] text-xs font-semibold text-[var(--ink-primary)] inline-flex items-center justify-center gap-1.5 transition-colors cursor-pointer"
-                    >
-                      <MessageSquare className="w-3.5 h-3.5 text-[var(--ink-secondary)]" />
-                      <span>Message</span>
-                    </button>
+                }
+                style={{ '--stagger-index': idx + 2 } as React.CSSProperties}
+                className="plotline-enter bg-[var(--surface-elevated)] border border-[var(--border-hairline)] rounded-[var(--radius-lg)] p-4 sm:p-5 flex flex-col justify-between gap-4 min-w-0"
+              >
+                {/* Top: Initials Avatar with Presence Dot + Name, Role, Department Chip */}
+                <div className="flex items-start justify-between gap-3">
+                  <div className="flex items-center gap-3 min-w-0">
+                    <div className="relative shrink-0">
+                      <span
+                        style={{ backgroundColor: 'var(--accent)' }}
+                        className="w-11 h-11 rounded-full flex items-center justify-center text-sm font-semibold text-white"
+                      >
+                        {member.initials}
+                      </span>
+                      <span
+                        title={presenceTextLabel(member.presence)}
+                        style={{
+                          backgroundColor: presenceDotColor(member.presence),
+                        }}
+                        className="absolute bottom-0 right-0 w-3 h-3 rounded-full border-2 border-[var(--surface-elevated)]"
+                      />
+                    </div>
 
-                    <button
-                      type="button"
-                      onClick={() => handleOpenProfile(member.id)}
-                      style={{
-                        backgroundColor: 'var(--accent-soft)',
-                        color: 'var(--accent)',
-                        borderColor: 'var(--accent-border)',
-                      }}
-                      className="flex-1 min-h-[44px] sm:min-h-0 py-2 px-2.5 rounded-[var(--radius-sm)] border text-xs font-semibold inline-flex items-center justify-center gap-1.5 hover:opacity-90 transition-opacity cursor-pointer"
-                    >
-                      <User className="w-3.5 h-3.5" />
-                      <span>Profile</span>
-                    </button>
-
-                    <DeleteButton
-                      name={member.name}
-                      disabled={member.id === currentUser.id}
-                      disabledTooltip="You can't delete your own profile."
-                      onDelete={() => deleteMember(member.id)}
-                    />
+                    <div className="min-w-0">
+                      <h2 className="text-sm sm:text-base font-semibold text-[var(--ink-primary)] truncate">
+                        {member.name}
+                      </h2>
+                      <p className="text-xs text-[var(--ink-secondary)] truncate">{member.role}</p>
+                    </div>
                   </div>
-                </motion.article>
-              )
-            )}
+
+                  <span className="px-2.5 py-0.5 rounded-full text-[11px] font-medium bg-[var(--surface-sunken)] text-[var(--ink-secondary)] border border-[var(--border-hairline)] whitespace-nowrap shrink-0">
+                    {member.department}
+                  </span>
+                </div>
+
+                {/* Middle: Open vs Completed Counts + Workload Bar with % */}
+                <div className="space-y-3 pt-1">
+                  <div className="grid grid-cols-2 gap-2.5">
+                    <div className="p-2.5 rounded-[var(--radius-sm)] bg-[var(--surface-canvas)] border border-[var(--border-hairline)] flex items-center justify-between">
+                      <span className="text-xs text-[var(--ink-secondary)]">Open</span>
+                      <span className="text-sm font-semibold font-ui-tabular text-[var(--ink-primary)]">
+                        {openCount}
+                      </span>
+                    </div>
+                    <div className="p-2.5 rounded-[var(--radius-sm)] bg-[var(--surface-canvas)] border border-[var(--border-hairline)] flex items-center justify-between">
+                      <span className="text-xs text-[var(--ink-secondary)]">Completed</span>
+                      <span className="text-sm font-semibold font-ui-tabular text-[var(--ink-primary)]">
+                        {completedCount}
+                      </span>
+                    </div>
+                  </div>
+
+                  <div className="space-y-1.5">
+                    <div className="flex items-center justify-between text-xs">
+                      <span className="text-[var(--ink-secondary)]">Workload</span>
+                      <span
+                        data-testid={`workload-pct-${member.id}`}
+                        className="font-semibold font-ui-tabular text-[var(--ink-primary)]"
+                      >
+                        {workloadPct}%
+                      </span>
+                    </div>
+                    <div className="h-2 w-full rounded-full bg-[var(--surface-sunken)] overflow-hidden">
+                      <div
+                        style={{
+                          width: `${workloadPct}%`,
+                          backgroundColor: 'var(--accent)',
+                        }}
+                        className="h-full rounded-full transition-all duration-300 ease-plotline"
+                      />
+                    </div>
+                  </div>
+                </div>
+
+                {/* Footer: Message & Profile & Delete Buttons */}
+                <div className="pt-2 border-t border-[var(--border-hairline)] flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() =>
+                      pushToast(
+                        `Direct dispatch opened for ${member.name}`,
+                        `${member.email} · ${member.timezone}`
+                      )
+                    }
+                    className="flex-1 min-h-[44px] sm:min-h-0 py-2 px-2.5 rounded-[var(--radius-sm)] border border-[var(--border-strong)] bg-[var(--surface-elevated)] hover:bg-[var(--surface-sunken)] text-xs font-semibold text-[var(--ink-primary)] inline-flex items-center justify-center gap-1.5 transition-colors cursor-pointer"
+                  >
+                    <MessageSquare className="w-3.5 h-3.5 text-[var(--ink-secondary)]" />
+                    <span>Message</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => handleOpenProfile(member.id)}
+                    style={{
+                      backgroundColor: 'var(--accent-soft)',
+                      color: 'var(--accent)',
+                      borderColor: 'var(--accent-border)',
+                    }}
+                    className="flex-1 min-h-[44px] sm:min-h-0 py-2 px-2.5 rounded-[var(--radius-sm)] border text-xs font-semibold inline-flex items-center justify-center gap-1.5 hover:opacity-90 transition-opacity cursor-pointer"
+                  >
+                    <User className="w-3.5 h-3.5" />
+                    <span>Profile</span>
+                  </button>
+
+                  <DeleteButton
+                    name={member.name}
+                    disabled={member.id === currentUser.id}
+                    disabledTooltip="You can't delete your own profile."
+                    onDelete={() => deleteMember(member.id)}
+                  />
+                </div>
+              </motion.article>
+            ))}
           </AnimatePresence>
         </motion.div>
       )}
@@ -564,9 +536,7 @@ export default function TeamScreen() {
                 <h3 className="text-xs sm:text-sm font-semibold text-[var(--ink-primary)]">
                   Assigned Tasks ({activeProfileData.memberTasks.length})
                 </h3>
-                <span className="text-[11px] text-[var(--ink-muted)]">
-                  Live store sync
-                </span>
+                <span className="text-[11px] text-[var(--ink-muted)]">Live store sync</span>
               </div>
 
               {activeProfileData.memberTasks.length === 0 ? (
@@ -591,9 +561,7 @@ export default function TeamScreen() {
                           <select
                             aria-label={`Change stage for ${t.title}`}
                             value={t.status}
-                            onChange={(e) =>
-                              moveTask(t.id, e.target.value as TaskItem['status'])
-                            }
+                            onChange={(e) => moveTask(t.id, e.target.value as TaskItem['status'])}
                             className="min-h-[36px] sm:min-h-0 px-2 py-1 rounded-[var(--radius-xs)] border border-[var(--border-strong)] bg-[var(--surface-elevated)] text-[11px] font-medium text-[var(--ink-primary)] shrink-0 cursor-pointer"
                           >
                             <option value="Backlog">To do</option>
@@ -619,9 +587,7 @@ export default function TeamScreen() {
                               {t.priority}
                             </span>
                           </div>
-                          <span className="text-[var(--ink-muted)]">
-                            Due {t.dueDate}
-                          </span>
+                          <span className="text-[var(--ink-muted)]">Due {t.dueDate}</span>
                         </div>
                       </li>
                     );

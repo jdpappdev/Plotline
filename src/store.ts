@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import { contourGlyph, hashSeed, mulberry32 } from './utils/contourGlyph';
+import { contourGlyph } from './utils/contourGlyph';
 
 export { contourGlyph };
 
@@ -249,9 +249,6 @@ export interface WorkspaceValidationReport {
 
 const ACCENT_STORAGE_KEY = 'plotline-accent-v3';
 const WEEK_START_STORAGE_KEY = 'plotline-week-start-v3';
-const TIMER_SECONDS_STORAGE_KEY = 'plotline-timer-seconds-v3';
-const TIMER_RUNNING_STORAGE_KEY = 'plotline-timer-running-v3';
-const TIMER_TASK_STORAGE_KEY = 'plotline-timer-task-v3';
 const TASKS_STORAGE_KEY = 'plotline-tasks-v6';
 const PROJECTS_STORAGE_KEY = 'plotline-projects-v6';
 const TEAM_STORAGE_KEY = 'plotline-team-v6';
@@ -263,91 +260,21 @@ const SIGNED_OUT_STORAGE_KEY = 'plotline-signed-out-v3';
 const RAIL_COLLAPSED_STORAGE_KEY = 'plotline-rail-collapsed-v3';
 const CHECKED_IN_EVENTS_STORAGE_KEY = 'plotline-checked-in-events-v3';
 
-export function getTodayIsoDate(): string {
-  const now = new Date();
-  const y = now.getFullYear();
-  const m = String(now.getMonth() + 1).padStart(2, '0');
-  const d = String(now.getDate()).padStart(2, '0');
-  return `${y}-${m}-${d}`;
-}
-
-export function getIsoDateOffset(daysOffset: number): string {
-  const d = new Date();
-  d.setDate(d.getDate() + daysOffset);
-  const y = d.getFullYear();
-  const m = String(d.getMonth() + 1).padStart(2, '0');
-  const day = String(d.getDate()).padStart(2, '0');
-  return `${y}-${m}-${day}`;
-}
-
-export function computeDaysAgoFromIso(dateIso: string): number {
-  if (!dateIso) return 9999;
-  const todayIso = getTodayIsoDate();
-  const todayParts = todayIso.split('-').map(Number);
-  const parts = dateIso.split('-').map(Number);
-  if (parts.length !== 3 || todayParts.length !== 3) return 9999;
-  const todayUtc = Date.UTC(todayParts[0], todayParts[1] - 1, todayParts[2]);
-  const dateUtc = Date.UTC(parts[0], parts[1] - 1, parts[2]);
-  return Math.round((todayUtc - dateUtc) / (1000 * 60 * 60 * 24));
-}
-
-export function computeDaysBetweenIso(startIso: string, endIso: string): number {
-  if (!startIso || !endIso) return 0;
-  const sParts = startIso.split('-').map(Number);
-  const eParts = endIso.split('-').map(Number);
-  if (sParts.length !== 3 || eParts.length !== 3) return 0;
-  const sUtc = Date.UTC(sParts[0], sParts[1] - 1, sParts[2]);
-  const eUtc = Date.UTC(eParts[0], eParts[1] - 1, eParts[2]);
-  return Math.max(0, Math.round((eUtc - sUtc) / (1000 * 60 * 60 * 24)));
-}
-
-export function getTaskCycleDays(task: TaskItem): number {
-  if (task.startDate && task.completedDate) {
-    return computeDaysBetweenIso(task.startDate, task.completedDate);
-  }
-  return task.cycleDays ?? 0;
-}
-
-export function isTaskCompletedOnTime(task: TaskItem): boolean {
-  if (!task.completedDate || !task.dueDate) return true;
-  return task.completedDate <= task.dueDate;
-}
-
-export function getTaskFactorBand(status: TaskItem['status']): [number, number] {
-  switch (status) {
-    case 'Done':
-      return [0.55, 0.7];
-    case 'In Review':
-      return [0.5, 0.65];
-    case 'In Progress':
-      return [0.25, 0.4];
-    case 'Backlog':
-    default:
-      return [0, 0];
-  }
-}
-
-export function isTaskCompletedInRange(
-  task: TaskItem,
-  minDaysAgoInclusive: number,
-  maxDaysAgoExclusive: number
-): boolean {
-  if (task.status !== 'Done' || !task.completedDate) return false;
-  const daysAgo = computeDaysAgoFromIso(task.completedDate);
-  return daysAgo >= minDaysAgoInclusive && daysAgo < maxDaysAgoExclusive;
-}
-
-export function formatDuration(totalSeconds: number): string {
-  const secs = Math.max(0, Math.round(totalSeconds || 0));
-  if (secs === 0) return '0m';
-  if (secs < 60) return '<1m';
-  if (secs < 3600) return `${Math.floor(secs / 60)}m`;
-  return `${(secs / 3600).toFixed(1)}h`;
-}
-
-export function formatLoggedDuration(seconds: number): string {
-  return formatDuration(seconds);
-}
+import { getTodayIsoDate, getIsoDateOffset, getNow, getNowTimestamp } from './lib/clock';
+import {
+  computeDaysAgoFromIso,
+  computeDaysBetweenIso,
+  formatDuration,
+} from './domain/derivations/time';
+import {
+  getTaskFactorBand,
+  isTaskCompletedInRange,
+} from './domain/derivations/tasks';
+import {
+  getProjectProgress,
+  getProjectStatus,
+} from './domain/derivations/projects';
+import { getMemberTaskCounts } from './domain/derivations/team';
 
 export function dedupeById<T extends { id: string }>(items: T[]): T[] {
   const seen = new Set<string>();
@@ -374,118 +301,6 @@ export function computeInitials(name: string): string {
 export function pluralize(count: number, singular: string, plural?: string): string {
   const word = count === 1 ? singular : plural || `${singular}s`;
   return `${count} ${word}`;
-}
-
-// --- Derivation Helpers (Used Everywhere) ---
-export function getProjectProgress(project: Project, tasks: TaskItem[]): number {
-  const projTasks = tasks.filter((t) => t.projectId === project.id);
-  if (projTasks.length === 0) return 0;
-  const doneCount = projTasks.filter((t) => t.status === 'Done').length;
-  return Math.round((doneCount / projTasks.length) * 100);
-}
-
-export function getProjectStatus(project: Project, tasks: TaskItem[]): 'Ended' | 'Pending' | 'Running' {
-  if (project.statusOverride) {
-    return project.statusOverride;
-  }
-  const projTasks = tasks.filter((t) => t.projectId === project.id);
-  if (projTasks.length === 0) {
-    return 'Pending';
-  }
-  if (projTasks.every((t) => t.status === 'Done')) {
-    return 'Ended';
-  }
-  const hasStartedTask = projTasks.some(
-    (t) => t.status === 'In Progress' || t.status === 'In Review' || t.status === 'Done'
-  );
-  if (!hasStartedTask) {
-    return 'Pending';
-  }
-  return 'Running';
-}
-
-export function getProjectHealth(project: Project, tasks: TaskItem[]): 'At risk' | 'On track' {
-  const today = getTodayIsoDate();
-  const projTasks = tasks.filter((t) => t.projectId === project.id);
-  const hasOverdue = projTasks.some(
-    (t) => t.status !== 'Done' && t.dueDate && t.dueDate < today
-  );
-  return hasOverdue ? 'At risk' : 'On track';
-}
-
-export function getMemberWorkload(memberId: string, tasks: TaskItem[]): number {
-  const openTasks = tasks.filter(
-    (t) => (t.assigneeId === memberId || t.coAssigneeId === memberId) && t.status !== 'Done'
-  );
-  const openHours = openTasks.reduce((sum, t) => sum + (t.estimateHours || 0), 0);
-  return Math.round((openHours / 60) * 100);
-}
-
-export function getMemberTaskCounts(
-  memberId: string,
-  tasks: TaskItem[]
-): { openCount: number; completedCount: number } {
-  const openCount = tasks.filter(
-    (t) => (t.assigneeId === memberId || t.coAssigneeId === memberId) && t.status !== 'Done'
-  ).length;
-  const completedCount = tasks.filter(
-    (t) => (t.assigneeId === memberId || t.coAssigneeId === memberId) && t.status === 'Done'
-  ).length;
-  return { openCount, completedCount };
-}
-
-export function getDoneTasksGrouped(tasks: TaskItem[]): { recentDone: TaskItem[]; earlierDone: TaskItem[] } {
-  const doneTasks = tasks.filter((t) => t.status === 'Done');
-  const cutoffDate = getIsoDateOffset(-14);
-  const recentDone = doneTasks.filter((t) => (t.completedDate || t.dueDate) >= cutoffDate);
-  const earlierDone = doneTasks.filter((t) => (t.completedDate || t.dueDate) < cutoffDate);
-  return { recentDone, earlierDone };
-}
-
-export function getNextUpEvent(events: CalendarEvent[], projects: Project[]): CalendarEvent | null {
-  const now = new Date();
-  const todayIso = getTodayIsoDate();
-  const currentHHMM = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
-
-  // Combine explicit events + auto-created deadline events
-  const deadlineEvents: CalendarEvent[] = projects.map((p) => ({
-    id: `evt-dl-${p.id}`,
-    title: `Deadline: ${p.name}`,
-    category: 'Deadline',
-    projectId: p.id,
-    date: p.targetDate,
-    startTime: '17:00',
-    endTime: '18:00',
-    attendeeIds: [p.leadId],
-    location: 'Project Milestone',
-  }));
-
-  const allEvents = [...events, ...deadlineEvents];
-
-  const upcoming = allEvents.filter((e) => {
-    if (e.date > todayIso) return true;
-    if (e.date === todayIso && e.startTime >= currentHHMM) return true;
-    return false;
-  });
-
-  upcoming.sort((a, b) => {
-    if (a.date !== b.date) return a.date.localeCompare(b.date);
-    return a.startTime.localeCompare(b.startTime);
-  });
-
-  return upcoming[0] || allEvents[0] || null;
-}
-
-export function getRingsProjects(
-  projects: Project[],
-  tasks: TaskItem[]
-): Array<{ project: Project; progress: number }> {
-  const unfinished = projects.filter((p) => getProjectStatus(p, tasks) !== 'Ended');
-  unfinished.sort((a, b) => a.targetDate.localeCompare(b.targetDate));
-  return unfinished.slice(0, 4).map((p) => ({
-    project: p,
-    progress: getProjectProgress(p, tasks),
-  }));
 }
 
 export function normalizeAccent(value: string | null | undefined): AccentName {
@@ -1187,34 +1002,34 @@ export function createSeedTasks(): TaskItem[] {
 // Done: 0.55–0.70, In Review: 0.50–0.65, In Progress: 0.25–0.40, Backlog: 0
 const SEED_TASK_FACTORS: Record<string, number> = {
   // Done (0.55–0.70)
-  'tsk-h-1': 0.62,  // 10h -> 6.2h
-  'tsk-h-2': 0.60,  // 6h -> 3.6h
+  'tsk-h-1': 0.62, // 10h -> 6.2h
+  'tsk-h-2': 0.6, // 6h -> 3.6h
   'tsk-h-3': 0.625, // 16h -> 10.0h
-  'tsk-h-4': 0.60,  // 14h -> 8.4h
-  'tsk-f-1': 0.60,  // 12h -> 7.2h
+  'tsk-h-4': 0.6, // 14h -> 8.4h
+  'tsk-f-1': 0.6, // 12h -> 7.2h
   'tsk-f-2': 0.625, // 8h -> 5.0h
-  'tsk-o-1': 0.60,  // 6h -> 3.6h
+  'tsk-o-1': 0.6, // 6h -> 3.6h
   'tsk-o-2': 0.625, // 12h -> 7.5h
-  'tsk-a-1': 0.60,  // 14h -> 8.4h
-  'tsk-a-2': 0.60,  // 12h -> 7.2h
-  'tsk-a-3': 0.60,  // 16h -> 9.6h
+  'tsk-a-1': 0.6, // 14h -> 8.4h
+  'tsk-a-2': 0.6, // 12h -> 7.2h
+  'tsk-a-3': 0.6, // 16h -> 9.6h
   'tsk-l-1': 0.625, // 16h -> 10.0h (previous 30D)
-  'tsk-l-2': 0.60,  // 14h -> 8.4h
+  'tsk-l-2': 0.6, // 14h -> 8.4h
   'tsk-l-3': 0.625, // 4h -> 2.5h
-  'tsk-l-4': 0.60,  // 3h -> 1.8h
+  'tsk-l-4': 0.6, // 3h -> 1.8h
   // In Review (0.50–0.65)
   'tsk-h-6': 0.575, // 8h -> 4.6h
-  'tsk-o-4': 0.55,  // 6h -> 3.3h
+  'tsk-o-4': 0.55, // 6h -> 3.3h
   'tsk-a-4': 0.575, // 4h -> 2.3h
   // In Progress (0.25–0.40)
   'tsk-h-5': 1 / 3, // 18h -> 6.0h (0.333)
-  'tsk-f-3': 0.3214,// 14h -> 4.5h (0.321)
+  'tsk-f-3': 0.3214, // 14h -> 4.5h (0.321)
   'tsk-f-4': 0.325, // 20h -> 6.5h (0.325)
-  'tsk-o-3': 0.3182,// 22h -> 7.0h (0.318)
+  'tsk-o-3': 0.3182, // 22h -> 7.0h (0.318)
 };
 
-export function createSeedFocusSessions(tasks: TaskItem[], _projects: Project[]): FocusSession[] {
-  const now = new Date();
+export function createSeedFocusSessions(tasks: TaskItem[]): FocusSession[] {
+  const now = getNow();
   const nowMs = now.getTime();
   const todayIso = getTodayIsoDate();
 
@@ -1495,7 +1310,15 @@ export function createSeedEvents(projects: Project[]): CalendarEvent[] {
       date: getIsoDateOffset(6),
       startTime: '12:30',
       endTime: '13:30',
-      attendeeIds: ['usr-soren', 'usr-mireia', 'usr-tarek', 'usr-kaelen', 'usr-nadia', 'usr-juno', 'usr-jade'],
+      attendeeIds: [
+        'usr-soren',
+        'usr-mireia',
+        'usr-tarek',
+        'usr-kaelen',
+        'usr-nadia',
+        'usr-juno',
+        'usr-jade',
+      ],
       location: 'Main Lounge',
     },
     {
@@ -1505,7 +1328,15 @@ export function createSeedEvents(projects: Project[]): CalendarEvent[] {
       date: getIsoDateOffset(0),
       startTime: '09:30',
       endTime: '09:45',
-      attendeeIds: ['usr-soren', 'usr-mireia', 'usr-tarek', 'usr-kaelen', 'usr-nadia', 'usr-juno', 'usr-jade'],
+      attendeeIds: [
+        'usr-soren',
+        'usr-mireia',
+        'usr-tarek',
+        'usr-kaelen',
+        'usr-nadia',
+        'usr-juno',
+        'usr-jade',
+      ],
       location: 'Standup Circle',
     },
   ];
@@ -1535,7 +1366,7 @@ export function validateWorkspace(
   focusSessions: FocusSession[]
 ): WorkspaceValidationReport {
   const today = getTodayIsoDate();
-  const nowMs = Date.now();
+  const nowMs = getNowTimestamp();
   const checks: ValidationCheckResult[] = [];
 
   // Check 1: All IDs resolve and are unique
@@ -1552,10 +1383,18 @@ export function validateWorkspace(
   const sessionUnique = sessionIds.size === focusSessions.length;
 
   const tasksProjectValid = tasks.every((t) => projIds.has(t.projectId));
-  const focusTaskValid = focusSessions.every((s) => taskIds.has(s.taskId) && projIds.has(s.projectId));
+  const focusTaskValid = focusSessions.every(
+    (s) => taskIds.has(s.taskId) && projIds.has(s.projectId)
+  );
 
   const check1Passed =
-    projUnique && taskUnique && teamUnique && eventUnique && sessionUnique && tasksProjectValid && focusTaskValid;
+    projUnique &&
+    taskUnique &&
+    teamUnique &&
+    eventUnique &&
+    sessionUnique &&
+    tasksProjectValid &&
+    focusTaskValid;
   checks.push({
     id: 'ids-unique',
     label: 'All IDs resolve and are unique',
@@ -1590,7 +1429,9 @@ export function validateWorkspace(
   const weekendSessions = focusSessions.some((s) => {
     const parts = s.date.split('-').map(Number);
     const dayOfWeek =
-      parts.length === 3 ? new Date(parts[0], parts[1] - 1, parts[2], 12, 0, 0).getDay() : s.weekdayIndex;
+      parts.length === 3
+        ? new Date(parts[0], parts[1] - 1, parts[2], 12, 0, 0).getDay()
+        : s.weekdayIndex;
     return dayOfWeek === 0 || dayOfWeek === 6 || s.weekdayIndex === 0 || s.weekdayIndex === 6;
   });
   const unstartedSessions = focusSessions.some((s) => {
@@ -1712,7 +1553,8 @@ export function validateWorkspace(
     (m) => tasksIn30D.filter((t) => t.assigneeId === m.id).length
   );
   const contributorSum30D = contributorCounts30D.reduce((a, b) => a + b, 0);
-  const check10Passed = kpiTaskCount30D === tasksIn30D.length && contributorSum30D === kpiTaskCount30D;
+  const check10Passed =
+    kpiTaskCount30D === tasksIn30D.length && contributorSum30D === kpiTaskCount30D;
   checks.push({
     id: 'analytics-kpi-contributor-tasks',
     label: 'KPI task count equals store tasks completed in range and contributor counts sum to it',
@@ -1728,7 +1570,9 @@ export function validateWorkspace(
     return dAgo >= 0 && dAgo < rangeDays30;
   });
   const totalSeconds30D = sessionsIn30D.reduce(
-    (acc, s) => acc + (typeof s.seconds === 'number' ? Math.round(s.seconds) : Math.round((s.hours || 0) * 3600)),
+    (acc, s) =>
+      acc +
+      (typeof s.seconds === 'number' ? Math.round(s.seconds) : Math.round((s.hours || 0) * 3600)),
     0
   );
   const totalHours30D = Number((totalSeconds30D / 3600).toFixed(1));
@@ -1737,7 +1581,11 @@ export function validateWorkspace(
       sessionsIn30D
         .filter((s) => s.projectId === p.id)
         .reduce(
-          (acc, s) => acc + (typeof s.seconds === 'number' ? Math.round(s.seconds) : Math.round((s.hours || 0) * 3600)),
+          (acc, s) =>
+            acc +
+            (typeof s.seconds === 'number'
+              ? Math.round(s.seconds)
+              : Math.round((s.hours || 0) * 3600)),
           0
         )
     )
@@ -1780,9 +1628,7 @@ export function validateWorkspace(
 
     const eps = 1e-4;
     const inBand =
-      t.status === 'Backlog'
-        ? loggedSeconds === 0
-        : factor + eps >= minF && factor - eps <= maxF;
+      t.status === 'Backlog' ? loggedSeconds === 0 : factor + eps >= minF && factor - eps <= maxF;
     const underCap = factor - eps <= 1.2;
 
     if (!inBand || !underCap || Math.abs(loggedSeconds - taskSessionSeconds) > 1) {
@@ -1809,9 +1655,7 @@ export function validateWorkspace(
   const analytics7DSeconds = sessions7D.reduce(
     (acc, s) =>
       acc +
-      (typeof s.seconds === 'number'
-        ? Math.round(s.seconds)
-        : Math.round((s.hours || 0) * 3600)),
+      (typeof s.seconds === 'number' ? Math.round(s.seconds) : Math.round((s.hours || 0) * 3600)),
     0
   );
   const dashboardWeeklySeconds = [0, 1, 2, 3, 4, 5, 6].reduce((sum, dayIdx) => {
@@ -1842,7 +1686,7 @@ export function validateWorkspace(
 
   const overallPassed = checks.every((c) => c.passed);
   const report: WorkspaceValidationReport = {
-    timestamp: new Date().toISOString(),
+    timestamp: getNow().toISOString(),
     passed: overallPassed,
     checks,
   };
@@ -1883,10 +1727,7 @@ function loadPersistedTasks(): TaskItem[] {
     const raw = window.localStorage.getItem(TASKS_STORAGE_KEY);
     if (raw !== null) {
       const parsed = JSON.parse(raw);
-      if (
-        Array.isArray(parsed) &&
-        parsed.some((t) => t.id === 'tsk-h-1' && Boolean(t.startDate))
-      ) {
+      if (Array.isArray(parsed) && parsed.some((t) => t.id === 'tsk-h-1' && Boolean(t.startDate))) {
         return dedupeById<TaskItem>(parsed);
       }
     }
@@ -1955,8 +1796,8 @@ function savePersistedEvents(events: CalendarEvent[]): void {
   }
 }
 
-function loadPersistedFocusSessions(tasks: TaskItem[], projects: Project[]): FocusSession[] {
-  if (typeof window === 'undefined') return createSeedFocusSessions(tasks, projects);
+function loadPersistedFocusSessions(tasks: TaskItem[]): FocusSession[] {
+  if (typeof window === 'undefined') return createSeedFocusSessions(tasks);
   try {
     const raw = window.localStorage.getItem(FOCUS_SESSIONS_STORAGE_KEY);
     if (raw !== null) {
@@ -1991,7 +1832,7 @@ function loadPersistedFocusSessions(tasks: TaskItem[], projects: Project[]): Foc
   } catch {
     // Ignore
   }
-  return createSeedFocusSessions(tasks, projects);
+  return createSeedFocusSessions(tasks);
 }
 
 function savePersistedFocusSessions(sessions: FocusSession[]): void {
@@ -2130,7 +1971,10 @@ export interface PlotlineState {
   importModalOpen: boolean;
   tourStep: number | null;
   isSignedOut: boolean;
-  setAccent: (accent: AccentName | 'Tide' | 'Moss' | 'Iris' | 'Signal', showToast?: boolean) => void;
+  setAccent: (
+    accent: AccentName | 'Tide' | 'Moss' | 'Iris' | 'Signal',
+    showToast?: boolean
+  ) => void;
   setWeekStart: (weekStart: WeekStart, showToast?: boolean) => void;
   setActiveRoute: (route: RouteId) => void;
   setRailCollapsed: (collapsed: boolean) => void;
@@ -2148,7 +1992,14 @@ export interface PlotlineState {
   toggleNotification: (key: keyof NotificationSettings) => void;
   addProject: (input: NewProjectInput) => Project;
   updateProject: (id: string, updates: Partial<Project>) => void;
-  importProjects: (items: Array<{ name: string; client: string; targetDate: string; status: 'Pending' | 'Running' | 'Ended' }>) => { importedCount: number; skippedCount: number };
+  importProjects: (
+    items: Array<{
+      name: string;
+      client: string;
+      targetDate: string;
+      status: 'Pending' | 'Running' | 'Ended';
+    }>
+  ) => { importedCount: number; skippedCount: number };
   importSampleBatch: () => Project;
   moveTask: (taskId: string, newStatus: TaskItem['status']) => void;
   addTask: (input: NewTaskInput) => TaskItem;
@@ -2177,12 +2028,18 @@ export const usePlotlineStore = create<PlotlineState>((set, get) => {
   const initialTasks = loadPersistedTasks();
   const initialTeam = loadPersistedTeam();
   const initialEvents = loadPersistedEvents(initialProjects);
-  const initialFocusSessions = loadPersistedFocusSessions(initialTasks, initialProjects);
+  const initialFocusSessions = loadPersistedFocusSessions(initialTasks);
 
   // Run validation check on startup
   if (typeof window !== 'undefined') {
     setTimeout(() => {
-      validateWorkspace(initialProjects, initialTasks, initialTeam, initialEvents, initialFocusSessions);
+      validateWorkspace(
+        initialProjects,
+        initialTasks,
+        initialTeam,
+        initialEvents,
+        initialFocusSessions
+      );
     }, 100);
   }
 
@@ -2296,9 +2153,7 @@ export const usePlotlineStore = create<PlotlineState>((set, get) => {
         initials,
       };
 
-      const updatedTeam = state.team.map((m) =>
-        m.id === updatedUser.id ? updatedUser : m
-      );
+      const updatedTeam = state.team.map((m) => (m.id === updatedUser.id ? updatedUser : m));
 
       try {
         window.localStorage.setItem(CURRENT_USER_STORAGE_KEY, JSON.stringify(updatedUser));
@@ -2332,7 +2187,7 @@ export const usePlotlineStore = create<PlotlineState>((set, get) => {
     addProject: (input) => {
       const snapshot = get();
       const newId =
-        input.id || `prj-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
+        input.id || `prj-${getNowTimestamp()}-${Math.random().toString(36).slice(2, 6)}`;
       const existing = snapshot.projects.find((p) => p.id === newId);
       if (existing) return existing;
 
@@ -2390,7 +2245,10 @@ export const usePlotlineStore = create<PlotlineState>((set, get) => {
             name: updates.name !== undefined ? updates.name.trim() : p.name,
             client: updates.client !== undefined ? updates.client.trim() : p.client,
             targetDate: updates.targetDate !== undefined ? updates.targetDate : p.targetDate,
-            progress: updates.progress !== undefined ? Math.max(0, Math.min(100, updates.progress)) : p.progress,
+            progress:
+              updates.progress !== undefined
+                ? Math.max(0, Math.min(100, updates.progress))
+                : p.progress,
           };
           if (updates.statusOverride !== undefined) {
             updated.statusOverride = updates.statusOverride;
@@ -2429,7 +2287,7 @@ export const usePlotlineStore = create<PlotlineState>((set, get) => {
 
         const nextNum = 110 + snapshot.projects.length + newProjects.length;
         const newPrj: Project = {
-          id: `prj-imp-${Date.now()}-${idx}-${Math.random().toString(36).slice(2, 6)}`,
+          id: `prj-imp-${getNowTimestamp()}-${idx}-${Math.random().toString(36).slice(2, 6)}`,
           code: `PLT-${nextNum}`,
           name: cleanName,
           client: item.client.trim() || 'Imported Partner',
@@ -2453,14 +2311,17 @@ export const usePlotlineStore = create<PlotlineState>((set, get) => {
       }
 
       const toastTitle = `${importedCount} ${importedCount === 1 ? 'project' : 'projects'} imported, ${skippedCount} skipped`;
-      get().pushToast(toastTitle, importedCount > 0 ? 'Active portfolio updated' : 'No new projects added');
+      get().pushToast(
+        toastTitle,
+        importedCount > 0 ? 'Active portfolio updated' : 'No new projects added'
+      );
 
       return { importedCount, skippedCount };
     },
 
     importSampleBatch: () => {
       const snapshot = get();
-      const newId = `prj-imp-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
+      const newId = `prj-imp-${getNowTimestamp()}-${Math.random().toString(36).slice(2, 6)}`;
       const existing = snapshot.projects.find((p) => p.id === newId);
       if (existing) return existing;
 
@@ -2511,14 +2372,14 @@ export const usePlotlineStore = create<PlotlineState>((set, get) => {
       const target = snapshot.tasks.find((t) => t.id === taskId);
       if (!target || target.status === newStatus) return;
 
-      const nowTs = Date.now();
+      const nowTs = getNowTimestamp();
       const nextProgress = progressForTaskStatus(newStatus, target.progress);
       const nextSubtasksDone =
         newStatus === 'Done'
           ? target.subtasksTotal
           : newStatus === 'Backlog'
-          ? 0
-          : Math.max(1, Math.min(target.subtasksTotal - 1, target.subtasksDone));
+            ? 0
+            : Math.max(1, Math.min(target.subtasksTotal - 1, target.subtasksDone));
 
       set((state) => {
         const currentTarget = state.tasks.find((t) => t.id === taskId);
@@ -2563,11 +2424,11 @@ export const usePlotlineStore = create<PlotlineState>((set, get) => {
     addTask: (input) => {
       const snapshot = get();
       const newId =
-        input.id || `tsk-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
+        input.id || `tsk-${getNowTimestamp()}-${Math.random().toString(36).slice(2, 6)}`;
       const existing = snapshot.tasks.find((t) => t.id === newId);
       if (existing) return existing;
 
-      const nowTs = Date.now();
+      const nowTs = getNowTimestamp();
       const defaultProject = snapshot.projects[0];
       const nextCodeNum = 100 + snapshot.tasks.length;
       const status = input.status || 'Backlog';
@@ -2591,7 +2452,7 @@ export const usePlotlineStore = create<PlotlineState>((set, get) => {
         progress: progressForTaskStatus(status, 15),
         subtasksDone: status === 'Done' ? 4 : 0,
         subtasksTotal: 4,
-        weekdayIndex: new Date().getDay(),
+        weekdayIndex: getNow().getDay(),
         updatedAt: nowTs,
         updatedAtLabel: 'Just now',
       };
@@ -2626,7 +2487,7 @@ export const usePlotlineStore = create<PlotlineState>((set, get) => {
     addTeamMember: (input) => {
       const snapshot = get();
       const newId =
-        input.id || `usr-${Date.now()}-${Math.random().toString(36).slice(2, 5)}`;
+        input.id || `usr-${getNowTimestamp()}-${Math.random().toString(36).slice(2, 5)}`;
       const existing = snapshot.team.find((m) => m.id === newId);
       if (existing) return existing;
 
@@ -2647,9 +2508,7 @@ export const usePlotlineStore = create<PlotlineState>((set, get) => {
         initials,
         capacityHours: 60,
         allocatedHours: 20,
-        email:
-          input.email?.trim() ||
-          `${parts[0].toLowerCase()}@plotline.studio`,
+        email: input.email?.trim() || `${parts[0].toLowerCase()}@plotline.studio`,
       };
 
       let didInsert = false;
@@ -2672,7 +2531,7 @@ export const usePlotlineStore = create<PlotlineState>((set, get) => {
     addEvent: (input) => {
       const snapshot = get();
       const newId =
-        input.id || `evt-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
+        input.id || `evt-${getNowTimestamp()}-${Math.random().toString(36).slice(2, 6)}`;
       const existing = snapshot.events.find((e) => e.id === newId);
       if (existing) return existing;
 
@@ -2684,8 +2543,7 @@ export const usePlotlineStore = create<PlotlineState>((set, get) => {
         date: input.date,
         startTime: input.startTime || '10:00',
         endTime: input.endTime || '11:00',
-        attendeeIds:
-          input.attendeeIds.length > 0 ? input.attendeeIds : [snapshot.currentUser.id],
+        attendeeIds: input.attendeeIds.length > 0 ? input.attendeeIds : [snapshot.currentUser.id],
         location: input.location?.trim() || 'Studio Room 01',
       };
 
@@ -2795,9 +2653,7 @@ export const usePlotlineStore = create<PlotlineState>((set, get) => {
           updated = true;
         }
 
-        return updated
-          ? { ...t, assigneeId: nextAssignee, coAssigneeId: nextCoAssignee }
-          : t;
+        return updated ? { ...t, assigneeId: nextAssignee, coAssigneeId: nextCoAssignee } : t;
       });
 
       savePersistedTeam(nextTeam);
@@ -2866,10 +2722,8 @@ export const usePlotlineStore = create<PlotlineState>((set, get) => {
         tasks: nextTasks,
       });
 
-      get().pushToastWithUndo(
-        `Task "${target.code}" deleted`,
-        target.title,
-        () => get().restoreSnapshot(savedSnapshot)
+      get().pushToastWithUndo(`Task "${target.code}" deleted`, target.title, () =>
+        get().restoreSnapshot(savedSnapshot)
       );
     },
 
@@ -2911,7 +2765,9 @@ export const usePlotlineStore = create<PlotlineState>((set, get) => {
 
       if (targetEvent) {
         get().pushToast(
-          isCheckedIn ? `Meeting ended: ${targetEvent.title}` : `Meeting started: ${targetEvent.title}`,
+          isCheckedIn
+            ? `Meeting ended: ${targetEvent.title}`
+            : `Meeting started: ${targetEvent.title}`,
           `${targetEvent.startTime}–${targetEvent.endTime} · ${targetEvent.location}`
         );
       }
@@ -2928,18 +2784,14 @@ export const usePlotlineStore = create<PlotlineState>((set, get) => {
     resetTimer: () => {
       const snapshot = get();
       const elapsedSeconds =
-        snapshot.timerSeconds > 0
-          ? snapshot.timerSeconds
-          : snapshot.timerRunning
-          ? 1
-          : 0;
+        snapshot.timerSeconds > 0 ? snapshot.timerSeconds : snapshot.timerRunning ? 1 : 0;
       const activeTask =
         snapshot.tasks.find((t) => t.id === snapshot.timerTaskId) || snapshot.tasks[0];
 
       if (elapsedSeconds > 0 && activeTask) {
-        const newSessionId = `fcs-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
-        const nowTs = Date.now();
-        const todayWeekday = new Date().getDay();
+        const newSessionId = `fcs-${getNowTimestamp()}-${Math.random().toString(36).slice(2, 6)}`;
+        const nowTs = getNowTimestamp();
+        const todayWeekday = getNow().getDay();
         const newSession: FocusSession = {
           id: newSessionId,
           taskId: activeTask.id,
@@ -3008,7 +2860,7 @@ export const usePlotlineStore = create<PlotlineState>((set, get) => {
     },
 
     pushToast: (title, detail) => {
-      const id = `tst-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
+      const id = `tst-${getNowTimestamp()}-${Math.random().toString(36).slice(2, 6)}`;
       set((state) => ({
         toasts: [...state.toasts, { id, title, detail }],
       }));
@@ -3018,7 +2870,7 @@ export const usePlotlineStore = create<PlotlineState>((set, get) => {
     },
 
     pushToastWithUndo: (title, detail, undoAction) => {
-      const id = `tst-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
+      const id = `tst-${getNowTimestamp()}-${Math.random().toString(36).slice(2, 6)}`;
       set((state) => ({
         toasts: [...state.toasts, { id, title, detail, undoAction }],
       }));
@@ -3051,7 +2903,7 @@ export const usePlotlineStore = create<PlotlineState>((set, get) => {
       const freshTasks = createSeedTasks();
       const freshTeam = SEED_TEAM;
       const freshEvents = createSeedEvents(freshProjects);
-      const freshSessions = createSeedFocusSessions(freshTasks, freshProjects);
+      const freshSessions = createSeedFocusSessions(freshTasks);
 
       set({
         projects: freshProjects,

@@ -85,9 +85,7 @@ export function Dialog({
             containerRef.current.querySelectorAll<HTMLElement>(
               'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])'
             )
-          ).filter(
-            (el) => !el.hasAttribute('disabled') && el.offsetParent !== null
-          );
+          ).filter((el) => !el.hasAttribute('disabled') && el.offsetParent !== null);
 
           if (focusables.length === 0) return;
 
@@ -175,8 +173,8 @@ export function Dialog({
     (size === 'lg'
       ? 'sm:max-w-[640px]'
       : variant === 'hero' || size === 'md'
-      ? 'sm:max-w-[560px]'
-      : 'sm:max-w-[440px]');
+        ? 'sm:max-w-[560px]'
+        : 'sm:max-w-[440px]');
 
   const wrapperStyle: React.CSSProperties =
     vvState && typeof window !== 'undefined' && vvState.height < window.innerHeight - 40
@@ -225,11 +223,7 @@ export function Dialog({
             aria-labelledby={titleId}
             tabIndex={-1}
             style={{ ...dialogMaxHeightStyle, zIndex: 'var(--z-content)' }}
-            initial={
-              prefersReducedMotion
-                ? false
-                : { opacity: 0, scale: 0.96, y: 12 }
-            }
+            initial={prefersReducedMotion ? false : { opacity: 0, scale: 0.96, y: 12 }}
             animate={{ opacity: 1, scale: 1, y: 0 }}
             exit={{ opacity: 0, scale: 0.96, y: 12 }}
             transition={{ duration: 0.24, ease: [0.16, 1, 0.3, 1] }}
@@ -314,9 +308,7 @@ export function Dialog({
                       </p>
                     )}
                     {heroData.meta && (
-                      <p className="text-xs text-[var(--ink-muted)] mt-0.5">
-                        {heroData.meta}
-                      </p>
+                      <p className="text-xs text-[var(--ink-muted)] mt-0.5">{heroData.meta}</p>
                     )}
                   </div>
                 </div>
@@ -345,9 +337,7 @@ export function Dialog({
                     </h2>
                   )}
                   {subtitle && (
-                    <p className="text-xs text-[var(--ink-muted)] mt-0.5 truncate">
-                      {subtitle}
-                    </p>
+                    <p className="text-xs text-[var(--ink-muted)] mt-0.5 truncate">{subtitle}</p>
                   )}
                 </div>
 

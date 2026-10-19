@@ -7,24 +7,13 @@ import {
   MapPin,
   Plus,
 } from 'lucide-react';
-import {
-  CalendarEvent,
-  EventCategory,
-  getTodayIsoDate,
-  TeamMember,
-  usePlotlineStore,
-} from '../store';
+import { usePlotlineStore } from '../store'; import { Project, TaskItem, TeamMember, CalendarEvent, EventCategory, AccentName, RouteId } from '../domain/types';;
+import { getNowTimestamp, getTodayIsoDate } from '../lib/clock';
 import { ContourGlyph } from '../utils/contourGlyph';
 import { Dialog } from '../ui/Dialog';
 import { DeleteButton } from './DeleteButton';
 
-const EVENT_CATEGORIES: EventCategory[] = [
-  'Meeting',
-  'Team',
-  'Review',
-  'Deadline',
-  'Social',
-];
+const EVENT_CATEGORIES: EventCategory[] = ['Meeting', 'Team', 'Review', 'Deadline', 'Social'];
 
 export function categoryChipStyles(category: EventCategory | undefined): {
   bg: string;
@@ -105,15 +94,8 @@ function formatFullAgendaHeading(isoDate: string, todayIso: string): string {
 }
 
 export default function CalendarScreen() {
-  const {
-    events,
-    team,
-    weekStart,
-    currentUser,
-    addEvent,
-    updateEvent,
-    deleteEvent,
-  } = usePlotlineStore();
+  const { events, team, weekStart, currentUser, addEvent, updateEvent, deleteEvent } =
+    usePlotlineStore();
 
   const todayIso = getTodayIsoDate();
   const initialDateParts = todayIso.split('-').map(Number);
@@ -154,8 +136,7 @@ export default function CalendarScreen() {
   const calendarDays = useMemo(() => {
     const firstOfMonth = new Date(viewYear, viewMonth, 1);
     const rawFirstWeekday = firstOfMonth.getDay(); // 0 (Sun) .. 6 (Sat)
-    const leadingOffset =
-      weekStart === 'monday' ? (rawFirstWeekday + 6) % 7 : rawFirstWeekday;
+    const leadingOffset = weekStart === 'monday' ? (rawFirstWeekday + 6) % 7 : rawFirstWeekday;
 
     const cells: Array<{
       iso: string;
@@ -167,11 +148,7 @@ export default function CalendarScreen() {
     for (let i = 0; i < 42; i++) {
       const dayOffset = i - leadingOffset + 1;
       const cellDate = new Date(viewYear, viewMonth, dayOffset);
-      const iso = toIsoDateString(
-        cellDate.getFullYear(),
-        cellDate.getMonth(),
-        cellDate.getDate()
-      );
+      const iso = toIsoDateString(cellDate.getFullYear(), cellDate.getMonth(), cellDate.getDate());
       cells.push({
         iso,
         dayNumber: cellDate.getDate(),
@@ -206,9 +183,7 @@ export default function CalendarScreen() {
     return [...events]
       .filter((e) => e.date > todayIso)
       .sort((a, b) =>
-        a.date === b.date
-          ? a.startTime.localeCompare(b.startTime)
-          : a.date.localeCompare(b.date)
+        a.date === b.date ? a.startTime.localeCompare(b.startTime) : a.date.localeCompare(b.date)
       )
       .slice(0, 6);
   }, [events, todayIso]);
@@ -308,7 +283,8 @@ export default function CalendarScreen() {
     setIsSavingEvent(true);
 
     if (editingEventId) {
-      updateEvent(editingEventId, {
+      updateEvent({
+        id: editingEventId,
         title: evtTitle.trim(),
         category: evtCategory,
         date: evtDate,
@@ -318,7 +294,7 @@ export default function CalendarScreen() {
         location: evtLocation.trim() || 'Studio Room 01',
       });
     } else {
-      const newId = `evt-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
+      const newId = `evt-${getNowTimestamp()}-${Math.random().toString(36).slice(2, 6)}`;
       addEvent({
         id: newId,
         title: evtTitle.trim(),
@@ -358,9 +334,7 @@ export default function CalendarScreen() {
         className="plotline-enter flex flex-col sm:flex-row sm:items-center justify-between gap-3"
       >
         <div className="min-w-0">
-          <h1 className="text-2xl font-bold tracking-tight text-[var(--ink-primary)]">
-            Calendar
-          </h1>
+          <h1 className="text-2xl font-bold tracking-tight text-[var(--ink-primary)]">Calendar</h1>
           <p className="text-xs sm:text-sm text-[var(--ink-secondary)] mt-0.5">
             Meetings, reviews and deadlines across the team
           </p>
@@ -438,129 +412,127 @@ export default function CalendarScreen() {
 
             {/* 6x7 Day Cells */}
             <div className="grid grid-cols-7 divide-x divide-y divide-[var(--border-hairline)]">
-            {calendarDays.map((cell) => {
-              const dayEvents = eventsByDate.get(cell.iso) || [];
-              const isSelected = selectedDateIso === cell.iso;
-              const isExpanded = expandedDayIso === cell.iso;
-              const maxVisible = isExpanded ? dayEvents.length : 2;
-              const visibleEvents = dayEvents.slice(0, maxVisible);
-              const overflowCount = Math.max(0, dayEvents.length - maxVisible);
+              {calendarDays.map((cell) => {
+                const dayEvents = eventsByDate.get(cell.iso) || [];
+                const isSelected = selectedDateIso === cell.iso;
+                const isExpanded = expandedDayIso === cell.iso;
+                const maxVisible = isExpanded ? dayEvents.length : 2;
+                const visibleEvents = dayEvents.slice(0, maxVisible);
+                const overflowCount = Math.max(0, dayEvents.length - maxVisible);
 
-              return (
-                <div
-                  key={cell.iso}
-                  data-testid={`calendar-day-${cell.iso}`}
-                  role="button"
-                  tabIndex={0}
-                  aria-pressed={isSelected}
-                  aria-label={`${cell.iso}, ${dayEvents.length} events.`}
-                  onClick={() => handleDayCellClick(cell.iso)}
-                  onKeyDown={(e) => {
-                    if (e.key === 'Enter' || e.key === ' ') {
-                      e.preventDefault();
-                      handleDayCellClick(cell.iso);
-                    }
-                  }}
-                  className={`min-h-[54px] sm:min-h-[104px] min-w-0 overflow-hidden p-1 sm:p-1.5 flex flex-col items-center sm:items-stretch justify-start sm:justify-between transition-colors cursor-pointer group ${
-                    isSelected
-                      ? 'bg-[var(--accent-soft)]/55 sm:bg-[var(--surface-elevated)]'
-                      : cell.inCurrentMonth
-                      ? 'bg-[var(--surface-elevated)] hover:bg-[var(--surface-sunken)]/45'
-                      : 'bg-[var(--surface-canvas)]/60 text-[var(--ink-muted)] hover:bg-[var(--surface-sunken)]/45'
-                  }`}
-                >
-                  <div className="flex items-center justify-center sm:justify-between gap-1 min-w-0 w-full">
-                    <span
-                      style={
-                        cell.isToday
-                          ? { backgroundColor: 'var(--accent)', color: '#ffffff' }
-                          : isSelected
-                          ? {
-                              backgroundColor: 'var(--accent-soft)',
-                              color: 'var(--accent)',
-                              border: '1px solid var(--accent)',
-                            }
-                          : undefined
+                return (
+                  <div
+                    key={cell.iso}
+                    data-testid={`calendar-day-${cell.iso}`}
+                    role="button"
+                    tabIndex={0}
+                    aria-pressed={isSelected}
+                    aria-label={`${cell.iso}, ${dayEvents.length} events.`}
+                    onClick={() => handleDayCellClick(cell.iso)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter' || e.key === ' ') {
+                        e.preventDefault();
+                        handleDayCellClick(cell.iso);
                       }
-                      className={`w-7 h-7 sm:w-6 sm:h-6 rounded-full text-xs font-ui-tabular flex items-center justify-center shrink-0 ${
-                        cell.isToday || isSelected
-                          ? 'font-bold'
-                          : cell.inCurrentMonth
-                          ? 'font-medium text-[var(--ink-primary)]'
-                          : 'text-[var(--ink-muted)]'
-                      }`}
-                    >
-                      {cell.dayNumber}
-                    </span>
+                    }}
+                    className={`min-h-[54px] sm:min-h-[104px] min-w-0 overflow-hidden p-1 sm:p-1.5 flex flex-col items-center sm:items-stretch justify-start sm:justify-between transition-colors cursor-pointer group ${
+                      isSelected
+                        ? 'bg-[var(--accent-soft)]/55 sm:bg-[var(--surface-elevated)]'
+                        : cell.inCurrentMonth
+                          ? 'bg-[var(--surface-elevated)] hover:bg-[var(--surface-sunken)]/45'
+                          : 'bg-[var(--surface-canvas)]/60 text-[var(--ink-muted)] hover:bg-[var(--surface-sunken)]/45'
+                    }`}
+                  >
+                    <div className="flex items-center justify-center sm:justify-between gap-1 min-w-0 w-full">
+                      <span
+                        style={
+                          cell.isToday
+                            ? { backgroundColor: 'var(--accent)', color: '#ffffff' }
+                            : isSelected
+                              ? {
+                                  backgroundColor: 'var(--accent-soft)',
+                                  color: 'var(--accent)',
+                                  border: '1px solid var(--accent)',
+                                }
+                              : undefined
+                        }
+                        className={`w-7 h-7 sm:w-6 sm:h-6 rounded-full text-xs font-ui-tabular flex items-center justify-center shrink-0 ${
+                          cell.isToday || isSelected
+                            ? 'font-bold'
+                            : cell.inCurrentMonth
+                              ? 'font-medium text-[var(--ink-primary)]'
+                              : 'text-[var(--ink-muted)]'
+                        }`}
+                      >
+                        {cell.dayNumber}
+                      </span>
 
-                    <span className="hidden sm:inline opacity-0 group-hover:opacity-100 text-[10px] text-[var(--ink-muted)] px-1 truncate">
-                      + Add
-                    </span>
-                  </div>
+                      <span className="hidden sm:inline opacity-0 group-hover:opacity-100 text-[10px] text-[var(--ink-muted)] px-1 truncate">
+                        + Add
+                      </span>
+                    </div>
 
-                  {/* Mobile Compact Colored Dots (<640px) */}
-                  {dayEvents.length > 0 && (
-                    <div
-                      data-testid={`calendar-dots-${cell.iso}`}
-                      className="flex sm:hidden items-center justify-center gap-1 mt-1.5 flex-wrap max-w-full px-0.5"
-                    >
-                      {dayEvents.slice(0, 4).map((evt) => {
+                    {/* Mobile Compact Colored Dots (<640px) */}
+                    {dayEvents.length > 0 && (
+                      <div
+                        data-testid={`calendar-dots-${cell.iso}`}
+                        className="flex sm:hidden items-center justify-center gap-1 mt-1.5 flex-wrap max-w-full px-0.5"
+                      >
+                        {dayEvents.slice(0, 4).map((evt) => {
+                          const chip = categoryChipStyles(evt.category);
+                          return (
+                            <span
+                              key={evt.id}
+                              style={{ backgroundColor: chip.dot }}
+                              className="w-1.5 h-1.5 rounded-full shrink-0"
+                            />
+                          );
+                        })}
+                      </div>
+                    )}
+
+                    {/* Tablet/Desktop Category-colored Event Chips (>=640px) */}
+                    <div className="hidden sm:block mt-1 space-y-1 flex-1 min-w-0 w-full">
+                      {visibleEvents.map((evt) => {
                         const chip = categoryChipStyles(evt.category);
                         return (
-                          <span
+                          <button
                             key={evt.id}
-                            style={{ backgroundColor: chip.dot }}
-                            className="w-1.5 h-1.5 rounded-full shrink-0"
-                          />
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              openEditEventModal(evt);
+                            }}
+                            style={{
+                              backgroundColor: chip.bg,
+                              color: chip.fg,
+                              borderColor: chip.border,
+                            }}
+                            className="w-full text-left px-1.5 py-0.5 rounded-[var(--radius-xs)] border text-[10px] font-semibold truncate block hover:opacity-90 cursor-pointer"
+                            title={`${evt.startTime} · ${evt.title} (${evt.category || 'Meeting'})`}
+                          >
+                            <span className="font-ui-tabular opacity-80 mr-1">{evt.startTime}</span>
+                            <span>{evt.title}</span>
+                          </button>
                         );
                       })}
-                    </div>
-                  )}
 
-                  {/* Tablet/Desktop Category-colored Event Chips (>=640px) */}
-                  <div className="hidden sm:block mt-1 space-y-1 flex-1 min-w-0 w-full">
-                    {visibleEvents.map((evt) => {
-                      const chip = categoryChipStyles(evt.category);
-                      return (
+                      {overflowCount > 0 && (
                         <button
-                          key={evt.id}
                           type="button"
                           onClick={(e) => {
                             e.stopPropagation();
-                            openEditEventModal(evt);
+                            setExpandedDayIso(cell.iso);
                           }}
-                          style={{
-                            backgroundColor: chip.bg,
-                            color: chip.fg,
-                            borderColor: chip.border,
-                          }}
-                          className="w-full text-left px-1.5 py-0.5 rounded-[var(--radius-xs)] border text-[10px] font-semibold truncate block hover:opacity-90 cursor-pointer"
-                          title={`${evt.startTime} · ${evt.title} (${evt.category || 'Meeting'})`}
+                          className="w-full text-left px-1.5 py-0.5 rounded-[var(--radius-xs)] bg-[var(--surface-sunken)] text-[10px] font-semibold text-[var(--ink-secondary)] hover:text-[var(--ink-primary)] cursor-pointer"
                         >
-                          <span className="font-ui-tabular opacity-80 mr-1">
-                            {evt.startTime}
-                          </span>
-                          <span>{evt.title}</span>
+                          +{overflowCount} more
                         </button>
-                      );
-                    })}
-
-                    {overflowCount > 0 && (
-                      <button
-                        type="button"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          setExpandedDayIso(cell.iso);
-                        }}
-                        className="w-full text-left px-1.5 py-0.5 rounded-[var(--radius-xs)] bg-[var(--surface-sunken)] text-[10px] font-semibold text-[var(--ink-secondary)] hover:text-[var(--ink-primary)] cursor-pointer"
-                      >
-                        +{overflowCount} more
-                      </button>
-                    )}
+                      )}
+                    </div>
                   </div>
-                </div>
-              );
-            })}
+                );
+              })}
             </div>
           </div>
         </section>
@@ -649,10 +621,7 @@ export default function CalendarScreen() {
                           >
                             {evt.category || 'Meeting'}
                           </span>
-                          <DeleteButton
-                            name={evt.title}
-                            onDelete={() => deleteEvent(evt.id)}
-                          />
+                          <DeleteButton name={evt.title} onDelete={() => deleteEvent(evt.id)} />
                         </div>
                       </div>
 
@@ -699,9 +668,7 @@ export default function CalendarScreen() {
           {/* Coming Up Card */}
           <div className="bg-[var(--surface-elevated)] border border-[var(--border-hairline)] rounded-[var(--radius-lg)] p-4 space-y-3">
             <div className="flex items-center justify-between border-b border-[var(--border-hairline)] pb-2.5">
-              <h2 className="text-sm font-semibold text-[var(--ink-primary)]">
-                Coming up
-              </h2>
+              <h2 className="text-sm font-semibold text-[var(--ink-primary)]">Coming up</h2>
               <span className="text-[11px] text-[var(--ink-muted)]">Next milestones</span>
             </div>
 
@@ -768,10 +735,7 @@ export default function CalendarScreen() {
                             >
                               {evt.category || 'Meeting'}
                             </span>
-                            <DeleteButton
-                              name={evt.title}
-                              onDelete={() => deleteEvent(evt.id)}
-                            />
+                            <DeleteButton name={evt.title} onDelete={() => deleteEvent(evt.id)} />
                           </div>
                         </div>
                         <div className="mt-1 flex items-center justify-between gap-2 text-[11px] text-[var(--ink-muted)]">
@@ -815,10 +779,7 @@ export default function CalendarScreen() {
         footer={
           <div className="flex items-center justify-between w-full">
             {editingEventId ? (
-              <DeleteButton
-                name={evtTitle}
-                onDelete={handleDeleteCurrentEvent}
-              />
+              <DeleteButton name={evtTitle} onDelete={handleDeleteCurrentEvent} />
             ) : (
               <span />
             )}
@@ -838,17 +799,18 @@ export default function CalendarScreen() {
                 style={{ backgroundColor: 'var(--accent)' }}
                 className="px-4 py-2 min-h-[44px] sm:min-h-0 rounded-full text-xs font-semibold text-white hover:opacity-95 disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
               >
-                {isSavingEvent
-                  ? 'Saving…'
-                  : editingEventId
-                  ? 'Save changes'
-                  : 'Create event'}
+                {isSavingEvent ? 'Saving…' : editingEventId ? 'Save changes' : 'Create event'}
               </button>
             </div>
           </div>
         }
       >
-        <form id="calendar-event-form" onSubmit={handleSaveEvent} className="p-4 sm:p-6 space-y-3.5" noValidate>
+        <form
+          id="calendar-event-form"
+          onSubmit={handleSaveEvent}
+          className="p-4 sm:p-6 space-y-3.5"
+          noValidate
+        >
           <div>
             <label
               htmlFor="calendar-event-title"

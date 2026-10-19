@@ -1,0 +1,3 @@
+[TOP BAR] ⌘K SL Soren Lindqvist soren@plotline.studio
+[SIDEBAR] Plotline Dashboard Projects Tasks Calendar Analytics Team Settings Help Log out Collapse rail
+[MAIN] Settings Manage your specialist profile, notification preferences, studio appearance, and dataset integrity. Profile Notifications Appearance Data & Integrity Profile Update your identity across the top bar, team roster, and task assignments. SL Full name Role Email address Save

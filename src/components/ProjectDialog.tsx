@@ -1,12 +1,9 @@
 import React, { useEffect, useState } from 'react';
 import { Plus, Trash2 } from 'lucide-react';
 import { Dialog } from '../ui/Dialog';
-import {
-  getProjectStatus,
-  pluralize,
-  TaskItem,
-  usePlotlineStore,
-} from '../store';
+import { usePlotlineStore } from '../store'; import { Project, TaskItem, TeamMember, CalendarEvent, EventCategory, AccentName, RouteId } from '../domain/types';;
+import { getProjectStatus } from '../domain/derivations/projects';
+import { pluralize } from '../domain/derivations/analytics';
 import { ContourGlyph } from '../utils/contourGlyph';
 
 export default function ProjectDialog() {
@@ -145,8 +142,8 @@ export default function ProjectDialog() {
                     status === 'Ended'
                       ? 'bg-[#E8F4EC] text-[#216E3E]'
                       : status === 'Running'
-                      ? 'bg-[#FEF5E6] text-[#9B5B0B]'
-                      : 'bg-[#EEEBF9] text-[#5B43B8]'
+                        ? 'bg-[#FEF5E6] text-[#9B5B0B]'
+                        : 'bg-[#EEEBF9] text-[#5B43B8]'
                   }`}
                 >
                   {status}

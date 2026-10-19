@@ -67,7 +67,7 @@ export default function ImportProjectsModal() {
             setParseError('JSON file must contain an array of project objects.');
             return;
           }
-          const parsed = json.map((item: any) => {
+          const parsed = json.map((item: Record<string, unknown>) => {
             const name = String(item.name || item.title || '').trim();
             const client = String(item.client || '').trim();
             const rawDate = String(item.due_date || item.targetDate || item.dueDate || '').trim();
@@ -219,9 +219,7 @@ export default function ImportProjectsModal() {
         {/* Top Controls: Template & File Input */}
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-[var(--surface-sunken)] p-3.5 rounded-[var(--radius-md)] border border-[var(--border-hairline)]">
           <div>
-            <h3 className="text-xs font-semibold text-[var(--ink-primary)]">
-              CSV or JSON Import
-            </h3>
+            <h3 className="text-xs font-semibold text-[var(--ink-primary)]">CSV or JSON Import</h3>
             <p className="text-[11px] text-[var(--ink-secondary)]">
               Required columns: <code className="font-mono">name, client, due_date, status</code>
             </p>
@@ -287,17 +285,21 @@ export default function ImportProjectsModal() {
                   {rows.map((r, idx) => (
                     <tr key={idx} className={r.isValid ? '' : 'bg-red-50/50 dark:bg-red-950/10'}>
                       <td className="p-2 font-mono text-[var(--ink-muted)]">{idx + 1}</td>
-                      <td className="p-2 font-semibold text-[var(--ink-primary)]">{r.name || '—'}</td>
+                      <td className="p-2 font-semibold text-[var(--ink-primary)]">
+                        {r.name || '—'}
+                      </td>
                       <td className="p-2 text-[var(--ink-secondary)]">{r.client}</td>
-                      <td className="p-2 font-mono text-[var(--ink-secondary)]">{r.targetDate || '—'}</td>
+                      <td className="p-2 font-mono text-[var(--ink-secondary)]">
+                        {r.targetDate || '—'}
+                      </td>
                       <td className="p-2">
                         <span
                           className={`px-2 py-0.5 rounded-full text-[10px] font-semibold ${
                             r.status === 'Ended'
                               ? 'bg-[#E8F4EC] text-[#216E3E]'
                               : r.status === 'Running'
-                              ? 'bg-[#FEF5E6] text-[#9B5B0B]'
-                              : 'bg-[#EEEBF9] text-[#5B43B8]'
+                                ? 'bg-[#FEF5E6] text-[#9B5B0B]'
+                                : 'bg-[#EEEBF9] text-[#5B43B8]'
                           }`}
                         >
                           {r.status}

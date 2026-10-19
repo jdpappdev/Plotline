@@ -10,17 +10,15 @@ import {
   Square,
   Video,
 } from 'lucide-react';
+import { usePlotlineStore } from '../store'; import { Project, TaskItem, TeamMember, CalendarEvent, EventCategory, AccentName, RouteId } from '../domain/types';;
 import {
   computeDaysAgoFromIso,
   formatDuration,
   formatLoggedDuration,
-  getProjectStatus,
-  pluralize,
-  Project,
-  TaskItem,
-  TeamMember,
-  usePlotlineStore,
-} from '../store';
+} from '../domain/derivations/time';
+import { getProjectStatus } from '../domain/derivations/projects';
+import { pluralize } from '../domain/derivations/analytics';
+import { getNow } from '../lib/clock';
 import { ContourGlyph } from '../utils/contourGlyph';
 import { AnimatedNumber } from '../motion/primitives';
 import { DeleteButton } from './DeleteButton';
@@ -33,18 +31,9 @@ interface CountUpNumeralProps {
   style?: React.CSSProperties;
 }
 
-function CountUpNumeral({
-  value,
-  suffix = '',
-  className = '',
-  style,
-}: CountUpNumeralProps) {
+function CountUpNumeral({ value, suffix = '', className = '', style }: CountUpNumeralProps) {
   return (
-    <span
-      data-value={value}
-      className={`font-display-num tabular-nums ${className}`}
-      style={style}
-    >
+    <span data-value={value} className={`font-display-num tabular-nums ${className}`} style={style}>
       <AnimatedNumber value={value} suffix={suffix} />
     </span>
   );
@@ -240,20 +229,15 @@ export default function DashboardScreen() {
         (timerRunning
           ? tasksByUpdatedAt.find(
               (t) =>
-                (t.assigneeId === member.id || t.coAssigneeId === member.id) &&
-                t.id === timerTaskId
+                (t.assigneeId === member.id || t.coAssigneeId === member.id) && t.id === timerTaskId
             )
           : undefined) ||
-        tasksByUpdatedAt.find(
-          (t) => t.assigneeId === member.id || t.coAssigneeId === member.id
-        ) ||
+        tasksByUpdatedAt.find((t) => t.assigneeId === member.id || t.coAssigneeId === member.id) ||
         tasksByUpdatedAt[0];
       return { member, task: assignedTask };
     });
 
-    return rows
-      .sort((a, b) => (b.task?.updatedAt ?? 0) - (a.task?.updatedAt ?? 0))
-      .slice(0, 4);
+    return rows.sort((a, b) => (b.task?.updatedAt ?? 0) - (a.task?.updatedAt ?? 0)).slice(0, 4);
   }, [team, uniqueTasks, timerRunning, timerTaskId]);
 
   // --- Store-Derived Metrics ---
@@ -273,34 +257,36 @@ export default function DashboardScreen() {
   const openTasksCount = uniqueTasks.filter((t) => t.status !== 'Done').length;
 
   // Weekly output — 7 slim columns, segmented by project with 2px gaps
-  const todayWeekdayIndex = new Date().getDay();
+  const todayWeekdayIndex = getNow().getDay();
 
-  const dayOrder =
-    weekStart === 'monday'
-      ? [
-          { dayIndex: 1, short: 'M', full: 'Monday' },
-          { dayIndex: 2, short: 'T', full: 'Tuesday' },
-          { dayIndex: 3, short: 'W', full: 'Wednesday' },
-          { dayIndex: 4, short: 'T', full: 'Thursday' },
-          { dayIndex: 5, short: 'F', full: 'Friday' },
-          { dayIndex: 6, short: 'S', full: 'Saturday' },
-          { dayIndex: 0, short: 'S', full: 'Sunday' },
-        ]
-      : [
-          { dayIndex: 0, short: 'S', full: 'Sunday' },
-          { dayIndex: 1, short: 'M', full: 'Monday' },
-          { dayIndex: 2, short: 'T', full: 'Tuesday' },
-          { dayIndex: 3, short: 'W', full: 'Wednesday' },
-          { dayIndex: 4, short: 'T', full: 'Thursday' },
-          { dayIndex: 5, short: 'F', full: 'Friday' },
-          { dayIndex: 6, short: 'S', full: 'Saturday' },
-        ];
+  const dayOrder = useMemo(
+    () =>
+      weekStart === 'monday'
+        ? [
+            { dayIndex: 1, short: 'M', full: 'Monday' },
+            { dayIndex: 2, short: 'T', full: 'Tuesday' },
+            { dayIndex: 3, short: 'W', full: 'Wednesday' },
+            { dayIndex: 4, short: 'T', full: 'Thursday' },
+            { dayIndex: 5, short: 'F', full: 'Friday' },
+            { dayIndex: 6, short: 'S', full: 'Saturday' },
+            { dayIndex: 0, short: 'S', full: 'Sunday' },
+          ]
+        : [
+            { dayIndex: 0, short: 'S', full: 'Sunday' },
+            { dayIndex: 1, short: 'M', full: 'Monday' },
+            { dayIndex: 2, short: 'T', full: 'Tuesday' },
+            { dayIndex: 3, short: 'W', full: 'Wednesday' },
+            { dayIndex: 4, short: 'T', full: 'Thursday' },
+            { dayIndex: 5, short: 'F', full: 'Friday' },
+            { dayIndex: 6, short: 'S', full: 'Saturday' },
+          ],
+    [weekStart]
+  );
 
   const weeklyColumns = useMemo(() => {
     return dayOrder.map((d, idx) => {
       const daySessions = focusSessions.filter((s) => {
-        const dAgo =
-          typeof s.daysAgo === 'number' ? s.daysAgo : computeDaysAgoFromIso(s.date);
+        const dAgo = typeof s.daysAgo === 'number' ? s.daysAgo : computeDaysAgoFromIso(s.date);
         return dAgo >= 0 && dAgo < 7 && s.weekdayIndex === d.dayIndex;
       });
       const byProject = new Map<
@@ -368,15 +354,11 @@ export default function DashboardScreen() {
 
   // Next up
   const nextEvent = events[0];
-  const isMeetingStarted = nextEvent
-    ? checkedInEventIds.includes(nextEvent.id)
-    : false;
+  const isMeetingStarted = nextEvent ? checkedInEventIds.includes(nextEvent.id) : false;
 
   // Project rings — up to 4 concentric rings for the projects due soonest
   const soonestProjects = useMemo(() => {
-    return [...uniqueProjects]
-      .sort((a, b) => a.targetDate.localeCompare(b.targetDate))
-      .slice(0, 4);
+    return [...uniqueProjects].sort((a, b) => a.targetDate.localeCompare(b.targetDate)).slice(0, 4);
   }, [uniqueProjects]);
 
   const overallRingsProgress = useMemo(() => {
@@ -447,10 +429,12 @@ export default function DashboardScreen() {
             if (typeof window !== 'undefined') window.history.pushState(null, '', '#/projects');
           }}
           aria-label={`View ${pluralize(totalCount, 'project')}`}
-          style={{
-            '--stagger-index': 1,
-            background: 'var(--surface-accent)',
-          } as React.CSSProperties}
+          style={
+            {
+              '--stagger-index': 1,
+              background: 'var(--surface-accent)',
+            } as React.CSSProperties
+          }
           className="plotline-enter group text-left col-span-1 sm:col-span-1 xl:col-span-3 sm:order-1 rounded-[var(--radius-lg)] p-3.5 sm:p-4 text-white flex flex-col justify-between shadow-[inset_0_0_0_1px_rgba(255,255,255,0.10)] focus:outline-none focus-visible:ring-2 focus-visible:ring-white cursor-pointer hover:opacity-98 transition-all"
         >
           <div className="flex items-center justify-between gap-2">
@@ -476,7 +460,8 @@ export default function DashboardScreen() {
           type="button"
           onClick={() => {
             setActiveRoute('Projects');
-            if (typeof window !== 'undefined') window.history.pushState(null, '', '#/projects?status=ended');
+            if (typeof window !== 'undefined')
+              window.history.pushState(null, '', '#/projects?status=ended');
           }}
           aria-label={`View ${pluralize(endedCount, 'ended project')}`}
           style={{ '--stagger-index': 2 } as React.CSSProperties}
@@ -502,7 +487,8 @@ export default function DashboardScreen() {
           type="button"
           onClick={() => {
             setActiveRoute('Projects');
-            if (typeof window !== 'undefined') window.history.pushState(null, '', '#/projects?status=running');
+            if (typeof window !== 'undefined')
+              window.history.pushState(null, '', '#/projects?status=running');
           }}
           aria-label={`View ${pluralize(runningCount, 'running project')}`}
           style={{ '--stagger-index': 3 } as React.CSSProperties}
@@ -528,7 +514,8 @@ export default function DashboardScreen() {
           type="button"
           onClick={() => {
             setActiveRoute('Projects');
-            if (typeof window !== 'undefined') window.history.pushState(null, '', '#/projects?status=pending');
+            if (typeof window !== 'undefined')
+              window.history.pushState(null, '', '#/projects?status=pending');
           }}
           aria-label={`View ${pluralize(pendingCount, 'pending project')}`}
           style={{ '--stagger-index': 4 } as React.CSSProperties}
@@ -567,7 +554,8 @@ export default function DashboardScreen() {
               <div
                 onClick={() => {
                   setActiveRoute('Calendar');
-                  if (typeof window !== 'undefined') window.history.pushState(null, '', '#calendar');
+                  if (typeof window !== 'undefined')
+                    window.history.pushState(null, '', '#calendar');
                 }}
                 className="my-auto space-y-1 cursor-pointer hover:opacity-90 transition-opacity py-1"
               >
@@ -580,9 +568,7 @@ export default function DashboardScreen() {
                 <p className="text-xs text-[var(--ink-secondary)]">
                   Time : {nextEvent.startTime} - {nextEvent.endTime}
                 </p>
-                <p className="text-xs text-[var(--ink-muted)] truncate">
-                  {nextEvent.location}
-                </p>
+                <p className="text-xs text-[var(--ink-muted)] truncate">{nextEvent.location}</p>
               </div>
 
               <button
@@ -600,14 +586,13 @@ export default function DashboardScreen() {
           ) : (
             <div className="flex-1 flex flex-col items-center justify-center text-center gap-2 py-2">
               <ContourGlyph seed="dashboard-next-up-empty" size={38} />
-              <p className="text-xs text-[var(--ink-secondary)]">
-                No upcoming meetings scheduled.
-              </p>
+              <p className="text-xs text-[var(--ink-secondary)]">No upcoming meetings scheduled.</p>
               <button
                 type="button"
                 onClick={() => {
                   setActiveRoute('Calendar');
-                  if (typeof window !== 'undefined') window.history.pushState(null, '', '#calendar');
+                  if (typeof window !== 'undefined')
+                    window.history.pushState(null, '', '#calendar');
                 }}
                 style={{ color: 'var(--accent)' }}
                 className="min-h-[44px] px-3 text-xs font-semibold hover:underline cursor-pointer inline-flex items-center"
@@ -622,10 +607,12 @@ export default function DashboardScreen() {
         <section
           aria-labelledby="focus-card-heading"
           data-tour="timer"
-          style={{
-            '--stagger-index': 10,
-            background: 'var(--surface-accent)',
-          } as React.CSSProperties}
+          style={
+            {
+              '--stagger-index': 10,
+              background: 'var(--surface-accent)',
+            } as React.CSSProperties
+          }
           className="plotline-enter col-span-2 sm:col-span-1 xl:col-span-3 sm:order-10 time-tracker-surface rounded-[var(--radius-lg)] p-4 sm:p-3.5 text-white flex flex-col justify-between gap-2.5 w-full lg:h-full xl:max-h-[212px] self-start relative"
         >
           {/* Large Contour Glyph Texture in White at 8–10% Opacity, Seeded from Active Task ID */}
@@ -640,17 +627,14 @@ export default function DashboardScreen() {
                 stroke="#ffffff"
                 strokeWidth={1.25}
                 minOpacity={0.08}
-                maxOpacity={0.10}
+                maxOpacity={0.1}
               />
             </div>
           </div>
 
           {/* Top-left title "Focus" 13px/500 in white + pulsing red dot ONLY while running */}
           <div className="relative flex items-center justify-between shrink-0">
-            <h2
-              id="focus-card-heading"
-              className="text-[13px] font-medium text-white leading-none"
-            >
+            <h2 id="focus-card-heading" className="text-[13px] font-medium text-white leading-none">
               Focus
             </h2>
             {timerRunning && (
@@ -721,10 +705,9 @@ export default function DashboardScreen() {
               isOpen={taskPickerOpen}
               onClose={() => setTaskPickerOpen(false)}
               triggerRef={taskPickerTriggerRef}
-              placement="top-start"
+              placement="top"
               matchTriggerWidth={true}
-              ariaLabel="Choose task to focus on"
-              sheetTitle="Focus on task"
+              title="Focus on task"
               role="menu"
               className="sm:max-h-56 sm:overflow-y-auto bg-[var(--surface-elevated)] text-[var(--ink-primary)] border border-[var(--border-strong)] rounded-[var(--radius-md)] shadow-xl p-1.5 space-y-0.5"
             >
@@ -752,10 +735,7 @@ export default function DashboardScreen() {
                       · {t.title}
                     </span>
                     {isCurrent && (
-                      <Check
-                        className="w-3.5 h-3.5 shrink-0"
-                        style={{ color: 'var(--accent)' }}
-                      />
+                      <Check className="w-3.5 h-3.5 shrink-0" style={{ color: 'var(--accent)' }} />
                     )}
                   </button>
                 );
@@ -897,8 +877,8 @@ export default function DashboardScreen() {
               data-seconds={weekTotalSeconds}
               className="text-xs text-[var(--ink-muted)] font-ui-tabular"
             >
-              {weekStart === 'monday' ? 'Mon–Sun' : 'Sun–Sat'} ·{' '}
-              {formatDuration(weekTotalSeconds)} total
+              {weekStart === 'monday' ? 'Mon–Sun' : 'Sun–Sat'} · {formatDuration(weekTotalSeconds)}{' '}
+              total
             </span>
           </div>
 
@@ -910,10 +890,7 @@ export default function DashboardScreen() {
             {weeklyColumns.map((col) => {
               const colHeightPct =
                 col.totalSeconds > 0
-                  ? Math.max(
-                      24,
-                      Math.min(100, Math.round((col.totalHours / maxDailyHours) * 100))
-                    )
+                  ? Math.max(24, Math.min(100, Math.round((col.totalHours / maxDailyHours) * 100)))
                   : 18;
               const isHovered = hoveredDayIndex === col.dayIndex;
 
@@ -929,9 +906,7 @@ export default function DashboardScreen() {
                   onFocus={() => setHoveredDayIndex(col.dayIndex)}
                   onBlur={() => setHoveredDayIndex(null)}
                   onClick={() =>
-                    setHoveredDayIndex((prev) =>
-                      prev === col.dayIndex ? null : col.dayIndex
-                    )
+                    setHoveredDayIndex((prev) => (prev === col.dayIndex ? null : col.dayIndex))
                   }
                   tabIndex={0}
                   role="button"
@@ -941,7 +916,9 @@ export default function DashboardScreen() {
                   {/* Hover / Tap Per-Project Breakdown Tooltip portaled to document.body */}
                   <AnchoredTooltip
                     isOpen={isHovered}
-                    anchorEl={dayColumnRefs.current.get(col.dayIndex) || null}
+                    anchorRect={
+                      dayColumnRefs.current.get(col.dayIndex)?.getBoundingClientRect() || null
+                    }
                     className="w-48 sm:w-52 bg-[var(--surface-elevated)] border border-[var(--border-strong)] rounded-[var(--radius-md)] shadow-lg p-2.5 text-[11px] space-y-1.5"
                   >
                     <div className="flex items-center justify-between font-semibold text-[var(--ink-primary)] border-b border-[var(--border-hairline)] pb-1">
@@ -1007,9 +984,7 @@ export default function DashboardScreen() {
                       ) : (
                         col.segments.map((seg) => {
                           const segShare =
-                            col.totalSeconds > 0
-                              ? (seg.seconds / col.totalSeconds) * 100
-                              : 100;
+                            col.totalSeconds > 0 ? (seg.seconds / col.totalSeconds) * 100 : 100;
                           return (
                             <div
                               key={seg.projectId}
@@ -1066,9 +1041,7 @@ export default function DashboardScreen() {
           {uniqueProjects.length === 0 ? (
             <div className="flex-1 flex flex-col items-center justify-center text-center gap-2 py-2">
               <ContourGlyph seed="dashboard-projects-empty" size={38} />
-              <p className="text-xs text-[var(--ink-secondary)]">
-                No active project streams yet.
-              </p>
+              <p className="text-xs text-[var(--ink-secondary)]">No active project streams yet.</p>
               <button
                 type="button"
                 onClick={() => setNewProjectModalOpen(true)}
@@ -1106,10 +1079,7 @@ export default function DashboardScreen() {
                         </p>
                       </div>
                     </div>
-                    <DeleteButton
-                      name={project.name}
-                      onDelete={() => deleteProject(project.id)}
-                    />
+                    <DeleteButton name={project.name} onDelete={() => deleteProject(project.id)} />
                   </li>
                 );
               })}
@@ -1198,9 +1168,7 @@ export default function DashboardScreen() {
                     suffix="%"
                     className="text-xl font-semibold text-[var(--ink-primary)] leading-none"
                   />
-                  <span className="text-[9px] text-[var(--ink-muted)] mt-0.5">
-                    Overall
-                  </span>
+                  <span className="text-[9px] text-[var(--ink-muted)] mt-0.5">Overall</span>
                 </div>
               </div>
 

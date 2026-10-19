@@ -18,12 +18,7 @@ import {
   Users,
   X,
 } from 'lucide-react';
-import {
-  ACCENT_THEMES,
-  AccentName,
-  RouteId,
-  usePlotlineStore,
-} from '../store';
+import { ACCENT_THEMES, AccentName, RouteId, usePlotlineStore } from '../store';
 import { ContourGlyph } from '../utils/contourGlyph';
 
 export interface CommandPaletteItem {
@@ -50,7 +45,6 @@ export default function CommandPalette({ onNavigate }: CommandPaletteProps) {
     team,
     accent,
     timerRunning,
-    timerSeconds,
     timerTaskId,
     setCommandPaletteOpen,
     setNewProjectModalOpen,
@@ -286,7 +280,6 @@ export default function CommandPalette({ onNavigate }: CommandPaletteProps) {
     team,
     accent,
     timerRunning,
-    timerSeconds,
     activeFocusTask,
     onNavigate,
     setCommandPaletteOpen,
@@ -506,7 +499,9 @@ export default function CommandPalette({ onNavigate }: CommandPaletteProps) {
                           ) : (
                             <span
                               className="w-7 h-7 rounded-[var(--radius-sm)] bg-[var(--surface-elevated)] border border-[var(--border-hairline)] flex items-center justify-center shrink-0"
-                              style={{ color: isSelected ? 'var(--accent)' : 'var(--ink-secondary)' }}
+                              style={{
+                                color: isSelected ? 'var(--accent)' : 'var(--ink-secondary)',
+                              }}
                             >
                               {item.icon}
                             </span>

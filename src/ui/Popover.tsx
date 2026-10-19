@@ -76,8 +76,8 @@ export function AnchoredPopover({
     const menuWidth = menuEl
       ? Math.max(menuEl.offsetWidth, matchTriggerWidth ? triggerRect.width : 0)
       : matchTriggerWidth
-      ? triggerRect.width
-      : 224;
+        ? triggerRect.width
+        : 224;
     const menuHeight = menuEl ? menuEl.offsetHeight : 220;
 
     // Horizontal alignment + viewport clamping
@@ -85,13 +85,10 @@ export function AnchoredPopover({
       align === 'end'
         ? triggerRect.right - menuWidth
         : align === 'center'
-        ? triggerRect.left + triggerRect.width / 2 - menuWidth / 2
-        : triggerRect.left;
+          ? triggerRect.left + triggerRect.width / 2 - menuWidth / 2
+          : triggerRect.left;
 
-    left = Math.max(
-      VIEWPORT_MARGIN,
-      Math.min(left, vw - menuWidth - VIEWPORT_MARGIN)
-    );
+    left = Math.max(VIEWPORT_MARGIN, Math.min(left, vw - menuWidth - VIEWPORT_MARGIN));
 
     // Vertical placement + flip + viewport clamping
     const spaceBelow = vh - triggerRect.bottom - TRIGGER_GAP - VIEWPORT_MARGIN;
@@ -138,8 +135,7 @@ export function AnchoredPopover({
 
   useEffect(() => {
     if (!isOpen) return;
-    previousFocusRef.current =
-      triggerRef.current || (document.activeElement as HTMLElement | null);
+    previousFocusRef.current = triggerRef.current || (document.activeElement as HTMLElement | null);
 
     const focusTimer = window.setTimeout(() => {
       if (!autoFocusFirst || !menuRef.current) return;
@@ -195,8 +191,7 @@ export function AnchoredPopover({
       } else if (e.key === 'ArrowUp' || e.key === 'ArrowLeft') {
         e.preventDefault();
         e.stopPropagation();
-        const prevIndex =
-          currentIndex <= 0 ? items.length - 1 : (currentIndex - 1) % items.length;
+        const prevIndex = currentIndex <= 0 ? items.length - 1 : (currentIndex - 1) % items.length;
         items[prevIndex]?.focus();
       } else if (e.key === 'Home') {
         e.preventDefault();
@@ -222,6 +217,7 @@ export function AnchoredPopover({
     window.addEventListener('resize', handleScrollOrResize);
     window.addEventListener('scroll', handleScrollOrResize, true);
     document.addEventListener('mousedown', handlePointerDownOutside);
+    const currentTrigger = triggerRef.current;
     document.addEventListener('touchstart', handlePointerDownOutside);
     window.addEventListener('keydown', handleKeyDown, true);
 
@@ -234,7 +230,7 @@ export function AnchoredPopover({
       window.removeEventListener('keydown', handleKeyDown, true);
 
       if (autoFocusFirst) {
-        const returnEl = triggerRef.current || previousFocusRef.current;
+        const returnEl = currentTrigger || previousFocusRef.current;
         if (returnEl && typeof returnEl.focus === 'function') {
           returnEl.focus();
         }

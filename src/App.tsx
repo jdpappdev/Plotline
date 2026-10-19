@@ -37,11 +37,12 @@ import { AnchoredPopover } from './ui/Popover';
 import {
   ACCENT_THEMES,
   applyAccentCssVariables,
-   getIsoDateOffset,
   RouteId,
   TaskItem,
   usePlotlineStore,
 } from './store';
+import { AccentName } from './domain/types';
+import { getIsoDateOffset, getNowTimestamp } from './lib/clock';
 import { ContourGlyph } from './utils/contourGlyph';
 
 interface RouteConfig {
@@ -100,9 +101,7 @@ function resolveRouteFromLocation(): RouteId {
     const match = ROUTES.find((r) => r.id.toLowerCase() === cleanedHash);
     return match ? match.id : 'NotFound';
   }
-  const cleanedPath = window.location.pathname
-    .replace(/^\/+|\/+$/g, '')
-    .toLowerCase();
+  const cleanedPath = window.location.pathname.replace(/^\/+|\/+$/g, '').toLowerCase();
   if (!cleanedPath || cleanedPath === 'index.html') {
     return 'Dashboard';
   }
@@ -268,11 +267,14 @@ export default function App() {
     setNewTaskModalOpen,
   ]);
 
-  const handleNavigate = useCallback((routeId: RouteId) => {
-    setActiveRoute(routeId);
-    window.history.replaceState(null, '', `#${routeId.toLowerCase()}`);
-    setMoreSheetOpen(false);
-  }, [setActiveRoute]);
+  const handleNavigate = useCallback(
+    (routeId: RouteId) => {
+      setActiveRoute(routeId);
+      window.history.replaceState(null, '', `#${routeId.toLowerCase()}`);
+      setMoreSheetOpen(false);
+    },
+    [setActiveRoute]
+  );
 
   const handleCreateProject = (e: React.FormEvent) => {
     e.preventDefault();
@@ -288,7 +290,7 @@ export default function App() {
 
     savingProjectRef.current = true;
     setIsSavingProject(true);
-    const newId = `prj-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
+    const newId = `prj-${getNowTimestamp()}-${Math.random().toString(36).slice(2, 6)}`;
 
     addProject({
       id: newId,
@@ -319,7 +321,7 @@ export default function App() {
 
     savingTaskRef.current = true;
     setIsSavingTask(true);
-    const newId = `tsk-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
+    const newId = `tsk-${getNowTimestamp()}-${Math.random().toString(36).slice(2, 6)}`;
 
     addTask({
       id: newId,
@@ -377,17 +379,17 @@ export default function App() {
           </div>
 
           <div className="space-y-1.5">
-            <span
-              className="text-xs font-semibold"
-              style={{ color: 'var(--accent)' }}
-            >
+            <span className="text-xs font-semibold" style={{ color: 'var(--accent)' }}>
               Session Locked
             </span>
             <h1 className="text-2xl font-bold tracking-tight text-[var(--ink-primary)]">
               Signed out of Plotline
             </h1>
             <p className="text-xs sm:text-sm text-[var(--ink-secondary)] leading-relaxed">
-              Your workspace for <span className="font-semibold text-[var(--ink-primary)]">{currentUser.name}</span> ({projects.length} projects, {tasks.length} tasks) is safely preserved in local storage.
+              Your workspace for{' '}
+              <span className="font-semibold text-[var(--ink-primary)]">{currentUser.name}</span> (
+              {projects.length} projects, {tasks.length} tasks) is safely preserved in local
+              storage.
             </p>
           </div>
 
@@ -395,7 +397,10 @@ export default function App() {
             type="button"
             onClick={() => {
               setSignedOut(false);
-              pushToast(`Welcome back, ${currentUser.name}`, 'Session restored with all data intact.');
+              pushToast(
+                `Welcome back, ${currentUser.name}`,
+                'Session restored with all data intact.'
+              );
             }}
             style={{ backgroundColor: 'var(--accent)' }}
             className="w-full min-h-[44px] py-2.5 px-5 rounded-full text-sm font-semibold text-white hover:opacity-95 transition-opacity cursor-pointer shadow-2xs"
@@ -447,7 +452,10 @@ export default function App() {
         </div>
 
         {/* Route Navigation List */}
-        <nav className="flex-1 py-3 px-2 space-y-1 overflow-y-auto min-h-0" aria-label="Workspace Views">
+        <nav
+          className="flex-1 py-3 px-2 space-y-1 overflow-y-auto min-h-0"
+          aria-label="Workspace Views"
+        >
           {ROUTES.map((route) => {
             const Icon = route.icon;
             const isActive = activeRoute === route.id;
@@ -546,7 +554,11 @@ export default function App() {
 
           {/* Left Zone on >=640px: Search Input + Cmd+K Badge */}
           <div className="hidden sm:flex items-center gap-3 flex-1 max-w-md min-w-0">
-            <div ref={searchContainerRef} className="relative flex-1 min-w-[140px]" data-tour="search">
+            <div
+              ref={searchContainerRef}
+              className="relative flex-1 min-w-[140px]"
+              data-tour="search"
+            >
               <div
                 className={`flex items-center h-9 px-3 rounded-full bg-[var(--surface-sunken)] border transition-colors duration-160 ease-plotline ${
                   searchFocused
@@ -741,34 +753,40 @@ export default function App() {
                   <p className="text-[11px] font-semibold text-[var(--ink-secondary)] mb-1.5">
                     Accent Palette
                   </p>
-                  <div className="grid grid-cols-4 gap-1.5" role="group" aria-label="Quick accent switch">
-                    {(Object.keys(ACCENT_THEMES) as Array<keyof typeof ACCENT_THEMES>).map((key) => {
-                      const theme = ACCENT_THEMES[key];
-                      const isSelected = accent === key;
-                      return (
-                        <button
-                          key={key}
-                          type="button"
-                          role="menuitem"
-                          onClick={() => {
-                            setAccent(key, true);
-                            setUserMenuOpen(false);
-                          }}
-                          aria-pressed={isSelected}
-                          className={`min-h-[44px] sm:min-h-0 px-1.5 py-1.5 rounded-[var(--radius-xs)] border text-[10px] font-semibold flex flex-col items-center justify-center gap-1 cursor-pointer ${
-                            isSelected
-                              ? 'bg-[var(--accent-soft)] border-[var(--accent)] text-[var(--ink-primary)]'
-                              : 'bg-[var(--surface-sunken)] border-transparent text-[var(--ink-secondary)] hover:text-[var(--ink-primary)]'
-                          }`}
-                        >
-                          <span
-                            className="w-3 h-3 rounded-full"
-                            style={{ backgroundColor: theme.hex }}
-                          />
-                          <span>{theme.label}</span>
-                        </button>
-                      );
-                    })}
+                  <div
+                    className="grid grid-cols-4 gap-1.5"
+                    role="group"
+                    aria-label="Quick accent switch"
+                  >
+                    {(Object.keys(ACCENT_THEMES) as Array<keyof typeof ACCENT_THEMES>).map(
+                      (key) => {
+                        const theme = ACCENT_THEMES[key];
+                        const isSelected = accent === key;
+                        return (
+                          <button
+                            key={key}
+                            type="button"
+                            role="menuitem"
+                            onClick={() => {
+                              setAccent(key as AccentName);
+                              setUserMenuOpen(false);
+                            }}
+                            aria-pressed={isSelected}
+                            className={`min-h-[44px] sm:min-h-0 px-1.5 py-1.5 rounded-[var(--radius-xs)] border text-[10px] font-semibold flex flex-col items-center justify-center gap-1 cursor-pointer ${
+                              isSelected
+                                ? 'bg-[var(--accent-soft)] border-[var(--accent)] text-[var(--ink-primary)]'
+                                : 'bg-[var(--surface-sunken)] border-transparent text-[var(--ink-secondary)] hover:text-[var(--ink-primary)]'
+                            }`}
+                          >
+                            <span
+                              className="w-3 h-3 rounded-full"
+                              style={{ backgroundColor: theme.hex }}
+                            />
+                            <span>{theme.label}</span>
+                          </button>
+                        );
+                      }
+                    )}
                   </div>
                 </div>
 
@@ -871,7 +889,11 @@ export default function App() {
                   Uncharted sector — page not found
                 </h1>
                 <p className="text-xs sm:text-sm text-[var(--ink-secondary)] leading-relaxed">
-                  The requested coordinates ({typeof window !== 'undefined' ? window.location.hash || window.location.pathname : '#/404'}) do not match any active workspace view in Plotline.
+                  The requested coordinates (
+                  {typeof window !== 'undefined'
+                    ? window.location.hash || window.location.pathname
+                    : '#/404'}
+                  ) do not match any active workspace view in Plotline.
                 </p>
               </div>
 
@@ -975,9 +997,7 @@ export default function App() {
                 >
                   <Icon className="w-5 h-5" />
                 </span>
-                <span className="text-[10px] leading-tight whitespace-nowrap">
-                  {tab.label}
-                </span>
+                <span className="text-[10px] leading-tight whitespace-nowrap">{tab.label}</span>
               </button>
             );
           })}
@@ -1094,7 +1114,8 @@ export default function App() {
       >
         <div className="p-5 sm:p-6">
           <p className="text-xs text-[var(--ink-secondary)] leading-relaxed">
-            Your projects, tasks, events, and focus sessions remain saved in local storage and will be restored when you sign back in.
+            Your projects, tasks, events, and focus sessions remain saved in local storage and will
+            be restored when you sign back in.
           </p>
         </div>
       </Dialog>
@@ -1127,7 +1148,12 @@ export default function App() {
           </>
         }
       >
-        <form id="new-project-form" onSubmit={handleCreateProject} className="p-5 sm:p-6 space-y-4" noValidate>
+        <form
+          id="new-project-form"
+          onSubmit={handleCreateProject}
+          className="p-5 sm:p-6 space-y-4"
+          noValidate
+        >
           <div>
             <label
               htmlFor="new-project-name"
@@ -1220,7 +1246,12 @@ export default function App() {
           </>
         }
       >
-        <form id="new-task-form" onSubmit={handleCreateTask} className="p-5 sm:p-6 space-y-3.5" noValidate>
+        <form
+          id="new-task-form"
+          onSubmit={handleCreateTask}
+          className="p-5 sm:p-6 space-y-3.5"
+          noValidate
+        >
           <div>
             <label
               htmlFor="new-task-title"
@@ -1275,9 +1306,7 @@ export default function App() {
               <select
                 id="new-task-priority"
                 value={taskPriority}
-                onChange={(e) =>
-                  setTaskPriority(e.target.value as TaskItem['priority'])
-                }
+                onChange={(e) => setTaskPriority(e.target.value as TaskItem['priority'])}
                 className="w-full h-11 sm:h-10 px-2.5 rounded-[var(--radius-sm)] bg-[var(--surface-sunken)] border border-[var(--border-strong)] text-xs sm:text-sm text-[var(--ink-primary)] focus:outline-2 focus:outline-[var(--accent)]"
               >
                 <option value="High">High</option>

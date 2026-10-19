@@ -4,7 +4,6 @@ import {
   closestCorners,
   CollisionDetection,
   DndContext,
-  DragCancelEvent,
   DragEndEvent,
   DragOverlay,
   DragStartEvent,
@@ -22,20 +21,10 @@ import {
 } from '@dnd-kit/core';
 import { CSS } from '@dnd-kit/utilities';
 import { motion, useReducedMotion } from 'motion/react';
-import {
-  CheckSquare,
-  Clock,
-  MoreHorizontal,
-  Plus,
-  Timer,
-} from 'lucide-react';
-import {
-  formatLoggedDuration,
-  getTodayIsoDate,
-  TaskItem,
-  TeamMember,
-  usePlotlineStore,
-} from '../store';
+import { CheckSquare, Clock, MoreHorizontal, Plus, Timer } from 'lucide-react';
+import { TaskItem, TeamMember, usePlotlineStore } from '../store';
+import { formatLoggedDuration } from '../domain/derivations/time';
+import { getTodayIsoDate } from '../lib/clock';
 import { ContourGlyph } from '../utils/contourGlyph';
 import { MotionCard, PLOTLINE_DURATION, PLOTLINE_EASE } from '../motion/primitives';
 import { DeleteButton } from './DeleteButton';
@@ -93,12 +82,8 @@ const stageKeyboardCoordinateGetter: KeyboardCoordinateGetter = (
   }
 
   const currentIndex = STAGE_IDS.indexOf(currentStageId);
-  const delta =
-    code === KeyboardCode.Right || code === KeyboardCode.Down ? 1 : -1;
-  const nextIndex = Math.max(
-    0,
-    Math.min(STAGE_IDS.length - 1, currentIndex + delta)
-  );
+  const delta = code === KeyboardCode.Right || code === KeyboardCode.Down ? 1 : -1;
+  const nextIndex = Math.max(0, Math.min(STAGE_IDS.length - 1, currentIndex + delta));
   const targetStageId = STAGE_IDS[nextIndex];
   const targetRect = context.droppableRects.get(targetStageId);
 
@@ -109,11 +94,8 @@ const stageKeyboardCoordinateGetter: KeyboardCoordinateGetter = (
   const activeWidth = context.collisionRect?.width ?? 240;
   const activeHeight = context.collisionRect?.height ?? 140;
 
-  let nextX =
-    targetRect.left + Math.max(8, (targetRect.width - activeWidth) / 2);
-  const nextY =
-    targetRect.top +
-    Math.max(36, Math.min(80, (targetRect.height - activeHeight) / 2));
+  let nextX = targetRect.left + Math.max(8, (targetRect.width - activeWidth) / 2);
+  const nextY = targetRect.top + Math.max(36, Math.min(80, (targetRect.height - activeHeight) / 2));
 
   if (Math.abs(nextX - currentCoordinates.x) < 1) {
     nextX += delta;
@@ -194,8 +176,8 @@ function TaskCardContent({
         isOverlay
           ? 'shadow-xl border-[var(--accent)] cursor-grabbing'
           : isRunningFocus
-          ? 'border-[var(--accent)] shadow-xs'
-          : 'border-[var(--border-hairline)] hover:border-[var(--border-strong)]'
+            ? 'border-[var(--accent)] shadow-xs'
+            : 'border-[var(--border-hairline)] hover:border-[var(--border-strong)]'
       }`}
     >
       {/* Top Row: Category chip + Priority chip + Running badge + "…" menu */}
@@ -256,9 +238,8 @@ function TaskCardContent({
               isOpen={menuOpen}
               onClose={() => setMenuOpen(false)}
               triggerRef={menuTriggerRef}
-              placement="bottom-end"
-              ariaLabel={`Actions for ${task.title}`}
-              sheetTitle={task.title}
+              placement="bottom"
+              title={task.title}
               role="menu"
               className="w-48 bg-[var(--surface-elevated)] border border-[var(--border-strong)] rounded-[var(--radius-md)] shadow-lg p-1.5 text-xs"
             >
@@ -521,9 +502,7 @@ function DroppableStageColumn({
       >
         {/* Column Header + Count */}
         <div className="flex items-center justify-between px-1 pt-0.5 shrink-0">
-          <h2 className="text-sm font-semibold text-[var(--ink-primary)]">
-            {column.title}
-          </h2>
+          <h2 className="text-sm font-semibold text-[var(--ink-primary)]">{column.title}</h2>
           <span className="px-2 py-0.5 rounded-full text-xs font-semibold font-ui-tabular bg-[var(--surface-elevated)] border border-[var(--border-hairline)] text-[var(--ink-secondary)]">
             {tasks.length}
           </span>
@@ -668,9 +647,7 @@ export default function TasksScreen() {
 
   const toggleFilter = (criterion: FilterCriterion) => {
     setActiveFilters((prev) =>
-      prev.includes(criterion)
-        ? prev.filter((item) => item !== criterion)
-        : [...prev, criterion]
+      prev.includes(criterion) ? prev.filter((item) => item !== criterion) : [...prev, criterion]
     );
   };
 
@@ -701,7 +678,7 @@ export default function TasksScreen() {
     setActiveDragTaskId(String(event.active.id));
   };
 
-  const handleDragCancel = (_event: DragCancelEvent) => {
+  const handleDragCancel = () => {
     setActiveDragTaskId(null);
   };
 
@@ -751,9 +728,7 @@ export default function TasksScreen() {
         className="plotline-enter flex flex-col sm:flex-row sm:items-center justify-between gap-3"
       >
         <div className="min-w-0">
-          <h1 className="text-2xl font-bold tracking-tight text-[var(--ink-primary)]">
-            Tasks
-          </h1>
+          <h1 className="text-2xl font-bold tracking-tight text-[var(--ink-primary)]">Tasks</h1>
           <p className="text-xs sm:text-sm text-[var(--ink-secondary)] mt-0.5">
             Drag a card to another stage, or use its menu to move it
           </p>
@@ -775,11 +750,7 @@ export default function TasksScreen() {
         style={{ '--stagger-index': 1 } as React.CSSProperties}
         className="plotline-enter flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-[var(--surface-elevated)] border border-[var(--border-hairline)] rounded-[var(--radius-lg)] p-2.5"
       >
-        <div
-          role="group"
-          aria-label="Task filters"
-          className="flex items-center gap-1.5 flex-wrap"
-        >
+        <div role="group" aria-label="Task filters" className="flex items-center gap-1.5 flex-wrap">
           <button
             type="button"
             onClick={() => setActiveFilters([])}
@@ -879,9 +850,7 @@ export default function TasksScreen() {
               aria-selected={isSelected}
               onClick={() => setActiveMobileStage(col.id)}
               style={
-                isSelected
-                  ? { backgroundColor: 'var(--accent)', color: '#ffffff' }
-                  : undefined
+                isSelected ? { backgroundColor: 'var(--accent)', color: '#ffffff' } : undefined
               }
               className={`min-h-[44px] px-1.5 py-1.5 rounded-[var(--radius-md)] text-[11px] font-semibold flex flex-col items-center justify-center gap-0.5 transition-colors cursor-pointer min-w-0 ${
                 isSelected
