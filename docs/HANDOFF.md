@@ -3,10 +3,12 @@
 ## 1. Quickstart: Installation & Development
 
 ### Prerequisites
+
 - Node.js >= 20.x
 - npm >= 10.x (or Bun runtime)
 
 ### Setup & Run
+
 ```bash
 # Install dependencies
 npm install
@@ -27,20 +29,20 @@ npm run preview
 
 ## 2. Complete NPM Script Reference
 
-| Script | Command | Purpose |
-| :--- | :--- | :--- |
-| `dev` | `vite --port=3000 --host=0.0.0.0` | Starts the Vite dev server on port 3000. HMR is toggled via `DISABLE_HMR` env var. |
-| `build` | `vite build` | Compiles production assets into `dist/`. Dynamic code-splitting generates `xlsx` and vendor chunks. |
-| `preview` | `vite preview` | Serves the production build locally. |
-| `clean` | `rm -rf dist server.js` | Removes build output and artifacts. |
-| `lint` | `eslint .` | Runs ESLint across all TypeScript and React source files. |
-| `format:check` | `prettier --check .` | Checks code formatting against `.prettierrc`. |
-| `typecheck` | `tsc --noEmit` | Runs the TypeScript compiler for strict type validation. |
-| `test` | `vitest run` | Runs in-memory Vitest unit and domain derivation suites. |
-| `test:visual` | `playwright test` | Runs Playwright visual and text snapshot regression suites against baselines. |
-| `check:cycles` | `madge --circular --extensions ts,tsx src` | Validates that no circular import cycles exist in `src/`. |
-| `check:clock` | Shell pipeline grep checking banned date calls | Enforces the clock contract (no direct `Date.now()` or parameterless `new Date()` outside `src/lib/clock.ts`). |
-| `check:all` | Chained quality gate | Executes typecheck, lint, format check, unit tests, cycle checks, and clock checks sequentially. |
+| Script         | Command                                        | Purpose                                                                                                        |
+| :------------- | :--------------------------------------------- | :------------------------------------------------------------------------------------------------------------- |
+| `dev`          | `vite --port=3000 --host=0.0.0.0`              | Starts the Vite dev server on port 3000. HMR is toggled via `DISABLE_HMR` env var.                             |
+| `build`        | `vite build`                                   | Compiles production assets into `dist/`. Dynamic code-splitting generates `xlsx` and vendor chunks.            |
+| `preview`      | `vite preview`                                 | Serves the production build locally.                                                                           |
+| `clean`        | `rm -rf dist server.js`                        | Removes build output and artifacts.                                                                            |
+| `lint`         | `eslint .`                                     | Runs ESLint across all TypeScript and React source files.                                                      |
+| `format:check` | `prettier --check .`                           | Checks code formatting against `.prettierrc`.                                                                  |
+| `typecheck`    | `tsc --noEmit`                                 | Runs the TypeScript compiler for strict type validation.                                                       |
+| `test`         | `vitest run`                                   | Runs in-memory Vitest unit and domain derivation suites.                                                       |
+| `test:visual`  | `playwright test`                              | Runs Playwright visual and text snapshot regression suites against baselines.                                  |
+| `check:cycles` | `madge --circular --extensions ts,tsx src`     | Validates that no circular import cycles exist in `src/`.                                                      |
+| `check:clock`  | Shell pipeline grep checking banned date calls | Enforces the clock contract (no direct `Date.now()` or parameterless `new Date()` outside `src/lib/clock.ts`). |
+| `check:all`    | Chained quality gate                           | Executes typecheck, lint, format check, unit tests, cycle checks, and clock checks sequentially.               |
 
 ---
 
@@ -116,6 +118,7 @@ npm run preview
 ## 4. Data Model & Derivation Rules
 
 ### Core Entities (`src/domain/types.ts`)
+
 - **`Project`**: `id`, `code` (e.g. `PLT-101`), `name`, `client`, `sector`, `status` (`On Track`, `At Risk`, `Planning`, `Completed`, `Pending`, `Running`, `Ended`), `leadId`, `startDate`, `targetDate`, `progress` (0–100), `budgetAllocated`, `budgetSpent`, `summary`.
 - **`TaskItem`**: `id` (e.g. `tsk-h-1`), `code` (`PLT-101-A`), `title`, `category`, `projectId`, `assigneeId`, `status` (`Backlog`, `In Progress`, `In Review`, `Done`), `priority` (`High`, `Medium`, `Low`), `startDate`, `dueDate`, `estimateHours`, `loggedSeconds`, `progress`, `subtasksDone`, `subtasksTotal`, `completedDate`.
 - **`TeamMember`**: `id` (e.g. `usr-soren`), `name`, `role`, `discipline`, `department` (`Engineering`, `Design`, `Marketing`, `Management`), `presence` (`online`, `away`, `offline`), `statusLabel`, `location`, `timezone`, `initials`, `capacityHours`, `allocatedHours`, `email`.
@@ -123,6 +126,7 @@ npm run preview
 - **`CalendarEvent`**: `id`, `title`, `date`, `startTime`, `endTime`, `category` (`Meeting`, `Team`, `Review`, `Deadline`, `Social`), `attendeeIds`, `location`.
 
 ### Derivation Rules (`src/domain/derivations/`)
+
 1. **Projects (`projects.ts`)**:
    - Status categorization: Projects with `progress === 100` are `Ended`. Projects with `startDate > today` are `Pending`. Other projects are `Running`.
    - Completion rings: Top 4 unfinished projects ordered by `targetDate` ascending.
@@ -144,6 +148,7 @@ npm run preview
 ## 5. Central Clock & Deterministic Time Contract
 
 To guarantee reproducible tests, visual regression snapshots, and deterministic seed generation:
+
 1. **Single Source of Truth (`src/lib/clock.ts`)**:
    - `getNow()`: Current Date object.
    - `getNowTimestamp()` (or `getNowMs()`): Epoch milliseconds.
@@ -182,6 +187,7 @@ To guarantee reproducible tests, visual regression snapshots, and deterministic 
 ## 7. Prioritized Unfinished Work Roadmap
 
 ### Priority 0: Blocks Push & Core Integrity
+
 1. **Fix CalendarScreen TS2554**: Update `CalendarScreen.tsx` to pass `editingEventId` and input payload to `updateEvent` matching the store signature.
 2. **Consolidate & Export Full Seed Data in `src/domain/seed/`**:
    - Move full seed generators (`createSeedTasks`, `createSeedEvents`, `createSeedFocusSessions`, `validateWorkspace`) out of `src/store.ts` into `src/domain/seed/`.
@@ -192,6 +198,7 @@ To guarantee reproducible tests, visual regression snapshots, and deterministic 
 5. **Investigate Visual Baseline Diffs**: Determine if visual mismatches are due to browser font rendering differences or uncommitted UI modifications, and reconcile the Help screen text mismatch.
 
 ### Priority 1: High Priority (Architecture & Usability)
+
 1. **Decompose `src/store.ts` into Modular Slices**:
    - Split into `slices/projectsSlice.ts`, `slices/tasksSlice.ts`, `slices/teamSlice.ts`, `slices/calendarSlice.ts`, `slices/timerSlice.ts`, and `slices/uiSlice.ts`.
 2. **Decompose Oversized Components (>250 lines)**:
@@ -202,6 +209,7 @@ To guarantee reproducible tests, visual regression snapshots, and deterministic 
    - Add listeners for `N` (new project/task modal) and `T` (today / focus timer toggle) with strict input/textarea/contentEditable suppression.
 
 ### Priority 2: Nice to Have (Repository Hygiene)
+
 1. **Add Root `README.md`**: Create project documentation with architecture overview, feature screenshots, and quickstart instructions.
 2. **Sync Package Name & Manager**: Update `name: "plotline"` in `package.json` and generate `package-lock.json` alongside `bun.lock`.
 3. **Expand GitHub Actions CI Workflow**: Update `.github/workflows/visual.yml` to run `npm run typecheck`, `npm run lint`, `npm run format:check`, and `npm test` prior to visual regression testing.

@@ -16,7 +16,7 @@ import {
   createSeedTasks,
   SEED_TEAM,
   validateWorkspace,
-} from '../types';
+} from '../seed';
 
 function assertEqual<T>(label: string, actual: T, expected: T): void {
   const actualJson = JSON.stringify(actual);

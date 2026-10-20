@@ -10,10 +10,6 @@ import {
 } from './time';
 
 describe('time derivations', () => {
-  const projects = createSeedProjects();
-  const tasks = createSeedTasks();
-  const focusSessions = createSeedFocusSessions(tasks, projects);
-
   beforeEach(() => {
     setClockOverride(new Date(2026, 9, 18, 12, 0, 0));
   });
@@ -23,6 +19,9 @@ describe('time derivations', () => {
   });
 
   it('computes exact baseline Weekly Output for Dashboard', () => {
+    const projects = createSeedProjects();
+    const tasks = createSeedTasks();
+    const focusSessions = createSeedFocusSessions(tasks, projects);
     const weekly = computeWeeklyOutputData(focusSessions, 'monday');
     expect(weekly.totalWeekSeconds).toBe(114480);
     expect(weekly.totalSessionsCount).toBe(15);

@@ -4,6 +4,7 @@ import {
   Check,
   CheckCircle2,
   Database,
+  Download,
   Palette,
   RotateCcw,
   ShieldCheck,
@@ -18,6 +19,8 @@ import {
   WeekStart,
   WorkspaceValidationReport,
 } from '../store';
+import { generateWeeklyReportCsv } from '../domain/derivations/weeklyReport';
+import { getIsoDateOffset } from '../lib/clock';
 import { computeInitials } from '../utils/string';
 
 type SettingsSection = 'Profile' | 'Notifications' | 'Appearance' | 'Data';
@@ -26,11 +29,13 @@ const NOTIFICATION_ITEMS: Array<{
   key: keyof NotificationSettings;
   label: string;
   description: string;
+  requiresEmailSetup?: boolean;
 }> = [
   {
     key: 'emailDigests',
-    label: 'Daily Field Digest',
+    label: 'Weekly digest reports',
     description: 'Receive a morning summary of tasks due today and upcoming reviews.',
+    requiresEmailSetup: true,
   },
   {
     key: 'milestoneAlerts',
@@ -51,11 +56,15 @@ const NOTIFICATION_ITEMS: Array<{
     key: 'weeklyReport',
     label: 'Weekly Throughput Report',
     description: 'Automated Friday afternoon CSV and velocity recap across streams.',
+    requiresEmailSetup: true,
   },
 ];
 
 export default function SettingsScreen() {
   const {
+    projects,
+    tasks,
+    focusSessions,
     currentUser,
     notifications,
     accent,
@@ -66,6 +75,7 @@ export default function SettingsScreen() {
     setWeekStart,
     resetDemoData,
     runValidationCheck,
+    pushToast,
   } = usePlotlineStore();
 
   const [activeTab, setActiveTab] = useState<SettingsSection>('Profile');
@@ -90,6 +100,25 @@ export default function SettingsScreen() {
   const handleRunCheck = () => {
     const report = runValidationCheck();
     setValidationReport(report);
+  };
+
+  const handleDownloadWeeklyReport = () => {
+    const csv = generateWeeklyReportCsv(tasks, projects, focusSessions);
+    const endDate = getIsoDateOffset(0);
+    const startDate = getIsoDateOffset(-6);
+    const filename = `plotline-weekly-report-${startDate}_${endDate}.csv`;
+
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = filename;
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    URL.revokeObjectURL(url);
+
+    pushToast('Weekly report downloaded', `Saved ${filename}`);
   };
 
   return (
@@ -266,39 +295,70 @@ export default function SettingsScreen() {
 
               <div className="divide-y divide-[var(--border-hairline)]">
                 {NOTIFICATION_ITEMS.map((item) => {
-                  const enabled = notifications[item.key];
+                  const isDisabledEmail = Boolean(item.requiresEmailSetup);
+                  const enabled = isDisabledEmail ? false : notifications[item.key];
                   return (
-                    <div key={item.key} className="py-3.5 flex items-center justify-between gap-4">
-                      <div className="min-w-0">
-                        <p className="text-xs sm:text-sm font-semibold text-[var(--ink-primary)]">
-                          {item.label}
-                        </p>
-                        <p className="text-xs text-[var(--ink-secondary)] mt-0.5">
-                          {item.description}
-                        </p>
+                    <div
+                      key={item.key}
+                      className="py-3.5 flex flex-col sm:flex-row sm:items-center justify-between gap-3 sm:gap-4"
+                    >
+                      <div className="min-w-0 space-y-1">
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <p className="text-xs sm:text-sm font-semibold text-[var(--ink-primary)]">
+                            {item.label}
+                          </p>
+                          {isDisabledEmail && (
+                            <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-semibold bg-[var(--surface-sunken)] text-[var(--ink-secondary)] border border-[var(--border-hairline)]">
+                              Requires email setup
+                            </span>
+                          )}
+                        </div>
+                        <p className="text-xs text-[var(--ink-secondary)]">{item.description}</p>
                       </div>
 
-                      <button
-                        type="button"
-                        role="switch"
-                        aria-checked={enabled}
-                        aria-label={item.label}
-                        onClick={() => toggleNotification(item.key)}
-                        className="relative w-12 min-h-[44px] flex items-center justify-center shrink-0 cursor-pointer"
-                      >
-                        <span
-                          style={{
-                            backgroundColor: enabled ? 'var(--accent)' : 'var(--border-strong)',
+                      <div className="flex items-center gap-2.5 shrink-0 self-start sm:self-center">
+                        {item.key === 'weeklyReport' && (
+                          <button
+                            type="button"
+                            onClick={handleDownloadWeeklyReport}
+                            data-testid="download-weekly-report-button"
+                            className="inline-flex items-center gap-1.5 px-3.5 py-1.5 min-h-[36px] rounded-full text-xs font-semibold bg-[var(--surface-elevated)] text-[var(--ink-primary)] border border-[var(--border-strong)] hover:bg-[var(--surface-sunken)] transition-colors cursor-pointer"
+                          >
+                            <Download className="w-3.5 h-3.5 text-[var(--accent)]" />
+                            <span>Download weekly report</span>
+                          </button>
+                        )}
+
+                        <button
+                          type="button"
+                          role="switch"
+                          disabled={isDisabledEmail}
+                          aria-disabled={isDisabledEmail ? 'true' : undefined}
+                          aria-checked={enabled}
+                          aria-label={item.label}
+                          onClick={() => {
+                            if (!isDisabledEmail) {
+                              toggleNotification(item.key);
+                            }
                           }}
-                          className="w-11 h-6 rounded-full transition-colors p-0.5 block"
+                          className={`relative w-12 min-h-[44px] flex items-center justify-center shrink-0 ${
+                            isDisabledEmail ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'
+                          }`}
                         >
                           <span
-                            className={`block w-5 h-5 rounded-full bg-white shadow-xs transition-transform ${
-                              enabled ? 'translate-x-5' : 'translate-x-0'
-                            }`}
-                          />
-                        </span>
-                      </button>
+                            style={{
+                              backgroundColor: enabled ? 'var(--accent)' : 'var(--border-strong)',
+                            }}
+                            className="w-11 h-6 rounded-full transition-colors p-0.5 block"
+                          >
+                            <span
+                              className={`block w-5 h-5 rounded-full bg-white shadow-xs transition-transform ${
+                                enabled ? 'translate-x-5' : 'translate-x-0'
+                              }`}
+                            />
+                          </span>
+                        </button>
+                      </div>
                     </div>
                   );
                 })}

@@ -1,84 +1,14 @@
 import React, { useMemo, useRef, useState } from 'react';
 import { AnimatePresence, motion, useReducedMotion } from 'motion/react';
-import { Mail, MapPin, MessageSquare, User, UserPlus } from 'lucide-react';
-import { usePlotlineStore } from '../store'; import { Project, TaskItem, TeamMember, CalendarEvent, EventCategory, AccentName, RouteId, Department, PresenceStatus } from '../domain/types';;
+import { UserPlus } from 'lucide-react';
+import { usePlotlineStore } from '../store';
+import { Department, TeamMember } from '../domain/types';
 import { ContourGlyph } from '../utils/contourGlyph';
-import { Dialog } from '../ui/Dialog';
-import { priorityChipStyle } from './TasksScreen';
-import { DeleteButton } from './DeleteButton';
-
-const DEPARTMENT_FILTERS: Array<'All' | Department> = [
-  'All',
-  'Engineering',
-  'Design',
-  'Marketing',
-  'Management',
-];
-
-function presenceDotColor(presence: PresenceStatus): string {
-  switch (presence) {
-    case 'online':
-      return '#16A34A';
-    case 'away':
-      return '#D97706';
-    case 'offline':
-    default:
-      return '#9CA3AF';
-  }
-}
-
-function presenceTextLabel(presence: PresenceStatus): string {
-  switch (presence) {
-    case 'online':
-      return 'Online';
-    case 'away':
-      return 'Away';
-    case 'offline':
-    default:
-      return 'Offline';
-  }
-}
-
-function UtilizationRing40({ pct }: { pct: number }) {
-  const normalizedPct = Math.min(100, Math.max(0, pct));
-  const strokeColor =
-    normalizedPct >= 100 ? '#DC2626' : normalizedPct >= 85 ? '#D97706' : 'var(--accent)';
-
-  const radius = 16;
-  const circumference = 2 * Math.PI * radius;
-  const strokeDashoffset = circumference * (1 - normalizedPct / 100);
-
-  return (
-    <div className="relative w-[40px] h-[40px] flex items-center justify-center shrink-0 mx-auto">
-      <svg className="w-full h-full -rotate-90" viewBox="0 0 40 40">
-        <circle
-          cx="20"
-          cy="20"
-          r={radius}
-          fill="none"
-          stroke={strokeColor}
-          strokeOpacity={0.12}
-          strokeWidth="4"
-        />
-        <circle
-          cx="20"
-          cy="20"
-          r={radius}
-          fill="none"
-          stroke={strokeColor}
-          strokeWidth="4"
-          strokeLinecap="round"
-          strokeDasharray={circumference}
-          strokeDashoffset={strokeDashoffset}
-          className="transition-all duration-300 ease-out"
-        />
-      </svg>
-      <span className="absolute inset-0 flex items-center justify-center text-[10px] font-bold font-ui-tabular text-[var(--ink-primary)]">
-        {normalizedPct}%
-      </span>
-    </div>
-  );
-}
+import { TeamMemberCard } from './team/TeamMemberCard';
+import { TeamProfileDialog } from './team/TeamProfileDialog';
+import { TeamInviteDialog } from './team/TeamInviteDialog';
+import { TeamMessageDialog } from './team/TeamMessageDialog';
+import { DEPARTMENT_FILTERS, EnrichedTeamMember } from './team/types';
 
 export default function TeamScreen() {
   const {
@@ -99,6 +29,7 @@ export default function TeamScreen() {
 
   // Invite Member Modal State
   const [inviteOpen, setInviteOpen] = useState(false);
+  const [messageMember, setMessageMember] = useState<TeamMember | null>(null);
   const [inviteName, setInviteName] = useState('');
   const [inviteRole, setInviteRole] = useState('');
   const [inviteDept, setInviteDept] = useState<Department>('Engineering');
@@ -107,7 +38,7 @@ export default function TeamScreen() {
   const inviteNameRef = useRef<HTMLInputElement>(null);
 
   // Dedupe team members by id and compute live task counts & workload % from store.tasks
-  const enrichedMembers = useMemo(() => {
+  const enrichedMembers = useMemo<EnrichedTeamMember[]>(() => {
     const unique = new Map<string, TeamMember>();
     for (const m of team) {
       if (!unique.has(m.id)) unique.set(m.id, m);
@@ -168,6 +99,10 @@ export default function TeamScreen() {
 
   const handleOpenProfile = (memberId: string) => {
     setSelectedProfileMemberId(memberId);
+  };
+
+  const handleMessageMember = (member: TeamMember) => {
+    setMessageMember(member);
   };
 
   const handleInviteSubmit = (e: React.FormEvent) => {
@@ -302,425 +237,60 @@ export default function TeamScreen() {
         >
           <AnimatePresence mode="popLayout">
             {filteredMembers.map(({ member, openCount, completedCount, workloadPct }, idx) => (
-              <motion.article
-                layout={!prefersReducedMotion}
+              <TeamMemberCard
                 key={member.id}
-                initial={prefersReducedMotion ? false : { opacity: 0, scale: 0.96 }}
-                animate={{ opacity: 1, scale: 1 }}
-                exit={prefersReducedMotion ? undefined : { opacity: 0, scale: 0.95 }}
-                transition={
-                  prefersReducedMotion
-                    ? { duration: 0 }
-                    : {
-                        type: 'spring',
-                        stiffness: 380,
-                        damping: 30,
-                      }
-                }
-                style={{ '--stagger-index': idx + 2 } as React.CSSProperties}
-                className="plotline-enter bg-[var(--surface-elevated)] border border-[var(--border-hairline)] rounded-[var(--radius-lg)] p-4 sm:p-5 flex flex-col justify-between gap-4 min-w-0"
-              >
-                {/* Top: Initials Avatar with Presence Dot + Name, Role, Department Chip */}
-                <div className="flex items-start justify-between gap-3">
-                  <div className="flex items-center gap-3 min-w-0">
-                    <div className="relative shrink-0">
-                      <span
-                        style={{ backgroundColor: 'var(--accent)' }}
-                        className="w-11 h-11 rounded-full flex items-center justify-center text-sm font-semibold text-white"
-                      >
-                        {member.initials}
-                      </span>
-                      <span
-                        title={presenceTextLabel(member.presence)}
-                        style={{
-                          backgroundColor: presenceDotColor(member.presence),
-                        }}
-                        className="absolute bottom-0 right-0 w-3 h-3 rounded-full border-2 border-[var(--surface-elevated)]"
-                      />
-                    </div>
-
-                    <div className="min-w-0">
-                      <h2 className="text-sm sm:text-base font-semibold text-[var(--ink-primary)] truncate">
-                        {member.name}
-                      </h2>
-                      <p className="text-xs text-[var(--ink-secondary)] truncate">{member.role}</p>
-                    </div>
-                  </div>
-
-                  <span className="px-2.5 py-0.5 rounded-full text-[11px] font-medium bg-[var(--surface-sunken)] text-[var(--ink-secondary)] border border-[var(--border-hairline)] whitespace-nowrap shrink-0">
-                    {member.department}
-                  </span>
-                </div>
-
-                {/* Middle: Open vs Completed Counts + Workload Bar with % */}
-                <div className="space-y-3 pt-1">
-                  <div className="grid grid-cols-2 gap-2.5">
-                    <div className="p-2.5 rounded-[var(--radius-sm)] bg-[var(--surface-canvas)] border border-[var(--border-hairline)] flex items-center justify-between">
-                      <span className="text-xs text-[var(--ink-secondary)]">Open</span>
-                      <span className="text-sm font-semibold font-ui-tabular text-[var(--ink-primary)]">
-                        {openCount}
-                      </span>
-                    </div>
-                    <div className="p-2.5 rounded-[var(--radius-sm)] bg-[var(--surface-canvas)] border border-[var(--border-hairline)] flex items-center justify-between">
-                      <span className="text-xs text-[var(--ink-secondary)]">Completed</span>
-                      <span className="text-sm font-semibold font-ui-tabular text-[var(--ink-primary)]">
-                        {completedCount}
-                      </span>
-                    </div>
-                  </div>
-
-                  <div className="space-y-1.5">
-                    <div className="flex items-center justify-between text-xs">
-                      <span className="text-[var(--ink-secondary)]">Workload</span>
-                      <span
-                        data-testid={`workload-pct-${member.id}`}
-                        className="font-semibold font-ui-tabular text-[var(--ink-primary)]"
-                      >
-                        {workloadPct}%
-                      </span>
-                    </div>
-                    <div className="h-2 w-full rounded-full bg-[var(--surface-sunken)] overflow-hidden">
-                      <div
-                        style={{
-                          width: `${workloadPct}%`,
-                          backgroundColor: 'var(--accent)',
-                        }}
-                        className="h-full rounded-full transition-all duration-300 ease-plotline"
-                      />
-                    </div>
-                  </div>
-                </div>
-
-                {/* Footer: Message & Profile & Delete Buttons */}
-                <div className="pt-2 border-t border-[var(--border-hairline)] flex items-center gap-2">
-                  <button
-                    type="button"
-                    onClick={() =>
-                      pushToast(
-                        `Direct dispatch opened for ${member.name}`,
-                        `${member.email} · ${member.timezone}`
-                      )
-                    }
-                    className="flex-1 min-h-[44px] sm:min-h-0 py-2 px-2.5 rounded-[var(--radius-sm)] border border-[var(--border-strong)] bg-[var(--surface-elevated)] hover:bg-[var(--surface-sunken)] text-xs font-semibold text-[var(--ink-primary)] inline-flex items-center justify-center gap-1.5 transition-colors cursor-pointer"
-                  >
-                    <MessageSquare className="w-3.5 h-3.5 text-[var(--ink-secondary)]" />
-                    <span>Message</span>
-                  </button>
-
-                  <button
-                    type="button"
-                    onClick={() => handleOpenProfile(member.id)}
-                    style={{
-                      backgroundColor: 'var(--accent-soft)',
-                      color: 'var(--accent)',
-                      borderColor: 'var(--accent-border)',
-                    }}
-                    className="flex-1 min-h-[44px] sm:min-h-0 py-2 px-2.5 rounded-[var(--radius-sm)] border text-xs font-semibold inline-flex items-center justify-center gap-1.5 hover:opacity-90 transition-opacity cursor-pointer"
-                  >
-                    <User className="w-3.5 h-3.5" />
-                    <span>Profile</span>
-                  </button>
-
-                  <DeleteButton
-                    name={member.name}
-                    disabled={member.id === currentUser.id}
-                    disabledTooltip="You can't delete your own profile."
-                    onDelete={() => deleteMember(member.id)}
-                  />
-                </div>
-              </motion.article>
+                member={member}
+                openCount={openCount}
+                completedCount={completedCount}
+                workloadPct={workloadPct}
+                staggerIndex={idx + 2}
+                prefersReducedMotion={prefersReducedMotion}
+                currentUserId={currentUser.id}
+                onMessage={handleMessageMember}
+                onOpenProfile={handleOpenProfile}
+                onDeleteMember={deleteMember}
+              />
             ))}
           </AnimatePresence>
         </motion.div>
       )}
 
-      {/* Team Member Profile Dialog (Hero Variant) */}
-      <Dialog
-        isOpen={!!activeProfileData}
+      <TeamProfileDialog
+        activeProfileData={activeProfileData}
+        currentUserId={currentUser.id}
         onClose={() => setSelectedProfileMemberId(null)}
-        variant="hero"
-        eyebrow={activeProfileData?.member.department}
-        title={activeProfileData?.member.name}
-        subtitle={activeProfileData?.member.role}
-        heroData={
-          activeProfileData
-            ? {
-                glyphSeed: activeProfileData.member.id,
-                avatarInitials: activeProfileData.member.initials,
-                presence: activeProfileData.member.presence,
-                meta: `${activeProfileData.member.location} · ${presenceTextLabel(
-                  activeProfileData.member.presence
-                )}`,
-              }
-            : undefined
-        }
-        footer={
-          activeProfileData ? (
-            <div className="flex flex-col sm:flex-row items-center justify-between gap-3 w-full">
-              <div className="flex items-center gap-2 w-full sm:w-auto">
-                <DeleteButton
-                  name={activeProfileData.member.name}
-                  disabled={activeProfileData.member.id === currentUser.id}
-                  disabledTooltip="You can't delete your own profile."
-                  onDelete={() => deleteMember(activeProfileData.member.id)}
-                />
+        onDeleteMember={deleteMember}
+        onMessageMember={handleMessageMember}
+        onMoveTask={moveTask}
+      />
 
-                <button
-                  type="button"
-                  onClick={() =>
-                    pushToast(
-                      `Direct dispatch opened for ${activeProfileData.member.name}`,
-                      `${activeProfileData.member.email} · ${activeProfileData.member.timezone}`
-                    )
-                  }
-                  style={{ backgroundColor: 'var(--accent)' }}
-                  className="flex-1 sm:flex-initial min-h-[44px] sm:min-h-0 py-2 px-4 rounded-full text-xs font-semibold text-white hover:opacity-95 inline-flex items-center justify-center gap-1.5 transition-opacity cursor-pointer shadow-2xs"
-                >
-                  <MessageSquare className="w-3.5 h-3.5" />
-                  <span>Message</span>
-                </button>
+      <TeamMessageDialog
+        member={messageMember}
+        onClose={() => setMessageMember(null)}
+        onPushToast={pushToast}
+      />
 
-                <button
-                  type="button"
-                  onClick={() => {
-                    window.location.href = `mailto:${activeProfileData.member.email}`;
-                  }}
-                  className="flex-1 sm:flex-initial min-h-[44px] sm:min-h-0 py-2 px-4 rounded-full border border-[var(--border-strong)] bg-[var(--surface-elevated)] hover:bg-[var(--surface-sunken)] text-xs font-semibold text-[var(--ink-primary)] inline-flex items-center justify-center gap-1.5 transition-colors cursor-pointer"
-                >
-                  <Mail className="w-3.5 h-3.5 text-[var(--ink-secondary)]" />
-                  <span>Email</span>
-                </button>
-              </div>
-
-              <span className="text-xs text-[var(--ink-muted)] inline-flex items-center gap-1 self-start sm:self-auto">
-                <MapPin className="w-3.5 h-3.5 text-[var(--ink-secondary)]" />
-                <span>{activeProfileData.member.timezone}</span>
-              </span>
-            </div>
-          ) : undefined
-        }
-      >
-        {activeProfileData && (
-          <div className="flex flex-col">
-            {/* Stats: Three identical tiles using dashboard stat-card style at compact size */}
-            <div className="grid grid-cols-3 gap-2 sm:gap-3 px-4 sm:px-6 pt-4 pb-3 shrink-0">
-              <div className="bg-[var(--surface-elevated)] border border-[var(--border-hairline)] rounded-[var(--radius-lg)] p-2.5 sm:p-3 text-center shadow-2xs flex flex-col items-center justify-center h-[80px]">
-                <span className="text-xl sm:text-2xl font-semibold font-display-num text-[var(--ink-primary)] leading-none">
-                  {activeProfileData.openCount}
-                </span>
-                <span className="text-[11px] sm:text-xs font-medium text-[var(--ink-secondary)] mt-1.5">
-                  Open tasks
-                </span>
-              </div>
-
-              <div className="bg-[var(--surface-elevated)] border border-[var(--border-hairline)] rounded-[var(--radius-lg)] p-2.5 sm:p-3 text-center shadow-2xs flex flex-col items-center justify-center h-[80px]">
-                <span className="text-xl sm:text-2xl font-semibold font-display-num text-[var(--ink-primary)] leading-none">
-                  {activeProfileData.completedCount}
-                </span>
-                <span className="text-[11px] sm:text-xs font-medium text-[var(--ink-secondary)] mt-1.5">
-                  Completed
-                </span>
-              </div>
-
-              <div className="bg-[var(--surface-elevated)] border border-[var(--border-hairline)] rounded-[var(--radius-lg)] p-2.5 sm:p-3 text-center shadow-2xs flex flex-col items-center justify-center h-[80px]">
-                <UtilizationRing40 pct={activeProfileData.workloadPct} />
-                <span className="text-[11px] sm:text-xs font-medium text-[var(--ink-secondary)] mt-1">
-                  Utilization
-                </span>
-              </div>
-            </div>
-
-            {/* Task rows */}
-            <div className="px-4 sm:px-6 pt-2 pb-6">
-              <div className="flex items-center justify-between pb-2">
-                <h3 className="text-xs sm:text-sm font-semibold text-[var(--ink-primary)]">
-                  Assigned Tasks ({activeProfileData.memberTasks.length})
-                </h3>
-                <span className="text-[11px] text-[var(--ink-muted)]">Live store sync</span>
-              </div>
-
-              {activeProfileData.memberTasks.length === 0 ? (
-                <div className="py-8 flex flex-col items-center justify-center text-center bg-[var(--surface-canvas)] rounded-[var(--radius-md)] border border-[var(--border-hairline)] gap-2 my-2">
-                  <p className="text-xs text-[var(--ink-secondary)]">
-                    No tasks currently assigned to this specialist.
-                  </p>
-                </div>
-              ) : (
-                <ul className="space-y-2.5 pb-2">
-                  {activeProfileData.memberTasks.map((t) => {
-                    const prioStyle = priorityChipStyle(t.priority);
-                    return (
-                      <li
-                        key={t.id}
-                        className="p-3.5 rounded-[var(--radius-md)] bg-[var(--surface-canvas)] border border-[var(--border-hairline)] hover:border-[var(--border-strong)] transition-colors space-y-2.5"
-                      >
-                        <div className="flex items-start justify-between gap-2.5">
-                          <p className="text-xs sm:text-sm font-semibold text-[var(--ink-primary)] leading-snug line-clamp-2 min-w-0">
-                            {t.title}
-                          </p>
-                          <select
-                            aria-label={`Change stage for ${t.title}`}
-                            value={t.status}
-                            onChange={(e) => moveTask(t.id, e.target.value as TaskItem['status'])}
-                            className="min-h-[36px] sm:min-h-0 px-2 py-1 rounded-[var(--radius-xs)] border border-[var(--border-strong)] bg-[var(--surface-elevated)] text-[11px] font-medium text-[var(--ink-primary)] shrink-0 cursor-pointer"
-                          >
-                            <option value="Backlog">To do</option>
-                            <option value="In Progress">In progress</option>
-                            <option value="In Review">In review</option>
-                            <option value="Done">Done</option>
-                          </select>
-                        </div>
-
-                        <div className="flex items-center justify-between flex-wrap gap-2 text-[11px]">
-                          <div className="flex items-center gap-1.5">
-                            <span className="px-2 py-0.5 rounded-[var(--radius-xs)] text-[11px] font-medium bg-[var(--surface-sunken)] text-[var(--ink-secondary)]">
-                              {t.category || 'Engineering'}
-                            </span>
-                            <span
-                              style={{
-                                backgroundColor: prioStyle.bg,
-                                color: prioStyle.fg,
-                                borderColor: prioStyle.border,
-                              }}
-                              className="px-2 py-0.5 rounded-[var(--radius-xs)] text-[11px] font-medium border"
-                            >
-                              {t.priority}
-                            </span>
-                          </div>
-                          <span className="text-[var(--ink-muted)]">Due {t.dueDate}</span>
-                        </div>
-                      </li>
-                    );
-                  })}
-                </ul>
-              )}
-            </div>
-          </div>
-        )}
-      </Dialog>
-
-      {/* Invite Member Dialog */}
-      <Dialog
+      <TeamInviteDialog
         isOpen={inviteOpen}
+        inviteName={inviteName}
+        inviteRole={inviteRole}
+        inviteDept={inviteDept}
+        inviteLocation={inviteLocation}
+        inviteError={inviteError}
+        inviteNameRef={inviteNameRef}
         onClose={() => setInviteOpen(false)}
-        eyebrow="Studio Roster"
-        title="Invite member"
-        maxWidthClass="max-w-md"
-        footer={
-          <>
-            <button
-              type="button"
-              onClick={() => setInviteOpen(false)}
-              className="px-4 py-2 min-h-[44px] sm:min-h-0 rounded-full text-xs font-medium text-[var(--ink-secondary)] hover:text-[var(--ink-primary)] hover:bg-[var(--surface-sunken)] cursor-pointer"
-            >
-              Cancel
-            </button>
-            <button
-              type="submit"
-              form="invite-member-form"
-              style={{ backgroundColor: 'var(--accent)' }}
-              className="px-4 py-2 min-h-[44px] sm:min-h-0 rounded-full text-xs font-semibold text-white hover:opacity-95 cursor-pointer"
-            >
-              Send invite
-            </button>
-          </>
-        }
-      >
-        <form
-          id="invite-member-form"
-          onSubmit={handleInviteSubmit}
-          className="p-4 sm:p-6 space-y-3.5"
-          noValidate
-        >
-          <div>
-            <label
-              htmlFor="invite-name"
-              className="block text-xs font-medium text-[var(--ink-primary)] mb-1"
-            >
-              Full name <span style={{ color: 'var(--accent)' }}>*</span>
-            </label>
-            <input
-              ref={inviteNameRef}
-              id="invite-name"
-              type="text"
-              required
-              value={inviteName}
-              onChange={(e) => {
-                setInviteName(e.target.value);
-                if (inviteError) setInviteError('');
-              }}
-              placeholder="e.g. Astrid Lindholm"
-              className="w-full h-11 sm:h-10 px-3 rounded-[var(--radius-sm)] bg-[var(--surface-sunken)] border border-[var(--border-strong)] text-sm text-[var(--ink-primary)] focus:outline-2 focus:outline-[var(--accent)]"
-            />
-          </div>
-
-          <div>
-            <label
-              htmlFor="invite-role"
-              className="block text-xs font-medium text-[var(--ink-primary)] mb-1"
-            >
-              Role <span style={{ color: 'var(--accent)' }}>*</span>
-            </label>
-            <input
-              id="invite-role"
-              type="text"
-              required
-              value={inviteRole}
-              onChange={(e) => {
-                setInviteRole(e.target.value);
-                if (inviteError) setInviteError('');
-              }}
-              placeholder="e.g. Senior Hydrographic Analyst"
-              className="w-full h-11 sm:h-10 px-3 rounded-[var(--radius-sm)] bg-[var(--surface-sunken)] border border-[var(--border-strong)] text-sm text-[var(--ink-primary)] focus:outline-2 focus:outline-[var(--accent)]"
-            />
-          </div>
-
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-            <div>
-              <label
-                htmlFor="invite-dept"
-                className="block text-xs font-medium text-[var(--ink-primary)] mb-1"
-              >
-                Department
-              </label>
-              <select
-                id="invite-dept"
-                value={inviteDept}
-                onChange={(e) => setInviteDept(e.target.value as Department)}
-                className="w-full h-11 sm:h-10 px-2.5 rounded-[var(--radius-sm)] bg-[var(--surface-sunken)] border border-[var(--border-strong)] text-xs sm:text-sm text-[var(--ink-primary)] focus:outline-2 focus:outline-[var(--accent)]"
-              >
-                <option value="Engineering">Engineering</option>
-                <option value="Design">Design</option>
-                <option value="Marketing">Marketing</option>
-                <option value="Management">Management</option>
-              </select>
-            </div>
-
-            <div>
-              <label
-                htmlFor="invite-location"
-                className="block text-xs font-medium text-[var(--ink-primary)] mb-1"
-              >
-                Location
-              </label>
-              <input
-                id="invite-location"
-                type="text"
-                value={inviteLocation}
-                onChange={(e) => setInviteLocation(e.target.value)}
-                placeholder="e.g. Oslo, NO"
-                className="w-full h-11 sm:h-10 px-3 rounded-[var(--radius-sm)] bg-[var(--surface-sunken)] border border-[var(--border-strong)] text-xs sm:text-sm text-[var(--ink-primary)] focus:outline-2 focus:outline-[var(--accent)]"
-              />
-            </div>
-          </div>
-
-          {inviteError && (
-            <p role="alert" className="text-xs font-medium text-[var(--status-critical)]">
-              {inviteError}
-            </p>
-          )}
-        </form>
-      </Dialog>
+        onNameChange={(value) => {
+          setInviteName(value);
+          if (inviteError) setInviteError('');
+        }}
+        onRoleChange={(value) => {
+          setInviteRole(value);
+          if (inviteError) setInviteError('');
+        }}
+        onDeptChange={setInviteDept}
+        onLocationChange={setInviteLocation}
+        onSubmit={handleInviteSubmit}
+      />
     </div>
   );
 }

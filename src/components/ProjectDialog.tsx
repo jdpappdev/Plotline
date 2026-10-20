@@ -1,7 +1,9 @@
 import React, { useEffect, useState } from 'react';
 import { Plus, Trash2 } from 'lucide-react';
 import { Dialog } from '../ui/Dialog';
-import { usePlotlineStore } from '../store'; import { Project, TaskItem, TeamMember, CalendarEvent, EventCategory, AccentName, RouteId } from '../domain/types';;
+import { usePlotlineStore } from '../store';
+import { TaskItem } from '../domain/types';
+
 import { getProjectStatus } from '../domain/derivations/projects';
 import { pluralize } from '../domain/derivations/analytics';
 import { ContourGlyph } from '../utils/contourGlyph';

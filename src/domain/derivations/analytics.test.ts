@@ -1,10 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import {
-  createSeedFocusSessions,
-  createSeedProjects,
-  createSeedTasks,
-  SEED_TEAM,
-} from '../types';
+import { createSeedFocusSessions, createSeedProjects, createSeedTasks, SEED_TEAM } from '../seed';
 import { computeAnalyticsData, computeLargestRemainderPercentages } from './analytics';
 
 describe('analytics derivations', () => {

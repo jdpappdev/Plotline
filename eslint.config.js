@@ -30,6 +30,17 @@ export default [
       'react-hooks': reactHooksPlugin,
       import: importPlugin,
     },
+    settings: {
+      'import/extensions': ['.ts', '.tsx', '.js', '.jsx'],
+      'import/parsers': {
+        '@typescript-eslint/parser': ['.ts', '.tsx'],
+      },
+      'import/resolver': {
+        node: {
+          extensions: ['.ts', '.tsx', '.js', '.jsx'],
+        },
+      },
+    },
     rules: {
       ...tsPlugin.configs['recommended'].rules,
       '@typescript-eslint/no-explicit-any': 'error',

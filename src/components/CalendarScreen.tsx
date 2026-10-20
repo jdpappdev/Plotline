@@ -1,65 +1,14 @@
 import React, { useMemo, useRef, useState } from 'react';
-import {
-  Calendar as CalendarIcon,
-  ChevronLeft,
-  ChevronRight,
-  Clock,
-  MapPin,
-  Plus,
-} from 'lucide-react';
-import { usePlotlineStore } from '../store'; import { Project, TaskItem, TeamMember, CalendarEvent, EventCategory, AccentName, RouteId } from '../domain/types';;
+import { ChevronLeft, ChevronRight, Plus } from 'lucide-react';
+import { usePlotlineStore } from '../store';
+import { CalendarEvent, EventCategory, TeamMember } from '../domain/types';
 import { getNowTimestamp, getTodayIsoDate } from '../lib/clock';
-import { ContourGlyph } from '../utils/contourGlyph';
-import { Dialog } from '../ui/Dialog';
-import { DeleteButton } from './DeleteButton';
+import { CalendarMonthGrid } from './calendar/CalendarMonthGrid';
+import { CalendarAgendaPanel } from './calendar/CalendarAgendaPanel';
+import { CalendarEventDialog } from './calendar/CalendarEventDialog';
+import { CalendarDayCell, categoryChipStyles } from './calendar/types';
 
-const EVENT_CATEGORIES: EventCategory[] = ['Meeting', 'Team', 'Review', 'Deadline', 'Social'];
-
-export function categoryChipStyles(category: EventCategory | undefined): {
-  bg: string;
-  fg: string;
-  border: string;
-  dot: string;
-} {
-  switch (category) {
-    case 'Meeting':
-      return {
-        bg: 'var(--accent-soft)',
-        fg: 'var(--accent)',
-        border: 'var(--accent-border)',
-        dot: 'var(--accent)',
-      };
-    case 'Team':
-      return {
-        bg: '#E8F4EC',
-        fg: '#216E3E',
-        border: '#B5DFC4',
-        dot: '#216E3E',
-      };
-    case 'Review':
-      return {
-        bg: '#FEF5E6',
-        fg: '#9B5B0B',
-        border: '#F5D69E',
-        dot: '#B86B14',
-      };
-    case 'Deadline':
-      return {
-        bg: '#FBECEE',
-        fg: '#B43342',
-        border: '#F1B9C0',
-        dot: '#C9352B',
-      };
-    case 'Social':
-    default:
-      return {
-        bg: '#EEEBF9',
-        fg: '#5B43B8',
-        border: '#BEB2EB',
-        dot: '#5B43B8',
-      };
-  }
-}
+export { categoryChipStyles };
 
 function toIsoDateString(year: number, monthIndex: number, day: number): string {
   const d = new Date(year, monthIndex, day);
@@ -67,30 +16,6 @@ function toIsoDateString(year: number, monthIndex: number, day: number): string 
   const m = String(d.getMonth() + 1).padStart(2, '0');
   const dayStr = String(d.getDate()).padStart(2, '0');
   return `${y}-${m}-${dayStr}`;
-}
-
-function formatDateBadge(isoDate: string): { monthShort: string; dayNum: string } {
-  const parts = isoDate.split('-');
-  if (parts.length !== 3) return { monthShort: 'OCT', dayNum: '01' };
-  const d = new Date(Number(parts[0]), Number(parts[1]) - 1, Number(parts[2]));
-  if (Number.isNaN(d.getTime())) return { monthShort: 'OCT', dayNum: '01' };
-  return {
-    monthShort: d.toLocaleDateString('en-US', { month: 'short' }).toUpperCase(),
-    dayNum: String(d.getDate()).padStart(2, '0'),
-  };
-}
-
-function formatFullAgendaHeading(isoDate: string, todayIso: string): string {
-  if (isoDate === todayIso) return "Today's Agenda";
-  const parts = isoDate.split('-').map(Number);
-  if (parts.length !== 3) return `Agenda · ${isoDate}`;
-  const d = new Date(parts[0], parts[1] - 1, parts[2]);
-  if (Number.isNaN(d.getTime())) return `Agenda · ${isoDate}`;
-  return d.toLocaleDateString('en-US', {
-    weekday: 'short',
-    month: 'short',
-    day: 'numeric',
-  });
 }
 
 export default function CalendarScreen() {
@@ -138,12 +63,7 @@ export default function CalendarScreen() {
     const rawFirstWeekday = firstOfMonth.getDay(); // 0 (Sun) .. 6 (Sat)
     const leadingOffset = weekStart === 'monday' ? (rawFirstWeekday + 6) % 7 : rawFirstWeekday;
 
-    const cells: Array<{
-      iso: string;
-      dayNumber: number;
-      inCurrentMonth: boolean;
-      isToday: boolean;
-    }> = [];
+    const cells: CalendarDayCell[] = [];
 
     for (let i = 0; i < 42; i++) {
       const dayOffset = i - leadingOffset + 1;
@@ -283,8 +203,7 @@ export default function CalendarScreen() {
     setIsSavingEvent(true);
 
     if (editingEventId) {
-      updateEvent({
-        id: editingEventId,
+      updateEvent(editingEventId, {
         title: evtTitle.trim(),
         category: evtCategory,
         date: evtDate,
@@ -388,585 +307,57 @@ export default function CalendarScreen() {
 
       {/* Main Layout: Month Grid (Cols 1-8) + Right Agenda Panel (Cols 9-12) */}
       <div className="grid grid-cols-1 xl:grid-cols-12 gap-4 items-start">
-        {/* Month Grid (8 cols) */}
-        <section
-          aria-label="Month calendar grid"
-          style={{ '--stagger-index': 1 } as React.CSSProperties}
-          className="plotline-enter xl:col-span-8 bg-[var(--surface-elevated)] border border-[var(--border-hairline)] rounded-[var(--radius-lg)]"
-        >
-          <div className="overflow-hidden rounded-[var(--radius-lg)]">
-            {/* Weekday Headers */}
-            <div
-              data-testid="calendar-weekday-headers"
-              className="grid grid-cols-7 border-b border-[var(--border-hairline)] bg-[var(--surface-sunken)]/60"
-            >
-              {weekdayHeaders.map((dayName) => (
-                <div
-                  key={dayName}
-                  className="py-2 sm:py-2.5 px-1 sm:px-2 text-center text-[11px] sm:text-xs font-semibold text-[var(--ink-secondary)]"
-                >
-                  {dayName}
-                </div>
-              ))}
-            </div>
+        <CalendarMonthGrid
+          weekdayHeaders={weekdayHeaders}
+          calendarDays={calendarDays}
+          eventsByDate={eventsByDate}
+          selectedDateIso={selectedDateIso}
+          expandedDayIso={expandedDayIso}
+          onDayCellClick={handleDayCellClick}
+          onEditEvent={openEditEventModal}
+          onExpandDay={setExpandedDayIso}
+        />
 
-            {/* 6x7 Day Cells */}
-            <div className="grid grid-cols-7 divide-x divide-y divide-[var(--border-hairline)]">
-              {calendarDays.map((cell) => {
-                const dayEvents = eventsByDate.get(cell.iso) || [];
-                const isSelected = selectedDateIso === cell.iso;
-                const isExpanded = expandedDayIso === cell.iso;
-                const maxVisible = isExpanded ? dayEvents.length : 2;
-                const visibleEvents = dayEvents.slice(0, maxVisible);
-                const overflowCount = Math.max(0, dayEvents.length - maxVisible);
-
-                return (
-                  <div
-                    key={cell.iso}
-                    data-testid={`calendar-day-${cell.iso}`}
-                    role="button"
-                    tabIndex={0}
-                    aria-pressed={isSelected}
-                    aria-label={`${cell.iso}, ${dayEvents.length} events.`}
-                    onClick={() => handleDayCellClick(cell.iso)}
-                    onKeyDown={(e) => {
-                      if (e.key === 'Enter' || e.key === ' ') {
-                        e.preventDefault();
-                        handleDayCellClick(cell.iso);
-                      }
-                    }}
-                    className={`min-h-[54px] sm:min-h-[104px] min-w-0 overflow-hidden p-1 sm:p-1.5 flex flex-col items-center sm:items-stretch justify-start sm:justify-between transition-colors cursor-pointer group ${
-                      isSelected
-                        ? 'bg-[var(--accent-soft)]/55 sm:bg-[var(--surface-elevated)]'
-                        : cell.inCurrentMonth
-                          ? 'bg-[var(--surface-elevated)] hover:bg-[var(--surface-sunken)]/45'
-                          : 'bg-[var(--surface-canvas)]/60 text-[var(--ink-muted)] hover:bg-[var(--surface-sunken)]/45'
-                    }`}
-                  >
-                    <div className="flex items-center justify-center sm:justify-between gap-1 min-w-0 w-full">
-                      <span
-                        style={
-                          cell.isToday
-                            ? { backgroundColor: 'var(--accent)', color: '#ffffff' }
-                            : isSelected
-                              ? {
-                                  backgroundColor: 'var(--accent-soft)',
-                                  color: 'var(--accent)',
-                                  border: '1px solid var(--accent)',
-                                }
-                              : undefined
-                        }
-                        className={`w-7 h-7 sm:w-6 sm:h-6 rounded-full text-xs font-ui-tabular flex items-center justify-center shrink-0 ${
-                          cell.isToday || isSelected
-                            ? 'font-bold'
-                            : cell.inCurrentMonth
-                              ? 'font-medium text-[var(--ink-primary)]'
-                              : 'text-[var(--ink-muted)]'
-                        }`}
-                      >
-                        {cell.dayNumber}
-                      </span>
-
-                      <span className="hidden sm:inline opacity-0 group-hover:opacity-100 text-[10px] text-[var(--ink-muted)] px-1 truncate">
-                        + Add
-                      </span>
-                    </div>
-
-                    {/* Mobile Compact Colored Dots (<640px) */}
-                    {dayEvents.length > 0 && (
-                      <div
-                        data-testid={`calendar-dots-${cell.iso}`}
-                        className="flex sm:hidden items-center justify-center gap-1 mt-1.5 flex-wrap max-w-full px-0.5"
-                      >
-                        {dayEvents.slice(0, 4).map((evt) => {
-                          const chip = categoryChipStyles(evt.category);
-                          return (
-                            <span
-                              key={evt.id}
-                              style={{ backgroundColor: chip.dot }}
-                              className="w-1.5 h-1.5 rounded-full shrink-0"
-                            />
-                          );
-                        })}
-                      </div>
-                    )}
-
-                    {/* Tablet/Desktop Category-colored Event Chips (>=640px) */}
-                    <div className="hidden sm:block mt-1 space-y-1 flex-1 min-w-0 w-full">
-                      {visibleEvents.map((evt) => {
-                        const chip = categoryChipStyles(evt.category);
-                        return (
-                          <button
-                            key={evt.id}
-                            type="button"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              openEditEventModal(evt);
-                            }}
-                            style={{
-                              backgroundColor: chip.bg,
-                              color: chip.fg,
-                              borderColor: chip.border,
-                            }}
-                            className="w-full text-left px-1.5 py-0.5 rounded-[var(--radius-xs)] border text-[10px] font-semibold truncate block hover:opacity-90 cursor-pointer"
-                            title={`${evt.startTime} · ${evt.title} (${evt.category || 'Meeting'})`}
-                          >
-                            <span className="font-ui-tabular opacity-80 mr-1">{evt.startTime}</span>
-                            <span>{evt.title}</span>
-                          </button>
-                        );
-                      })}
-
-                      {overflowCount > 0 && (
-                        <button
-                          type="button"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            setExpandedDayIso(cell.iso);
-                          }}
-                          className="w-full text-left px-1.5 py-0.5 rounded-[var(--radius-xs)] bg-[var(--surface-sunken)] text-[10px] font-semibold text-[var(--ink-secondary)] hover:text-[var(--ink-primary)] cursor-pointer"
-                        >
-                          +{overflowCount} more
-                        </button>
-                      )}
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-          </div>
-        </section>
-
-        {/* Right / Bottom Panel: Selected Day's Agenda + Coming Up (4 cols) */}
-        <aside
-          style={{ '--stagger-index': 2 } as React.CSSProperties}
-          className="plotline-enter xl:col-span-4 space-y-4"
-        >
-          {/* Selected Day's Agenda Card */}
-          <div
-            data-testid="calendar-selected-day-agenda"
-            className="bg-[var(--surface-elevated)] border border-[var(--border-hairline)] rounded-[var(--radius-lg)] p-4 space-y-3"
-          >
-            <div className="flex items-center justify-between border-b border-[var(--border-hairline)] pb-2.5 gap-2">
-              <div>
-                <h2 className="text-sm font-semibold text-[var(--ink-primary)]">
-                  {formatFullAgendaHeading(selectedDateIso, todayIso)}
-                </h2>
-                <p className="text-[11px] text-[var(--ink-muted)] mt-0.5">
-                  {selectedDateIso} · {selectedDayEvents.length}{' '}
-                  {selectedDayEvents.length === 1 ? 'session' : 'sessions'}
-                </p>
-              </div>
-              <div className="flex items-center gap-2">
-                <button
-                  type="button"
-                  onClick={() => openNewEventModal(selectedDateIso)}
-                  style={{ color: 'var(--accent)' }}
-                  className="sm:hidden inline-flex items-center gap-1 px-2.5 py-1.5 min-h-[36px] rounded-full text-xs font-semibold bg-[var(--accent-soft)] cursor-pointer"
-                >
-                  <Plus className="w-3.5 h-3.5" />
-                  <span>Add</span>
-                </button>
-                <CalendarIcon className="w-4 h-4 shrink-0" style={{ color: 'var(--accent)' }} />
-              </div>
-            </div>
-
-            {selectedDayEvents.length === 0 ? (
-              <div className="py-6 flex flex-col items-center justify-center text-center gap-2">
-                <ContourGlyph seed={`calendar-empty-${selectedDateIso}`} size={40} />
-                <p className="text-xs text-[var(--ink-secondary)]">
-                  {selectedDateIso === todayIso
-                    ? 'No events scheduled for today.'
-                    : `No events scheduled for ${selectedDateIso}.`}
-                </p>
-                <button
-                  type="button"
-                  onClick={() => openNewEventModal(selectedDateIso)}
-                  style={{ color: 'var(--accent)' }}
-                  className="min-h-[44px] sm:min-h-0 px-3 py-1.5 text-xs font-semibold hover:underline cursor-pointer"
-                >
-                  + Schedule an event
-                </button>
-              </div>
-            ) : (
-              <div className="space-y-2.5">
-                {selectedDayEvents.map((evt) => {
-                  const chip = categoryChipStyles(evt.category);
-                  return (
-                    <div
-                      key={evt.id}
-                      role="button"
-                      tabIndex={0}
-                      onClick={() => openEditEventModal(evt)}
-                      onKeyDown={(e) => {
-                        if (e.key === 'Enter' || e.key === ' ') {
-                          e.preventDefault();
-                          openEditEventModal(evt);
-                        }
-                      }}
-                      className="p-3 rounded-[var(--radius-md)] bg-[var(--surface-canvas)] border border-[var(--border-hairline)] hover:border-[var(--border-strong)] transition-colors cursor-pointer space-y-2"
-                    >
-                      <div className="flex items-start justify-between gap-2">
-                        <h3 className="text-xs sm:text-sm font-semibold text-[var(--ink-primary)] leading-snug">
-                          {evt.title}
-                        </h3>
-                        <div className="flex items-center gap-1 shrink-0">
-                          <span
-                            style={{
-                              backgroundColor: chip.bg,
-                              color: chip.fg,
-                              borderColor: chip.border,
-                            }}
-                            className="px-2 py-0.5 rounded-[var(--radius-xs)] border text-[10px] font-semibold"
-                          >
-                            {evt.category || 'Meeting'}
-                          </span>
-                          <DeleteButton name={evt.title} onDelete={() => deleteEvent(evt.id)} />
-                        </div>
-                      </div>
-
-                      <div className="flex items-center justify-between gap-2 text-[11px] text-[var(--ink-secondary)]">
-                        <span className="inline-flex items-center gap-1 font-ui-tabular">
-                          <Clock className="w-3 h-3 text-[var(--ink-muted)]" />
-                          <span>
-                            {evt.startTime} – {evt.endTime}
-                          </span>
-                        </span>
-
-                        {/* Attendee Avatars */}
-                        <div className="flex items-center -space-x-1.5 shrink-0">
-                          {evt.attendeeIds.slice(0, 4).map((id) => {
-                            const member = teamMap.get(id);
-                            if (!member) return null;
-                            return (
-                              <span
-                                key={id}
-                                title={member.name}
-                                style={{ backgroundColor: 'var(--accent)' }}
-                                className="w-5 h-5 rounded-full border border-[var(--surface-elevated)] flex items-center justify-center text-[9px] font-semibold text-white"
-                              >
-                                {member.initials}
-                              </span>
-                            );
-                          })}
-                        </div>
-                      </div>
-
-                      {evt.location && (
-                        <p className="text-[11px] text-[var(--ink-muted)] flex items-center gap-1 truncate">
-                          <MapPin className="w-3 h-3 shrink-0" />
-                          <span className="truncate">{evt.location}</span>
-                        </p>
-                      )}
-                    </div>
-                  );
-                })}
-              </div>
-            )}
-          </div>
-
-          {/* Coming Up Card */}
-          <div className="bg-[var(--surface-elevated)] border border-[var(--border-hairline)] rounded-[var(--radius-lg)] p-4 space-y-3">
-            <div className="flex items-center justify-between border-b border-[var(--border-hairline)] pb-2.5">
-              <h2 className="text-sm font-semibold text-[var(--ink-primary)]">Coming up</h2>
-              <span className="text-[11px] text-[var(--ink-muted)]">Next milestones</span>
-            </div>
-
-            {comingUpEvents.length === 0 ? (
-              <div className="py-5 flex flex-col items-center justify-center text-center gap-2">
-                <ContourGlyph seed="calendar-upcoming-empty" size={38} />
-                <p className="text-xs text-[var(--ink-secondary)]">
-                  No upcoming events on the horizon.
-                </p>
-                <button
-                  type="button"
-                  onClick={() => openNewEventModal(todayIso)}
-                  style={{ color: 'var(--accent)' }}
-                  className="min-h-[44px] sm:min-h-0 px-3 py-1.5 text-xs font-semibold hover:underline cursor-pointer"
-                >
-                  + Schedule an event
-                </button>
-              </div>
-            ) : (
-              <div className="space-y-2.5">
-                {comingUpEvents.map((evt) => {
-                  const badge = formatDateBadge(evt.date);
-                  const chip = categoryChipStyles(evt.category);
-                  return (
-                    <div
-                      key={evt.id}
-                      role="button"
-                      tabIndex={0}
-                      onClick={() => openEditEventModal(evt)}
-                      onKeyDown={(e) => {
-                        if (e.key === 'Enter' || e.key === ' ') {
-                          e.preventDefault();
-                          openEditEventModal(evt);
-                        }
-                      }}
-                      className="p-2.5 rounded-[var(--radius-md)] bg-[var(--surface-canvas)] border border-[var(--border-hairline)] hover:border-[var(--border-strong)] transition-colors cursor-pointer flex items-center gap-3"
-                    >
-                      {/* Date Badge */}
-                      <div className="w-11 h-11 rounded-[var(--radius-sm)] bg-[var(--surface-elevated)] border border-[var(--border-hairline)] flex flex-col items-center justify-center shrink-0">
-                        <span
-                          className="text-[9px] font-bold tracking-wider"
-                          style={{ color: 'var(--accent)' }}
-                        >
-                          {badge.monthShort}
-                        </span>
-                        <span className="text-sm font-bold font-ui-tabular text-[var(--ink-primary)] leading-none mt-0.5">
-                          {badge.dayNum}
-                        </span>
-                      </div>
-
-                      <div className="min-w-0 flex-1">
-                        <div className="flex items-center justify-between gap-1.5">
-                          <p className="text-xs font-semibold text-[var(--ink-primary)] truncate">
-                            {evt.title}
-                          </p>
-                          <div className="flex items-center gap-1 shrink-0">
-                            <span
-                              style={{
-                                backgroundColor: chip.bg,
-                                color: chip.fg,
-                                borderColor: chip.border,
-                              }}
-                              className="px-1.5 py-0.5 rounded-[var(--radius-xs)] border text-[9px] font-semibold"
-                            >
-                              {evt.category || 'Meeting'}
-                            </span>
-                            <DeleteButton name={evt.title} onDelete={() => deleteEvent(evt.id)} />
-                          </div>
-                        </div>
-                        <div className="mt-1 flex items-center justify-between gap-2 text-[11px] text-[var(--ink-muted)]">
-                          <span className="font-ui-tabular">
-                            {evt.startTime} – {evt.endTime}
-                          </span>
-                          <div className="flex items-center -space-x-1 shrink-0">
-                            {evt.attendeeIds.slice(0, 3).map((id) => {
-                              const member = teamMap.get(id);
-                              if (!member) return null;
-                              return (
-                                <span
-                                  key={id}
-                                  title={member.name}
-                                  style={{ backgroundColor: 'var(--accent)' }}
-                                  className="w-4 h-4 rounded-full border border-[var(--surface-elevated)] flex items-center justify-center text-[8px] font-semibold text-white"
-                                >
-                                  {member.initials}
-                                </span>
-                              );
-                            })}
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            )}
-          </div>
-        </aside>
+        <CalendarAgendaPanel
+          selectedDateIso={selectedDateIso}
+          todayIso={todayIso}
+          selectedDayEvents={selectedDayEvents}
+          comingUpEvents={comingUpEvents}
+          teamMap={teamMap}
+          onNewEvent={openNewEventModal}
+          onEditEvent={openEditEventModal}
+          onDeleteEvent={deleteEvent}
+        />
       </div>
 
-      {/* Global Event Dialog */}
-      <Dialog
+      <CalendarEventDialog
         isOpen={modalOpen}
+        editingEventId={editingEventId}
+        evtTitle={evtTitle}
+        evtCategory={evtCategory}
+        evtDate={evtDate}
+        evtStart={evtStart}
+        evtEnd={evtEnd}
+        evtLocation={evtLocation}
+        evtAttendees={evtAttendees}
+        formError={formError}
+        isSavingEvent={isSavingEvent}
+        team={team}
+        titleInputRef={titleInputRef}
         onClose={() => setModalOpen(false)}
-        eyebrow={editingEventId ? 'Modify Schedule' : 'Schedule Dispatch'}
-        title={editingEventId ? 'Edit event' : 'New event'}
-        maxWidthClass="max-w-md"
-        footer={
-          <div className="flex items-center justify-between w-full">
-            {editingEventId ? (
-              <DeleteButton name={evtTitle} onDelete={handleDeleteCurrentEvent} />
-            ) : (
-              <span />
-            )}
-
-            <div className="flex items-center gap-2">
-              <button
-                type="button"
-                onClick={() => setModalOpen(false)}
-                className="px-4 py-2 min-h-[44px] sm:min-h-0 rounded-full text-xs font-medium text-[var(--ink-secondary)] hover:text-[var(--ink-primary)] hover:bg-[var(--surface-sunken)] cursor-pointer"
-              >
-                Cancel
-              </button>
-              <button
-                type="submit"
-                form="calendar-event-form"
-                disabled={isSavingEvent}
-                style={{ backgroundColor: 'var(--accent)' }}
-                className="px-4 py-2 min-h-[44px] sm:min-h-0 rounded-full text-xs font-semibold text-white hover:opacity-95 disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
-              >
-                {isSavingEvent ? 'Saving…' : editingEventId ? 'Save changes' : 'Create event'}
-              </button>
-            </div>
-          </div>
-        }
-      >
-        <form
-          id="calendar-event-form"
-          onSubmit={handleSaveEvent}
-          className="p-4 sm:p-6 space-y-3.5"
-          noValidate
-        >
-          <div>
-            <label
-              htmlFor="calendar-event-title"
-              className="block text-xs font-medium text-[var(--ink-primary)] mb-1"
-            >
-              Event title <span style={{ color: 'var(--accent)' }}>*</span>
-            </label>
-            <input
-              ref={titleInputRef}
-              id="calendar-event-title"
-              type="text"
-              required
-              value={evtTitle}
-              onChange={(e) => {
-                setEvtTitle(e.target.value);
-                if (formError) setFormError('');
-              }}
-              placeholder="e.g. Sub-bottom Sonar Calibration Review"
-              className="w-full h-11 sm:h-10 px-3 rounded-[var(--radius-sm)] bg-[var(--surface-sunken)] border border-[var(--border-strong)] text-sm text-[var(--ink-primary)] placeholder:text-[var(--ink-muted)] focus:outline-2 focus:outline-[var(--accent)] focus:bg-[var(--surface-elevated)]"
-            />
-          </div>
-
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-            <div>
-              <label
-                htmlFor="calendar-event-category"
-                className="block text-xs font-medium text-[var(--ink-primary)] mb-1"
-              >
-                Category
-              </label>
-              <select
-                id="calendar-event-category"
-                value={evtCategory}
-                onChange={(e) => setEvtCategory(e.target.value as EventCategory)}
-                className="w-full h-11 sm:h-10 px-2.5 rounded-[var(--radius-sm)] bg-[var(--surface-sunken)] border border-[var(--border-strong)] text-xs sm:text-sm text-[var(--ink-primary)] focus:outline-2 focus:outline-[var(--accent)]"
-              >
-                {EVENT_CATEGORIES.map((cat) => (
-                  <option key={cat} value={cat}>
-                    {cat}
-                  </option>
-                ))}
-              </select>
-            </div>
-
-            <div>
-              <label
-                htmlFor="calendar-event-date"
-                className="block text-xs font-medium text-[var(--ink-primary)] mb-1"
-              >
-                Date <span style={{ color: 'var(--accent)' }}>*</span>
-              </label>
-              <input
-                id="calendar-event-date"
-                type="date"
-                required
-                value={evtDate}
-                onChange={(e) => setEvtDate(e.target.value)}
-                className="w-full h-11 sm:h-10 px-2.5 rounded-[var(--radius-sm)] bg-[var(--surface-sunken)] border border-[var(--border-strong)] text-xs sm:text-sm text-[var(--ink-primary)] focus:outline-2 focus:outline-[var(--accent)]"
-              />
-            </div>
-          </div>
-
-          <div className="grid grid-cols-2 gap-3">
-            <div>
-              <label
-                htmlFor="calendar-event-start"
-                className="block text-xs font-medium text-[var(--ink-primary)] mb-1"
-              >
-                Start time
-              </label>
-              <input
-                id="calendar-event-start"
-                type="time"
-                value={evtStart}
-                onChange={(e) => setEvtStart(e.target.value)}
-                className="w-full h-11 sm:h-10 px-2.5 rounded-[var(--radius-sm)] bg-[var(--surface-sunken)] border border-[var(--border-strong)] text-xs sm:text-sm text-[var(--ink-primary)] focus:outline-2 focus:outline-[var(--accent)]"
-              />
-            </div>
-
-            <div>
-              <label
-                htmlFor="calendar-event-end"
-                className="block text-xs font-medium text-[var(--ink-primary)] mb-1"
-              >
-                End time
-              </label>
-              <input
-                id="calendar-event-end"
-                type="time"
-                value={evtEnd}
-                onChange={(e) => setEvtEnd(e.target.value)}
-                className="w-full h-11 sm:h-10 px-2.5 rounded-[var(--radius-sm)] bg-[var(--surface-sunken)] border border-[var(--border-strong)] text-xs sm:text-sm text-[var(--ink-primary)] focus:outline-2 focus:outline-[var(--accent)]"
-              />
-            </div>
-          </div>
-
-          <div>
-            <label
-              htmlFor="calendar-event-location"
-              className="block text-xs font-medium text-[var(--ink-primary)] mb-1"
-            >
-              Location
-            </label>
-            <input
-              id="calendar-event-location"
-              type="text"
-              value={evtLocation}
-              onChange={(e) => setEvtLocation(e.target.value)}
-              placeholder="e.g. Room 04 · Cartography Lab"
-              className="w-full h-11 sm:h-10 px-3 rounded-[var(--radius-sm)] bg-[var(--surface-sunken)] border border-[var(--border-strong)] text-xs sm:text-sm text-[var(--ink-primary)] placeholder:text-[var(--ink-muted)] focus:outline-2 focus:outline-[var(--accent)]"
-            />
-          </div>
-
-          <div>
-            <label className="block text-xs font-medium text-[var(--ink-primary)] mb-1.5">
-              Attendees
-            </label>
-            <div className="flex flex-wrap gap-1.5">
-              {team.map((member) => {
-                const selected = evtAttendees.includes(member.id);
-                return (
-                  <button
-                    key={member.id}
-                    type="button"
-                    onClick={() => toggleAttendee(member.id)}
-                    aria-pressed={selected}
-                    style={
-                      selected
-                        ? {
-                            backgroundColor: 'var(--accent-soft)',
-                            color: 'var(--accent)',
-                            borderColor: 'var(--accent-border)',
-                          }
-                        : undefined
-                    }
-                    className={`px-3 py-1.5 min-h-[40px] sm:min-h-0 rounded-full border text-xs font-medium flex items-center gap-1.5 cursor-pointer transition-colors ${
-                      selected
-                        ? 'font-semibold'
-                        : 'bg-[var(--surface-sunken)] border-[var(--border-hairline)] text-[var(--ink-secondary)] hover:text-[var(--ink-primary)]'
-                    }`}
-                  >
-                    <span>{member.initials}</span>
-                    <span>{member.name.split(' ')[0]}</span>
-                  </button>
-                );
-              })}
-            </div>
-          </div>
-
-          {formError && (
-            <p role="alert" className="text-xs font-medium text-[var(--status-critical)]">
-              {formError}
-            </p>
-          )}
-        </form>
-      </Dialog>
+        onTitleChange={(value) => {
+          setEvtTitle(value);
+          if (formError) setFormError('');
+        }}
+        onCategoryChange={setEvtCategory}
+        onDateChange={setEvtDate}
+        onStartChange={setEvtStart}
+        onEndChange={setEvtEnd}
+        onLocationChange={setEvtLocation}
+        onToggleAttendee={toggleAttendee}
+        onSaveEvent={handleSaveEvent}
+        onDeleteCurrentEvent={handleDeleteCurrentEvent}
+      />
     </div>
   );
 }

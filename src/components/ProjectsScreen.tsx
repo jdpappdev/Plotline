@@ -1,6 +1,7 @@
 import React, { useMemo, useState } from 'react';
 import { ArrowUpDown, Plus, Search, Trash2, Upload } from 'lucide-react';
-import { usePlotlineStore } from '../store'; import { Project, TaskItem, TeamMember, CalendarEvent, EventCategory, AccentName, RouteId } from '../domain/types';;
+import { usePlotlineStore } from '../store';
+
 import { getProjectProgress, getProjectStatus } from '../domain/derivations/projects';
 import { pluralize } from '../domain/derivations/analytics';
 import { ContourGlyph } from '../utils/contourGlyph';

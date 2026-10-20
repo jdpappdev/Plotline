@@ -25,6 +25,49 @@ export interface AccentDefinition {
   borderHex: string;
 }
 
+export const ACCENT_THEMES: Record<AccentName, AccentDefinition> = {
+  tide: {
+    id: 'tide',
+    label: 'Tide',
+    description: 'Deep marine chart blue (Default)',
+    hex: '#204282',
+    midHex: '#2c52a3',
+    lightHex: '#789ce2',
+    softHex: '#e9effa',
+    borderHex: '#b8ccf2',
+  },
+  moss: {
+    id: 'moss',
+    label: 'Moss',
+    description: 'Alpine forestry & botanical index',
+    hex: '#2E6B47',
+    midHex: '#3b8559',
+    lightHex: '#84c29d',
+    softHex: '#E8F2EC',
+    borderHex: '#A7CBB5',
+  },
+  iris: {
+    id: 'iris',
+    label: 'Iris',
+    description: 'High-altitude twilight contour violet',
+    hex: '#5B43B8',
+    midHex: '#6f56d1',
+    lightHex: '#a594eb',
+    softHex: '#EEEBF9',
+    borderHex: '#BEB2EB',
+  },
+  signal: {
+    id: 'signal',
+    label: 'Signal',
+    description: 'Signal-orange survey marker',
+    hex: '#BE3A15',
+    midHex: '#d94b24',
+    lightHex: '#f59d84',
+    softHex: '#FCECE7',
+    borderHex: '#F3B7A5',
+  },
+};
+
 export type TaskStatus = 'Backlog' | 'In Progress' | 'In Review' | 'Done';
 export type ProjectStatusFilter = 'all' | 'running' | 'pending' | 'ended';
 export type ProjectSortField = 'dueDate' | 'progress' | 'name';
@@ -138,60 +181,7 @@ export interface StoreSnapshot {
   timerRunning: boolean;
   timerSeconds: number;
   timerTaskId: string;
-  accent: AccentName;
-  activeRoute: RouteId;
-  railCollapsed: boolean;
-  searchQuery: string;
-  currentUser: TeamMember;
-  toasts: ToastNotice[];
-  newProjectModalOpen: boolean;
-  newTaskModalOpen: boolean;
-  commandPaletteOpen: boolean;
-  isSignedOut: boolean;
-  setActiveRoute: (route: RouteId) => void;
-  toggleRail: () => void;
-  setSearchQuery: (query: string) => void;
-  setNewProjectModalOpen: (open: boolean) => void;
-  setNewTaskModalOpen: (open: boolean) => void;
-  setCommandPaletteOpen: (open: boolean) => void;
-  setSignedOut: (signedOut: boolean) => void;
-  setAccent: (accent: AccentName) => void;
-  addProject: (input: NewProjectInput) => void;
-  addTask: (input: NewTaskInput) => void;
-  tickTimer: () => void;
-  toggleTimer: () => void;
-  resetTimer: () => void;
-  pushToast: (title: string, detail?: string) => void;
-  dismissToast: (id: string) => void;
-  deleteTask: (id: string) => void;
-  setTimerTask: (id: string) => void;
-  addTeamMember: (input: NewMemberInput) => void;
-  deleteMember: (id: string) => void;
-  selectedProfileMemberId: string | null;
-  setSelectedProfileMemberId: (id: string | null) => void;
-  moveTask: (id: string, status: TaskStatus) => void;
-  weekStart: WeekStart;
-  lastAddedProjectId: string | null;
-  checkedInEventIds: string[];
-  tourStep: number;
-  importModalOpen: boolean;
-  selectedProjectIdForDialog: string | null;
-  notifications: NotificationSettings;
-  addEvent: (event: CalendarEvent) => void;
-  updateEvent: (event: CalendarEvent) => void;
-  deleteEvent: (id: string) => void;
-  toggleEventCheckIn: (id: string) => void;
-  openProjectDialog: (id: string | null) => void;
-  setImportModalOpen: (open: boolean) => void;
-  deleteProject: (id: string) => void;
-  setTourStep: (step: number) => void;
-  importProjects: (projects: Project[]) => void;
-  updateProject: (id: string, updates: Partial<Project>) => void;
-  updateProfile: (updates: UpdateProfileInput) => void;
-  toggleNotification: (key: keyof NotificationSettings) => void;
-  setWeekStart: (weekStart: WeekStart) => void;
-  resetDemoData: () => void;
-  runValidationCheck: () => WorkspaceValidationReport;
+  focusPromptFired?: boolean;
 }
 
 export interface NewProjectInput {
@@ -253,11 +243,3 @@ export interface WorkspaceValidationReport {
   passed: boolean;
   checks: ValidationCheckResult[];
 }
-export {
-  createSeedProjects,
-  createSeedTasks,
-  createSeedFocusSessions,
-  createSeedEvents,
-  SEED_TEAM,
-  validateWorkspace,
-} from './seed';

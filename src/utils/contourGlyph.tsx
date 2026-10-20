@@ -34,74 +34,55 @@ export interface ContourGlyphResult {
 }
 
 /**
- * Deterministically generates stacked, continuous waved straight lines for a given seed and size.
+ * Deterministically generates 4-6 closed Catmull-Rom spline contour rings for a given seed and size.
  */
 export function contourGlyph(
   seed: string = 'plotline',
   size: number = 100,
-  ringsCount: number = 5
+  ringsCount?: number
 ): ContourGlyphResult {
   const hash = hashSeed(seed || 'plotline');
   const prng = mulberry32(hash);
-  const numLines = Math.max(3, Math.min(8, ringsCount));
+  const numRings =
+    ringsCount !== undefined ? Math.max(3, Math.min(8, ringsCount)) : 4 + Math.floor(prng() * 3);
   const paths: string[] = [];
 
-  // Deterministic wave frequencies & phase offsets for stacked horizontal wave lines
-  const freq1 = 2 + Math.floor(prng() * 2); // 2 or 3 wave crests across width
-  const freq2 = 3 + Math.floor(prng() * 2); // 3 or 4 wave crests across width
-  const basePhase1 = prng() * Math.PI * 2;
-  const basePhase2 = prng() * Math.PI * 2;
+  const cx = size / 2;
+  const cy = size / 2;
+  const minR = size * 0.12;
+  const maxR = size * 0.42;
+  const numSamples = 12;
 
-  const topMargin = size * 0.15;
-  const bottomMargin = size * 0.15;
-  const usableHeight = size - topMargin - bottomMargin;
-  const lineSpacing = numLines > 1 ? usableHeight / (numLines - 1) : usableHeight / 2;
-
-  const leftMargin = size * 0.08;
-  const rightMargin = size * 0.08;
-  const usableWidth = size - leftMargin - rightMargin;
-  const numSamples = 32;
-
-  for (let lineIdx = 0; lineIdx < numLines; lineIdx++) {
-    const yBase = topMargin + lineIdx * lineSpacing;
-    const phaseShift = (lineIdx * Math.PI) / 4;
-    // Amplitude scales proportionally to line spacing so lines wave gracefully
-    const maxAmp = Math.min(lineSpacing * 0.38, size * 0.08);
-
+  for (let ringIdx = 0; ringIdx < numRings; ringIdx++) {
+    const t = numRings > 1 ? ringIdx / (numRings - 1) : 0.5;
+    const baseR = minR + t * (maxR - minR);
     const pts: { x: number; y: number }[] = [];
 
     for (let i = 0; i < numSamples; i++) {
-      const normX = i / (numSamples - 1); // 0 to 1
-      const x = leftMargin + normX * usableWidth;
-
-      // Calculate continuous wave y displacement
-      const theta = normX * Math.PI * 2;
-      const waveVal =
-        0.65 * Math.sin(freq1 * theta + basePhase1 + phaseShift) +
-        0.35 * Math.cos(freq2 * theta + basePhase2 - phaseShift * 0.5);
-
-      // Dampen wave amplitude near edges (left & right) for smooth line terminations
-      const edgeDamping = Math.sin(normX * Math.PI);
-      const y = yBase + waveVal * maxAmp * (0.4 + 0.6 * edgeDamping);
-
-      pts.push({ x, y });
+      const theta = (i / numSamples) * Math.PI * 2;
+      const perturbation = 1 + (prng() * 2 - 1) * 0.18;
+      const r = baseR * perturbation;
+      pts.push({
+        x: cx + Math.cos(theta) * r,
+        y: cy + Math.sin(theta) * r,
+      });
     }
 
-    // Convert sample points into open smooth Catmull-Rom cubic bezier SVG path
     let d = `M ${pts[0].x.toFixed(2)} ${pts[0].y.toFixed(2)}`;
-    for (let i = 0; i < numSamples - 1; i++) {
-      const pPrev = pts[Math.max(0, i - 1)];
+    for (let i = 0; i < numSamples; i++) {
+      const pPrev = pts[(i - 1 + numSamples) % numSamples];
       const pCurr = pts[i];
-      const pNext = pts[i + 1];
-      const pNext2 = pts[Math.min(numSamples - 1, i + 2)];
+      const pNext = pts[(i + 1) % numSamples];
+      const pNext2 = pts[(i + 2) % numSamples];
 
       const cp1x = pCurr.x + (pNext.x - pPrev.x) / 6;
       const cp1y = pCurr.y + (pNext.y - pPrev.y) / 6;
       const cp2x = pNext.x - (pNext2.x - pCurr.x) / 6;
-      const cp2y = pNext.y - (pNext2.y - pCurr.x) / 6;
+      const cp2y = pNext.y - (pNext2.y - pCurr.y) / 6;
 
       d += ` C ${cp1x.toFixed(2)} ${cp1y.toFixed(2)}, ${cp2x.toFixed(2)} ${cp2y.toFixed(2)}, ${pNext.x.toFixed(2)} ${pNext.y.toFixed(2)}`;
     }
+    d += ' Z';
     paths.push(d);
   }
 
@@ -131,7 +112,7 @@ export interface ContourGlyphProps extends Omit<React.SVGProps<SVGSVGElement>, '
 }
 
 /**
- * React SVG component for rendering stacked waved straight line glyphs.
+ * React SVG component for rendering procedural closed Catmull-Rom contour rings.
  */
 export const ContourGlyph: React.FC<ContourGlyphProps> = ({
   seed = 'plotline',
@@ -153,14 +134,20 @@ export const ContourGlyph: React.FC<ContourGlyphProps> = ({
 
   return (
     <svg
+      width={numericSize}
+      height={numericSize}
       viewBox={glyphData.viewBox}
       fill="none"
-      stroke={color || 'currentColor'}
+      stroke={color}
       strokeWidth={strokeWidth}
       strokeLinecap="round"
       strokeLinejoin="round"
       className={`overflow-hidden ${className}`.trim()}
-      style={{ display: 'inline-block', verticalAlign: 'middle', borderRadius: 'inherit', ...style }}
+      style={{
+        display: 'inline-block',
+        verticalAlign: 'middle',
+        ...style,
+      }}
       {...svgProps}
     >
       {glyphData.paths.map((pathD, idx) => {

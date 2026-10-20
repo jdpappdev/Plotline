@@ -390,6 +390,7 @@ export default function HelpScreen() {
                 Frequently Asked Questions
               </h2>
             </div>
+            <ContourGlyph seed="help-faq-glyph" size={28} />
           </div>
 
           <div className="divide-y divide-[var(--border-hairline)]">
@@ -413,24 +414,8 @@ export default function HelpScreen() {
                     />
                   </button>
                   {isOpen && (
-                    <div className="mt-1 pb-2 text-xs sm:text-sm text-[var(--ink-secondary)] leading-relaxed pr-2">
-                      {faq.id === 'faq-glyphs' ? (
-                        <div className="flex items-start gap-3 pt-1">
-                          <div className="shrink-0 flex flex-col items-center gap-1 p-2 rounded-lg bg-[var(--surface-sunken)] border border-[var(--border-subtle)]">
-                            <ContourGlyph
-                              seed="plotline-faq-preview"
-                              size={48}
-                              className="w-12 h-12 text-[var(--accent)]"
-                            />
-                            <span className="text-[10px] font-mono font-medium text-[var(--ink-muted)]">
-                              Sample
-                            </span>
-                          </div>
-                          <p className="flex-1 min-w-0 pt-0.5">{faq.answer}</p>
-                        </div>
-                      ) : (
-                        <p>{faq.answer}</p>
-                      )}
+                    <div className="mt-1 pb-2 text-xs sm:text-sm text-[var(--ink-secondary)] leading-relaxed pr-4">
+                      <p>{faq.answer}</p>
                     </div>
                   )}
                 </div>
