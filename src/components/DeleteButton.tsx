@@ -30,7 +30,7 @@ export function DeleteButton({
         type="button"
         disabled={disabled}
         title={tooltipText}
-        aria-label={disabled ? tooltipText : `Delete ${name}`}
+        aria-label={`Delete ${name}`}
         onMouseEnter={() => setHovered(true)}
         onMouseLeave={() => setHovered(false)}
         onFocus={() => setHovered(true)}

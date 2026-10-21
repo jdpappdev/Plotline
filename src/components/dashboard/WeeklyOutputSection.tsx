@@ -2,6 +2,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import { WeekStart } from '../../domain/types';
 import { formatDuration } from '../../domain/derivations/time';
 import { AnchoredTooltip } from '../../ui/Popover';
+import { pluralize } from '../../utils/string';
 import { WeeklyOutputDayColumn } from './types';
 
 export interface WeeklyOutputSectionProps {
@@ -83,7 +84,7 @@ export function WeeklyOutputSection({
               }
               tabIndex={0}
               role="button"
-              aria-label={`${col.full}: ${col.formattedTotal} across ${col.segments.length} projects`}
+              aria-label={`${col.full}: ${col.formattedTotal} across ${pluralize(col.segments.length, 'project')}`}
               className="relative flex-1 min-w-[36px] h-full flex flex-col items-center justify-end gap-1.5 group rounded-[var(--radius-sm)] cursor-pointer select-none"
             >
               {/* Hover / Tap Per-Project Breakdown Tooltip portaled to document.body */}

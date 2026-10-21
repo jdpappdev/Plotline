@@ -1,6 +1,7 @@
 import React from 'react';
 import { TaskItem } from '../../store';
 import { ContourGlyph } from '../../utils/contourGlyph';
+import { pluralize } from '../../utils/string';
 import { FilterCriterion, STAGE_COLUMNS } from './types';
 
 export interface TasksFilterBarProps {
@@ -109,7 +110,7 @@ export function TasksFilterBar({
           data-testid="tasks-shown-count"
           className="text-xs font-semibold font-ui-tabular text-[var(--ink-secondary)] px-2 sm:text-right whitespace-nowrap"
         >
-          {filteredTasks.length} {filteredTasks.length === 1 ? 'task' : 'tasks'} shown
+          {pluralize(filteredTasks.length, 'task')} shown
         </span>
       </div>
 

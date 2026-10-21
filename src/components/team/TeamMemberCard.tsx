@@ -129,6 +129,7 @@ export const TeamMemberCard = React.forwardRef<HTMLElement, TeamMemberCardProps>
           <button
             type="button"
             onClick={() => onMessage(member)}
+            aria-label={`Send message to ${member.name}`}
             className="flex-1 min-h-[44px] sm:min-h-0 py-2 px-2.5 rounded-[var(--radius-sm)] border border-[var(--border-strong)] bg-[var(--surface-elevated)] hover:bg-[var(--surface-sunken)] text-xs font-semibold text-[var(--ink-primary)] inline-flex items-center justify-center gap-1.5 transition-colors cursor-pointer"
           >
             <MessageSquare className="w-3.5 h-3.5 text-[var(--ink-secondary)]" />
@@ -138,6 +139,7 @@ export const TeamMemberCard = React.forwardRef<HTMLElement, TeamMemberCardProps>
           <button
             type="button"
             onClick={() => onOpenProfile(member.id)}
+            aria-label={`View profile of ${member.name}`}
             style={{
               backgroundColor: 'var(--accent-soft)',
               color: 'var(--accent)',

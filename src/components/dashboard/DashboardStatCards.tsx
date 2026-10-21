@@ -1,6 +1,6 @@
 import React from 'react';
 import { ArrowUpRight } from 'lucide-react';
-import { pluralize } from '../../domain/derivations/analytics';
+import { pluralize } from '../../utils/string';
 import { CountUpNumeral } from './CountUpNumeral';
 
 export interface DashboardStatCardsProps {
@@ -49,7 +49,8 @@ export function DashboardStatCards({
           className="text-3xl sm:text-4xl font-semibold leading-none tracking-tight text-white my-1"
         />
         <p className="text-[11px] sm:text-xs text-white/90 max-h-[2.5rem] overflow-hidden leading-snug">
-          {pluralize(totalCount, 'project')} · {pluralize(openTasksCount, 'open task')}
+          {pluralize(totalCount, 'project')} ·{' '}
+          {pluralize(openTasksCount, 'open task', 'open tasks')}
         </p>
       </button>
 
@@ -72,7 +73,7 @@ export function DashboardStatCards({
           className="text-3xl sm:text-4xl font-semibold leading-none tracking-tight text-[var(--ink-primary)] my-1"
         />
         <p className="text-[11px] sm:text-xs text-[var(--ink-secondary)] max-h-[2.5rem] overflow-hidden leading-snug">
-          {pluralize(endedCount, 'project')} · {pluralize(openTasksCount, 'open task')}
+          {endedCount} of {pluralize(totalCount, 'project')}
         </p>
       </button>
 
@@ -95,7 +96,7 @@ export function DashboardStatCards({
           className="text-3xl sm:text-4xl font-semibold leading-none tracking-tight text-[var(--ink-primary)] my-1"
         />
         <p className="text-[11px] sm:text-xs text-[var(--ink-secondary)] max-h-[2.5rem] overflow-hidden leading-snug">
-          {pluralize(runningCount, 'project')} · {pluralize(openTasksCount, 'open task')}
+          {runningCount} of {pluralize(totalCount, 'project')}
         </p>
       </button>
 
@@ -118,7 +119,7 @@ export function DashboardStatCards({
           className="text-3xl sm:text-4xl font-semibold leading-none tracking-tight text-[var(--ink-primary)] my-1"
         />
         <p className="text-[11px] sm:text-xs text-[var(--ink-secondary)] max-h-[2.5rem] overflow-hidden leading-snug">
-          {pluralize(pendingCount, 'project')} · {pluralize(openTasksCount, 'open task')}
+          {pendingCount} of {pluralize(totalCount, 'project')}
         </p>
       </button>
     </>

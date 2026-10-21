@@ -94,26 +94,24 @@ export default function DashboardScreen() {
         uniqueMembers.set(m.id, m);
       }
     }
-    const tasksByUpdatedAt = [...uniqueTasks].sort(
-      (a, b) => (b.updatedAt ?? 0) - (a.updatedAt ?? 0)
-    );
+    const openTasks = uniqueTasks.filter((t) => t.status !== 'Done');
+    const tasksByUpdatedAt = [...openTasks].sort((a, b) => (b.updatedAt ?? 0) - (a.updatedAt ?? 0));
 
-    const rows = Array.from(uniqueMembers.values()).map((member) => {
+    const rows: MemberCollaborationRow[] = [];
+    for (const member of uniqueMembers.values()) {
+      const memberOpenTasks = tasksByUpdatedAt.filter(
+        (t) => t.assigneeId === member.id || t.coAssigneeId === member.id
+      );
+      if (memberOpenTasks.length === 0) continue;
       const assignedTask =
-        (timerRunning
-          ? tasksByUpdatedAt.find(
-              (t) =>
-                (t.assigneeId === member.id || t.coAssigneeId === member.id) && t.id === timerTaskId
-            )
-          : undefined) ||
-        tasksByUpdatedAt.find((t) => t.assigneeId === member.id || t.coAssigneeId === member.id) ||
-        tasksByUpdatedAt[0];
-      return {
+        (timerRunning ? memberOpenTasks.find((t) => t.id === timerTaskId) : undefined) ||
+        memberOpenTasks[0];
+      rows.push({
         member,
         task: assignedTask,
         workloadPct: getMemberWorkload(member.id, uniqueTasks),
-      };
-    });
+      });
+    }
 
     return rows.sort((a, b) => (b.task?.updatedAt ?? 0) - (a.task?.updatedAt ?? 0)).slice(0, 4);
   }, [team, uniqueTasks, timerRunning, timerTaskId]);
@@ -267,7 +265,7 @@ export default function DashboardScreen() {
             Dashboard
           </h1>
           <p className="text-xs sm:text-sm text-[var(--ink-secondary)] mt-0.5 truncate">
-            Plan, prioritize, and coordinate field engineering streams with clarity.
+            Plan, prioritize, and track your studio's projects.
           </p>
         </div>
 

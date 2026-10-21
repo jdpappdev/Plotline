@@ -1,5 +1,6 @@
 import React from 'react';
 import { ContourGlyph } from '../../utils/contourGlyph';
+import { pluralize } from '../../utils/string';
 import { AnalyticsRangeKey, ContributorMetricItem } from './types';
 
 export interface ContributorBreakdownCardProps {
@@ -64,7 +65,7 @@ export function ContributorBreakdownCard({ range, contributors }: ContributorBre
                     data-testid={`contributor-metrics-${entry.member.id}`}
                     className="font-ui-tabular font-semibold text-[var(--ink-primary)] shrink-0"
                   >
-                    {entry.formattedDuration} · {entry.tasksCompleted} tasks
+                    {entry.formattedDuration} · {pluralize(entry.tasksCompleted, 'task')}
                   </span>
                 </div>
                 <div className="h-1.5 w-full rounded-full bg-[var(--surface-sunken)] overflow-hidden">

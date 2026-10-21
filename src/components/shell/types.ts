@@ -45,11 +45,10 @@ export const MOBILE_MORE_ROUTES: RouteConfig[] = [
 export const TASK_CATEGORIES = [
   'Research',
   'Engineering',
-  'Interface',
-  'Architecture',
+  'Design',
   'Visualization',
-  'Field Ops',
-  'Outreach',
+  'Delivery',
+  'Content',
 ];
 
 export function formatTimerHMS(totalSeconds: number): string {

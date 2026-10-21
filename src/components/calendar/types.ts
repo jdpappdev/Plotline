@@ -72,8 +72,7 @@ export function formatDateBadge(isoDate: string): { monthShort: string; dayNum: 
   };
 }
 
-export function formatFullAgendaHeading(isoDate: string, todayIso: string): string {
-  if (isoDate === todayIso) return "Today's Agenda";
+export function formatFullAgendaHeading(isoDate: string): string {
   const parts = isoDate.split('-').map(Number);
   if (parts.length !== 3) return `Agenda · ${isoDate}`;
   const d = new Date(parts[0], parts[1] - 1, parts[2]);

@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { AlertCircle, CheckCircle2, Download, Upload } from 'lucide-react';
 import { Dialog } from '../ui/Dialog';
 import { usePlotlineStore } from '../store';
+import { pluralize } from '../utils/string';
 
 interface ParsedRow {
   name: string;
@@ -209,7 +210,7 @@ export default function ImportProjectsModal() {
               style={{ backgroundColor: 'var(--accent)' }}
               className="min-h-[44px] px-5 py-2 rounded-full text-xs font-semibold text-white hover:opacity-90 disabled:opacity-40 transition-opacity cursor-pointer"
             >
-              Import {validCount} valid {validCount === 1 ? 'row' : 'rows'}
+              Import {pluralize(validCount, 'valid row')}
             </button>
           )}
         </div>

@@ -1,5 +1,6 @@
 import { FocusSession, Project, TaskItem, TeamMember } from '../types';
 import { getIsoDateOffset } from '../../lib/clock';
+import { pluralize } from '../../utils/string';
 import { computeDaysAgoFromIso, formatDuration, getSessionSeconds, SECONDS_PER_HOUR } from './time';
 import {
   getTaskCycleDays,
@@ -17,11 +18,6 @@ const ACCENT_TINTS = [
 ];
 
 export type AnalyticsRangeKey = '7D' | '30D' | '90D';
-
-export function pluralize(count: number, singular: string, plural?: string): string {
-  const word = count === 1 ? singular : plural || `${singular}s`;
-  return `${count} ${word}`;
-}
 
 export function formatShortMonthDay(dateIso: string): string {
   const parts = dateIso.split('-').map(Number);

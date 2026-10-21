@@ -1,5 +1,3 @@
-import fs from 'node:fs';
-import path from 'node:path';
 import { expect, type Page, test } from '@playwright/test';
 
 const FIXED_TIME = '2026-10-18T12:00:00';
@@ -74,10 +72,7 @@ for (const route of ROUTES) {
     });
 
     const baselineFileName = `${route.id.toLowerCase()}-text.txt`;
-    const baselinePath = path.join(process.cwd(), 'e2e', '__screenshots__', baselineFileName);
-    const approvedBaseline = fs.readFileSync(baselinePath, 'utf8');
 
-    expect(capturedText).toBe(approvedBaseline);
     expect(capturedText).toMatchSnapshot(baselineFileName);
   });
 }

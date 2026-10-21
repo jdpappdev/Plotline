@@ -23,7 +23,7 @@ jobs:
         run: npm install --no-audit --no-fund
 
       - name: Update Playwright visual and text snapshots
-        run: npx playwright test --update-snapshots
+        run: npx playwright test e2e/visual.spec.ts --update-snapshots
 
       - name: Commit updated snapshots and open pull request
         env:

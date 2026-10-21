@@ -2,6 +2,7 @@ import React from 'react';
 import { Calendar as CalendarIcon, Clock, MapPin, Plus } from 'lucide-react';
 import { CalendarEvent, TeamMember } from '../../domain/types';
 import { ContourGlyph } from '../../utils/contourGlyph';
+import { pluralize } from '../../utils/string';
 import { DeleteButton } from '../DeleteButton';
 import { categoryChipStyles, formatDateBadge, formatFullAgendaHeading } from './types';
 
@@ -39,11 +40,10 @@ export function CalendarAgendaPanel({
         <div className="flex items-center justify-between border-b border-[var(--border-hairline)] pb-2.5 gap-2">
           <div>
             <h2 className="text-sm font-semibold text-[var(--ink-primary)]">
-              {formatFullAgendaHeading(selectedDateIso, todayIso)}
+              {formatFullAgendaHeading(selectedDateIso)}
             </h2>
             <p className="text-[11px] text-[var(--ink-muted)] mt-0.5">
-              {selectedDateIso} · {selectedDayEvents.length}{' '}
-              {selectedDayEvents.length === 1 ? 'session' : 'sessions'}
+              {selectedDateIso} · {pluralize(selectedDayEvents.length, 'session')}
             </p>
           </div>
           <div className="flex items-center gap-2">

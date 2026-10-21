@@ -143,7 +143,7 @@ export default function TeamScreen() {
             </span>
           </div>
           <p className="text-xs sm:text-sm text-[var(--ink-secondary)] mt-0.5">
-            Studio specialists, discipline capacity, and active deliverable assignments.
+            Roles, workload and current assignments.
           </p>
         </div>
 

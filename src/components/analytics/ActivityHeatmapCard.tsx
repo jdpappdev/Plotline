@@ -1,4 +1,5 @@
 import React, { useMemo } from 'react';
+import { pluralize } from '../../utils/string';
 import { AnalyticsDailyPoint, AnalyticsRangeKey } from './types';
 
 const WEEKDAY_ROW_LABELS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'] as const;
@@ -119,7 +120,7 @@ export function ActivityHeatmapCard({
         </div>
         <span className="text-xs text-[var(--ink-muted)] shrink-0">
           {selectedHeatmapDay
-            ? `${selectedHeatmapDay.label}: ${selectedHeatmapDay.formattedDuration} (${selectedHeatmapDay.tasks} tasks)`
+            ? `${selectedHeatmapDay.label}: ${selectedHeatmapDay.formattedDuration} (${pluralize(selectedHeatmapDay.tasks, 'task')})`
             : `${dailyCurrent.length} days`}
         </span>
       </div>
@@ -189,8 +190,8 @@ export function ActivityHeatmapCard({
                       data-level={shadeLevel}
                       data-hours={day.hours}
                       onClick={() => onToggleDate(day.date)}
-                      title={`${day.label} (${row.label}): ${day.formattedDuration} (${day.tasks} tasks)`}
-                      aria-label={`${day.label} (${row.label}): ${day.formattedDuration}, ${day.tasks} tasks`}
+                      title={`${day.label} (${row.label}): ${day.formattedDuration} (${pluralize(day.tasks, 'task')})`}
+                      aria-label={`${day.label} (${row.label}): ${day.formattedDuration}, ${pluralize(day.tasks, 'task')}`}
                       style={{
                         backgroundColor: getHeatmapBg(day.hours),
                       }}

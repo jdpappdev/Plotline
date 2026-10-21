@@ -132,6 +132,7 @@ export function InMotionPanel({
                           className="ml-1.5 font-ui-tabular font-semibold"
                           style={{ color: 'var(--accent)' }}
                         >
+                          {' '}
                           (+{formatLoggedDuration(task.loggedSeconds)})
                         </span>
                       ) : null}

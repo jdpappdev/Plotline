@@ -5,8 +5,8 @@ import { usePlotlineStore } from '../store';
 import { TaskItem } from '../domain/types';
 
 import { getProjectStatus } from '../domain/derivations/projects';
-import { pluralize } from '../domain/derivations/analytics';
 import { ContourGlyph } from '../utils/contourGlyph';
+import { pluralize } from '../utils/string';
 
 export default function ProjectDialog() {
   const {

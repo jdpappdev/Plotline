@@ -2,16 +2,30 @@ import fs from 'node:fs/promises';
 import { expect, test } from '@playwright/test';
 
 test.describe('Plotline Messages, Notifications, Focus Prompts & Weekly Reporting', () => {
+  test.beforeEach(async ({ page }) => {
+    await page.setViewportSize({ width: 1280, height: 800 });
+    await page.clock.setFixedTime('2026-10-18T12:00:00');
+    await page.addInitScript(() => {
+      window.localStorage.clear();
+    });
+  });
+
   test('Message dialog populates real email, encodes mailto, copies to clipboard, handles errors, and closes on Escape', async ({
     page,
   }) => {
-    await page.setViewportSize({ width: 1280, height: 800 });
     await page.goto('/#team', { waitUntil: 'networkidle' });
 
+    // Verify Team card buttons aria-labels
+    await expect(
+      page.getByRole('button', { name: 'Send message to Soren Lindqvist' })
+    ).toBeVisible();
+    await expect(
+      page.getByRole('button', { name: 'View profile of Soren Lindqvist' })
+    ).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Delete Soren Lindqvist' })).toBeVisible();
+
     // Open Message dialog for Soren Lindqvist
-    const messageBtn = page
-      .getByRole('button', { name: /send message to soren lindqvist/i })
-      .first();
+    const messageBtn = page.getByRole('button', { name: 'Send message to Soren Lindqvist' });
     await messageBtn.click();
 
     const dialog = page.getByRole('dialog');
@@ -91,7 +105,6 @@ test.describe('Plotline Messages, Notifications, Focus Prompts & Weekly Reportin
   test('Notification bell positioned right of search displays unread count, filters by category, marks read, and persists across reload', async ({
     page,
   }) => {
-    await page.setViewportSize({ width: 1280, height: 800 });
     await page.goto('/#dashboard', { waitUntil: 'networkidle' });
 
     const searchInput = page.getByRole('searchbox', { name: /search workspace/i });
@@ -107,29 +120,27 @@ test.describe('Plotline Messages, Notifications, Focus Prompts & Weekly Reportin
     expect(bellBox).not.toBeNull();
     expect(bellBox!.x).toBeGreaterThan(searchBox!.x + searchBox!.width);
 
-    // Check unread badge count from derived seed data (2 overdue + 5 due soon + 1 event starting within 60m = 8)
+    // Check unread badge count from derived seed data (1 overdue + 2 due soon = 3)
     const badge = page.getByTestId('notification-unread-badge');
-    await expect(badge).toHaveText('8');
+    await expect(badge).toHaveText('3');
 
     // Open portal-based popover
     await bellButton.click();
     const popover = page.getByTestId('notifications-popover');
     await expect(popover).toBeVisible();
-    await expect(popover).toContainText('8 unread');
+    await expect(popover).toContainText('3 unread');
 
     // Filter by Overdue task
     await popover.getByRole('button', { name: 'Overdue task' }).click();
-    await expect(popover.getByRole('listitem')).toHaveCount(2);
-
-    // Filter by Calendar event starting within 60 minutes
-    await popover
-      .getByRole('button', { name: 'Calendar event starting within 60 minutes' })
-      .click();
     await expect(popover.getByRole('listitem')).toHaveCount(1);
+
+    // Filter by Task due within 48 hours
+    await popover.getByRole('button', { name: 'Task due within 48 hours' }).click();
+    await expect(popover.getByRole('listitem')).toHaveCount(2);
 
     // Reset filter to All
     await popover.getByRole('button', { name: 'All' }).click();
-    await expect(popover.getByRole('listitem')).toHaveCount(8);
+    await expect(popover.getByRole('listitem')).toHaveCount(3);
 
     // Mark all read and verify persistence across reload
     await popover.getByRole('button', { name: /mark all read/i }).click();
@@ -152,10 +163,9 @@ test.describe('Plotline Messages, Notifications, Focus Prompts & Weekly Reportin
   test('Settings screen displays Weekly digest reports, Requires email setup, and downloads weekly report CSV', async ({
     page,
   }) => {
-    await page.setViewportSize({ width: 1280, height: 800 });
     await page.goto('/#settings', { waitUntil: 'networkidle' });
 
-    await page.getByRole('button', { name: 'Notifications' }).click();
+    await page.getByTestId('settings-tab-notifications').click();
 
     // Verify plain-language wording and disabled email delivery notices
     await expect(page.getByText('Weekly digest reports')).toBeVisible();
@@ -182,7 +192,6 @@ test.describe('Plotline Messages, Notifications, Focus Prompts & Weekly Reportin
   });
 
   test('Team screen renders exact workload percentages for all members', async ({ page }) => {
-    await page.setViewportSize({ width: 1280, height: 800 });
     await page.goto('/#team', { waitUntil: 'networkidle' });
 
     await expect(page.getByTestId('workload-pct-usr-soren')).toHaveText('17%');

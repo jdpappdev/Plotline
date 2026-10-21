@@ -3,8 +3,8 @@ import { ArrowUpDown, Plus, Search, Trash2, Upload } from 'lucide-react';
 import { usePlotlineStore } from '../store';
 
 import { getProjectProgress, getProjectStatus } from '../domain/derivations/projects';
-import { pluralize } from '../domain/derivations/analytics';
 import { ContourGlyph } from '../utils/contourGlyph';
+import { pluralize } from '../utils/string';
 
 type StatusFilter = 'all' | 'running' | 'pending' | 'ended';
 type SortField = 'dueDate' | 'progress' | 'name';
@@ -147,7 +147,7 @@ export default function ProjectsScreen() {
             </span>
           </div>
           <p className="text-xs sm:text-sm text-[var(--ink-secondary)] mt-0.5">
-            Manage, filter, and track project streams across active sectors
+            Manage, filter and track every project in one place.
           </p>
         </div>
 

@@ -1,5 +1,6 @@
 import React from 'react';
 import { CalendarEvent } from '../../domain/types';
+import { pluralize } from '../../utils/string';
 import { CalendarDayCell, categoryChipStyles } from './types';
 
 export interface CalendarMonthGridProps {
@@ -62,7 +63,7 @@ export function CalendarMonthGrid({
                 role="button"
                 tabIndex={0}
                 aria-pressed={isSelected}
-                aria-label={`${cell.iso}, ${dayEvents.length} events.`}
+                aria-label={`${cell.iso}, ${pluralize(dayEvents.length, 'event')}.`}
                 onClick={() => onDayCellClick(cell.iso)}
                 onKeyDown={(e) => {
                   if (e.key === 'Enter' || e.key === ' ') {

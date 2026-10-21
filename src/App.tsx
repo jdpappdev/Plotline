@@ -14,6 +14,7 @@ import { TopBarHeader } from './components/shell/TopBarHeader';
 import { resolveRouteFromLocation } from './components/shell/types';
 import { applyAccentCssVariables, RouteId, usePlotlineStore } from './store';
 import { ContourGlyph } from './utils/contourGlyph';
+import { pluralize } from './utils/string';
 
 export default function App() {
   const {
@@ -203,8 +204,8 @@ export default function App() {
             <p className="text-xs sm:text-sm text-[var(--ink-secondary)] leading-relaxed">
               Your workspace for{' '}
               <span className="font-semibold text-[var(--ink-primary)]">{currentUser.name}</span> (
-              {projects.length} projects, {tasks.length} tasks) is safely preserved in local
-              storage.
+              {pluralize(projects.length, 'project')}, {pluralize(tasks.length, 'task')}) is safely
+              preserved in local storage.
             </p>
           </div>
 

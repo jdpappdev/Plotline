@@ -3,6 +3,7 @@ import type { Project, StoreSnapshot } from '../../domain/types';
 import type { PlotlineState, ProjectsSlice } from '../sliceTypes';
 import { getTodayIsoDate, getIsoDateOffset, getNowTimestamp } from '../../lib/clock';
 import { dedupeById } from '../../domain/seed/index';
+import { pluralize } from '../../utils/string';
 import { loadPersistedProjects, savePersistedProjects, savePersistedTasks } from '../persistence';
 
 export const createProjectsSlice: StateCreator<PlotlineState, [], [], ProjectsSlice> = (
@@ -144,7 +145,7 @@ export const createProjectsSlice: StateCreator<PlotlineState, [], [], ProjectsSl
       set({ projects: nextProjects });
     }
 
-    const toastTitle = `${importedCount} ${importedCount === 1 ? 'project' : 'projects'} imported, ${skippedCount} skipped`;
+    const toastTitle = `${pluralize(importedCount, 'project')} imported, ${skippedCount} skipped`;
     get().pushToast(
       toastTitle,
       importedCount > 0 ? 'Active portfolio updated' : 'No new projects added'

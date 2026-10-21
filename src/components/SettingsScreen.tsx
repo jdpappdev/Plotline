@@ -127,8 +127,7 @@ export default function SettingsScreen() {
       <div style={{ '--stagger-index': 0 } as React.CSSProperties} className="plotline-enter">
         <h1 className="text-2xl font-bold tracking-tight text-[var(--ink-primary)]">Settings</h1>
         <p className="text-xs sm:text-sm text-[var(--ink-secondary)] mt-0.5">
-          Manage your specialist profile, notification preferences, studio appearance, and dataset
-          integrity.
+          Manage your profile, notifications, appearance and data.
         </p>
       </div>
 
@@ -143,9 +142,14 @@ export default function SettingsScreen() {
           {(
             [
               { id: 'Profile', label: 'Profile', icon: User },
-              { id: 'Notifications', label: 'Notifications', icon: Bell },
+              {
+                id: 'Notifications',
+                label: 'Notifications',
+                icon: Bell,
+                testId: 'settings-tab-notifications',
+              },
               { id: 'Appearance', label: 'Appearance', icon: Palette },
-              { id: 'Data', label: 'Data & Integrity', icon: Database },
+              { id: 'Data', label: 'Data', icon: Database },
             ] as const
           ).map((item) => {
             const Icon = item.icon;
@@ -154,7 +158,8 @@ export default function SettingsScreen() {
               <button
                 key={item.id}
                 type="button"
-                onClick={() => setActiveTab(item.id)}
+                onClick={() => setActiveTab(item.id as SettingsSection)}
+                data-testid={'testId' in item ? item.testId : undefined}
                 aria-current={isActive ? 'page' : undefined}
                 className={`w-full min-h-[44px] flex items-center gap-2 px-3 py-2.5 rounded-[var(--radius-md)] text-xs sm:text-sm font-medium transition-colors cursor-pointer min-w-0 ${
                   isActive
