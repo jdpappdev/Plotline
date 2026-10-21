@@ -20,7 +20,7 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Install dependencies
-        run: npm ci
+        run: npm install --no-audit --no-fund
 
       - name: Update Playwright visual and text snapshots
         run: npx playwright test --update-snapshots
