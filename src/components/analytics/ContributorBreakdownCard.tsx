@@ -31,9 +31,7 @@ export function ContributorBreakdownCard({ range, contributors }: ContributorBre
       {contributors.length === 0 ? (
         <div className="my-auto py-6 flex flex-col items-center justify-center text-center gap-2">
           <ContourGlyph seed="analytics-contributors-empty" size={42} />
-          <p className="text-xs text-[var(--ink-secondary)]">
-            No contributor telemetry available yet.
-          </p>
+          <p className="text-xs text-[var(--ink-secondary)]">No contributor activity yet.</p>
         </div>
       ) : (
         <div data-testid="contributors-list" className="space-y-2.5">

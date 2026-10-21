@@ -43,8 +43,8 @@ export const MOBILE_MORE_ROUTES: RouteConfig[] = [
 ];
 
 export const TASK_CATEGORIES = [
-  'Cartography',
-  'Telemetry',
+  'Research',
+  'Engineering',
   'Interface',
   'Architecture',
   'Visualization',

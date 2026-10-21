@@ -180,4 +180,17 @@ test.describe('Plotline Messages, Notifications, Focus Prompts & Weekly Reportin
     expect(lines[0]).toBe('Task Title,Project,Category,Completion Date,Logged Hours');
     expect(lines.length).toBeGreaterThan(1);
   });
+
+  test('Team screen renders exact workload percentages for all members', async ({ page }) => {
+    await page.setViewportSize({ width: 1280, height: 800 });
+    await page.goto('/#team', { waitUntil: 'networkidle' });
+
+    await expect(page.getByTestId('workload-pct-usr-soren')).toHaveText('17%');
+    await expect(page.getByTestId('workload-pct-usr-mireia')).toHaveText('20%');
+    await expect(page.getByTestId('workload-pct-usr-tarek')).toHaveText('77%');
+    await expect(page.getByTestId('workload-pct-usr-kaelen')).toHaveText('10%');
+    await expect(page.getByTestId('workload-pct-usr-nadia')).toHaveText('37%');
+    await expect(page.getByTestId('workload-pct-usr-juno')).toHaveText('25%');
+    await expect(page.getByTestId('workload-pct-usr-jade')).toHaveText('33%');
+  });
 });

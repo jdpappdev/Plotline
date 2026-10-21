@@ -4,6 +4,7 @@ import { usePlotlineStore } from '../store';
 import { Project, TaskItem, TeamMember } from '../domain/types';
 import { computeDaysAgoFromIso, formatDuration } from '../domain/derivations/time';
 import { computeProjectStatusCounts } from '../domain/derivations/projects';
+import { getMemberWorkload } from '../domain/derivations/team';
 import { getNow } from '../lib/clock';
 import { DashboardStatCards } from './dashboard/DashboardStatCards';
 import { NextUpPanel } from './dashboard/NextUpPanel';
@@ -107,7 +108,11 @@ export default function DashboardScreen() {
           : undefined) ||
         tasksByUpdatedAt.find((t) => t.assigneeId === member.id || t.coAssigneeId === member.id) ||
         tasksByUpdatedAt[0];
-      return { member, task: assignedTask };
+      return {
+        member,
+        task: assignedTask,
+        workloadPct: getMemberWorkload(member.id, uniqueTasks),
+      };
     });
 
     return rows.sort((a, b) => (b.task?.updatedAt ?? 0) - (a.task?.updatedAt ?? 0)).slice(0, 4);

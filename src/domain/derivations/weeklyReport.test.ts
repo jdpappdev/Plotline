@@ -68,7 +68,7 @@ describe('weeklyReport CSV derivation', () => {
         id: 'tsk-recent-done',
         code: 'TSK-01',
         title: 'Calibrate " Alpha ", sensor\narray',
-        category: 'Field, Ops & Telemetry',
+        category: 'Field operations',
         projectId: 'prj-1',
         assigneeId: 'usr-soren',
         status: 'Done',
@@ -163,7 +163,7 @@ describe('weeklyReport CSV derivation', () => {
     expect(rows.find((r) => r.taskTitle.includes('Calibrate'))).toEqual({
       taskTitle: 'Calibrate " Alpha ", sensor\narray',
       project: 'Horizon Array, Phase "Alpha"',
-      category: 'Field, Ops & Telemetry',
+      category: 'Field operations',
       completionDate: '2026-10-17',
       loggedHours: 3.5,
     });
@@ -179,7 +179,7 @@ describe('weeklyReport CSV derivation', () => {
     const lines = csv.split('\r\n');
     expect(lines[0]).toBe('Task Title,Project,Category,Completion Date,Logged Hours');
     expect(csv).toContain(
-      '"Calibrate "" Alpha "", sensor\narray","Horizon Array, Phase ""Alpha""","Field, Ops & Telemetry",2026-10-17,3.5'
+      '"Calibrate "" Alpha "", sensor\narray","Horizon Array, Phase ""Alpha""",Field operations,2026-10-17,3.5'
     );
   });
 

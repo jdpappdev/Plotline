@@ -59,7 +59,7 @@ export function CalendarEventDialog({
     <Dialog
       isOpen={isOpen}
       onClose={onClose}
-      eyebrow={editingEventId ? 'Modify Schedule' : 'Schedule Dispatch'}
+      eyebrow={editingEventId ? 'Modify Schedule' : 'Schedule'}
       title={editingEventId ? 'Edit event' : 'New event'}
       maxWidthClass="max-w-md"
       footer={
@@ -202,7 +202,7 @@ export function CalendarEventDialog({
             type="text"
             value={evtLocation}
             onChange={(e) => onLocationChange(e.target.value)}
-            placeholder="e.g. Room 04 · Cartography Lab"
+            placeholder="e.g. Room 04 · Research Lab"
             className="w-full h-11 sm:h-10 px-3 rounded-[var(--radius-sm)] bg-[var(--surface-sunken)] border border-[var(--border-strong)] text-xs sm:text-sm text-[var(--ink-primary)] placeholder:text-[var(--ink-muted)] focus:outline-2 focus:outline-[var(--accent)]"
           />
         </div>

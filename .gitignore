@@ -1,8 +1,12 @@
 node_modules/
-build/
 dist/
+build/
 coverage/
 .DS_Store
 *.log
-.env*
+test-results/
+playwright-report/
+.aistudio/
+.env
+.env.*
 !.env.example

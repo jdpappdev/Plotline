@@ -105,7 +105,7 @@ export default function App() {
     };
   }, [setActiveRoute]);
 
-  // Keyboard shortcut Cmd/Ctrl + K to toggle Command Palette
+  // Keyboard shortcuts (Cmd/Ctrl+K, N, T, Escape)
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'k') {
@@ -113,6 +113,42 @@ export default function App() {
         setCommandPaletteOpen(!usePlotlineStore.getState().commandPaletteOpen);
         return;
       }
+
+      const isEditableElement = (el: Element | EventTarget | null): boolean => {
+        if (!el || !(el instanceof HTMLElement)) return false;
+        const tag = el.tagName?.toLowerCase();
+        if (tag === 'input' || tag === 'textarea' || tag === 'select') return true;
+        if (el.isContentEditable || el.getAttribute('contenteditable') === 'true') return true;
+        return el.closest('[contenteditable="true"]') !== null;
+      };
+
+      const isInput = isEditableElement(e.target) || isEditableElement(document.activeElement);
+      const hasModifier = e.metaKey || e.ctrlKey || e.altKey || e.shiftKey;
+      const storeState = usePlotlineStore.getState();
+      const isDialogOpen =
+        isSignedOut ||
+        logoutConfirmOpen ||
+        newProjectModalOpen ||
+        newTaskModalOpen ||
+        storeState.commandPaletteOpen ||
+        storeState.importModalOpen ||
+        storeState.selectedProjectIdForDialog !== null ||
+        storeState.selectedProfileMemberId !== null ||
+        document.querySelector('[role="dialog"]') !== null;
+
+      if (!isInput && !hasModifier && !isDialogOpen) {
+        if (e.key.toLowerCase() === 'n') {
+          e.preventDefault();
+          setNewProjectModalOpen(true);
+          return;
+        }
+        if (e.key.toLowerCase() === 't') {
+          e.preventDefault();
+          setNewTaskModalOpen(true);
+          return;
+        }
+      }
+
       if (e.key === 'Escape') {
         setUserMenuOpen(false);
         setMoreSheetOpen(false);
@@ -125,6 +161,8 @@ export default function App() {
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [
+    isSignedOut,
+    logoutConfirmOpen,
     newProjectModalOpen,
     newTaskModalOpen,
     setCommandPaletteOpen,

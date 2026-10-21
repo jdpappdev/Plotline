@@ -38,7 +38,7 @@ export default function CalendarScreen() {
   const [evtDate, setEvtDate] = useState(todayIso);
   const [evtStart, setEvtStart] = useState('10:00');
   const [evtEnd, setEvtEnd] = useState('11:00');
-  const [evtLocation, setEvtLocation] = useState('Room 04 · Cartography Lab');
+  const [evtLocation, setEvtLocation] = useState('Room 04 · Research Lab');
   const [evtAttendees, setEvtAttendees] = useState<string[]>([currentUser.id]);
   const [formError, setFormError] = useState('');
   const titleInputRef = useRef<HTMLInputElement>(null);
@@ -150,7 +150,7 @@ export default function CalendarScreen() {
     setEvtDate(dateIso);
     setEvtStart('10:00');
     setEvtEnd('11:00');
-    setEvtLocation('Room 04 · Cartography Lab');
+    setEvtLocation('Room 04 · Research Lab');
     setEvtAttendees([currentUser.id]);
     setFormError('');
     setModalOpen(true);

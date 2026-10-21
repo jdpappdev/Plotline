@@ -3,6 +3,7 @@ import { Project, TaskItem, TeamMember } from '../../domain/types';
 export interface MemberCollaborationRow {
   member: TeamMember;
   task: TaskItem | undefined;
+  workloadPct?: number;
 }
 
 export interface WeeklyOutputProjectSegment {

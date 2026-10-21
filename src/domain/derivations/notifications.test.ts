@@ -18,7 +18,7 @@ describe('deriveNotifications', () => {
     id: 't1',
     code: 'TSK-01',
     title: 'Test Task',
-    category: 'Telemetry',
+    category: 'Engineering',
     projectId: 'p1',
     assigneeId: 'u1',
     status: 'In Progress',

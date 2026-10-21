@@ -1,6 +1,7 @@
 import React from 'react';
 import { Mail, MapPin, MessageSquare } from 'lucide-react';
 import { TaskItem, TeamMember } from '../../domain/types';
+import { getMemberWorkload } from '../../domain/derivations';
 import { Dialog } from '../../ui/Dialog';
 import { DeleteButton } from '../DeleteButton';
 import { priorityChipStyle } from '../tasks/TaskCard';
@@ -64,6 +65,10 @@ export function TeamProfileDialog({
   onMessageMember,
   onMoveTask,
 }: TeamProfileDialogProps) {
+  const workloadPct = activeProfileData
+    ? getMemberWorkload(activeProfileData.member.id, activeProfileData.memberTasks)
+    : 0;
+
   return (
     <Dialog
       isOpen={!!activeProfileData}
@@ -148,7 +153,7 @@ export function TeamProfileDialog({
             </div>
 
             <div className="bg-[var(--surface-elevated)] border border-[var(--border-hairline)] rounded-[var(--radius-lg)] p-2.5 sm:p-3 text-center shadow-2xs flex flex-col items-center justify-center h-[80px]">
-              <UtilizationRing40 pct={activeProfileData.workloadPct} />
+              <UtilizationRing40 pct={workloadPct} />
               <span className="text-[11px] sm:text-xs font-medium text-[var(--ink-secondary)] mt-1">
                 Utilization
               </span>

@@ -40,7 +40,7 @@ export const createProjectsSlice: StateCreator<PlotlineState, [], [], ProjectsSl
       progress: 0,
       budgetAllocated: 150000,
       budgetSpent: 0,
-      summary: `Newly chartered project (${code}) target completion ${input.targetDate}.`,
+      summary: `Newly created project (${code}) target completion ${input.targetDate}.`,
     };
 
     let didInsert = false;

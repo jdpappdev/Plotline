@@ -201,7 +201,7 @@ export function ShellOverlays({
       <Dialog
         isOpen={newProjectModalOpen}
         onClose={() => onSetNewProjectModalOpen(false)}
-        eyebrow="Charter Stream"
+        eyebrow="Create a project"
         title="New project"
         maxWidthClass="sm:max-w-md"
         footer={
@@ -299,7 +299,7 @@ export function ShellOverlays({
       <Dialog
         isOpen={newTaskModalOpen}
         onClose={() => onSetNewTaskModalOpen(false)}
-        eyebrow="Task Dispatch"
+        eyebrow="New Task"
         title="New task"
         maxWidthClass="sm:max-w-md"
         footer={

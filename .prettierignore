@@ -3,5 +3,5 @@ dist
 test-results
 playwright-report
 e2e/__screenshots__
-bun.lock
+package-lock.json
 .vitest-cache

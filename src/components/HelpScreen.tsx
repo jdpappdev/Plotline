@@ -10,6 +10,8 @@ const KEYBOARD_SHORTCUTS = [
     altKeys: ['Ctrl', 'K'],
     description: 'Open global Command Palette from any screen',
   },
+  { keys: ['N'], description: 'Open new project modal' },
+  { keys: ['T'], description: 'Open new task modal' },
   { keys: ['↑', '↓'], description: 'Navigate command palette items and task menus' },
   { keys: ['↵'], description: 'Execute highlighted command or submit modal form' },
   { keys: ['Esc'], description: 'Dismiss active modal, command palette, or profile drawer' },

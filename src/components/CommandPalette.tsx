@@ -96,7 +96,7 @@ export default function CommandPalette({ onNavigate }: CommandPaletteProps) {
         group: 'Actions',
         label: 'New project',
         subtitle: 'Create a new delivery stream in the portfolio',
-        keywords: 'new project create add stream charter',
+        keywords: 'new project create add stream',
         icon: <Plus className="w-4 h-4" style={{ color: 'var(--accent)' }} />,
         onSelect: () => {
           setCommandPaletteOpen(false);
@@ -107,7 +107,7 @@ export default function CommandPalette({ onNavigate }: CommandPaletteProps) {
         id: 'cmd-action-new-task',
         group: 'Actions',
         label: 'New task',
-        subtitle: 'Dispatch a new engineering or design deliverable',
+        subtitle: 'Create a new engineering or design deliverable',
         keywords: 'new task create add deliverable card',
         icon: <Plus className="w-4 h-4" style={{ color: 'var(--accent)' }} />,
         onSelect: () => {
@@ -183,7 +183,7 @@ export default function CommandPalette({ onNavigate }: CommandPaletteProps) {
       },
       {
         id: 'Analytics',
-        subtitle: 'Throughput distribution and budget telemetry',
+        subtitle: 'Throughput distribution and budget analytics',
         icon: <BarChart3 className="w-4 h-4" />,
       },
       {

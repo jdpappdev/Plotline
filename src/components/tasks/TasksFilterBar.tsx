@@ -169,7 +169,7 @@ export function TasksFilterBar({
             <p className="text-xs text-[var(--ink-secondary)]">
               {totalTasksCount === 0
                 ? 'Create a deliverable to begin tracking progress across stages.'
-                : 'Try clearing your filter selection or dispatching a new deliverable.'}
+                : 'Try clearing your filter selection or creating a new project.'}
             </p>
           </div>
           <div className="flex items-center gap-2 pt-1">

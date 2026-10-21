@@ -3,6 +3,11 @@ import { AnimatePresence, motion, useReducedMotion } from 'motion/react';
 import { UserPlus } from 'lucide-react';
 import { usePlotlineStore } from '../store';
 import { Department, TeamMember } from '../domain/types';
+import {
+  getMemberAssignedTasks,
+  getMemberTaskCounts,
+  getMemberWorkload,
+} from '../domain/derivations';
 import { ContourGlyph } from '../utils/contourGlyph';
 import { TeamMemberCard } from './team/TeamMemberCard';
 import { TeamProfileDialog } from './team/TeamProfileDialog';
@@ -45,22 +50,15 @@ export default function TeamScreen() {
     }
 
     return Array.from(unique.values()).map((member) => {
-      const memberTasks = tasks.filter(
-        (t) => t.assigneeId === member.id || t.coAssigneeId === member.id
-      );
-      const openTasks = memberTasks.filter((t) => t.status !== 'Done');
-      const completedTasks = memberTasks.filter((t) => t.status === 'Done');
-      const openHours = openTasks.reduce((sum, t) => sum + t.estimateHours, 0);
-      const rawUtilization = Math.round(
-        ((openHours + 10) / Math.max(20, member.capacityHours)) * 100
-      );
-      const workloadPct = Math.min(100, Math.max(18, rawUtilization));
+      const memberTasks = getMemberAssignedTasks(member.id, tasks);
+      const { openCount, completedCount } = getMemberTaskCounts(member.id, tasks);
+      const workloadPct = getMemberWorkload(member.id, tasks);
 
       return {
         member,
         memberTasks,
-        openCount: openTasks.length,
-        completedCount: completedTasks.length,
+        openCount,
+        completedCount,
         workloadPct,
       };
     });

@@ -1,0 +1,64 @@
+name: Update Snapshots
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  update-snapshots:
+    timeout-minutes: 15
+    runs-on: ubuntu-latest
+    container:
+      image: mcr.microsoft.com/playwright:v1.64.1-noble
+    env:
+      TZ: UTC
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Update Playwright visual and text snapshots
+        run: npx playwright test --update-snapshots
+
+      - name: Commit updated snapshots and open pull request
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          git config --global --add safe.directory "$GITHUB_WORKSPACE"
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git checkout -B snapshots/update
+          git add e2e/__screenshots__/
+          if ! git diff --cached --quiet; then
+            git commit -m "chore(e2e): update visual and text snapshot baselines"
+            git push --force origin snapshots/update
+            if command -v gh >/dev/null 2>&1; then
+              gh pr create \
+                --base main \
+                --head snapshots/update \
+                --title "chore(e2e): update visual and text snapshot baselines" \
+                --body "Automated Playwright visual and text snapshot baseline update from workflow_dispatch." \
+                || echo "Pull request already exists for snapshots/update -> main."
+            else
+              curl -sS -X POST \
+                -H "Accept: application/vnd.github+json" \
+                -H "Authorization: Bearer $GH_TOKEN" \
+                -H "X-GitHub-Api-Version: 2022-11-28" \
+                "https://api.github.com/repos/$GITHUB_REPOSITORY/pulls" \
+                -d '{"title":"chore(e2e): update visual and text snapshot baselines","head":"snapshots/update","base":"main","body":"Automated Playwright visual and text snapshot baseline update from workflow_dispatch."}'
+            fi
+          else
+            echo "No snapshot changes detected."
+          fi
+
+      - name: Upload updated snapshots artifact
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: updated-snapshots
+          path: e2e/__screenshots__/
