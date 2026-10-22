@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it } from 'vitest';
 import { setClockOverride } from '../../lib/clock';
+import { contourGlyph } from '../../utils/contourGlyph';
 import {
   computeAnalyticsData,
   computeProjectStatusCounts,
@@ -162,5 +163,28 @@ describe('baseline dataset verification at fixed clock 2026-10-18T12:00 (Sunday)
     }
 
     assertEqual('Mon–Sun and month boundary validation failures', failures, []);
+  });
+
+  it('contourGlyph generator: same seed is deterministic, different seeds differ, only M and C commands, at least 5 paths', () => {
+    const glyphA1 = contourGlyph('prj-harbor', 36);
+    const glyphA2 = contourGlyph('prj-harbor', 36);
+    const glyphB = contourGlyph('prj-fernlight', 36);
+
+    expect(glyphA1.paths).toEqual(glyphA2.paths);
+    expect(glyphA1.svgString).toBe(glyphA2.svgString);
+    expect(glyphA1.paths).not.toEqual(glyphB.paths);
+    expect(glyphA1.svgString).not.toBe(glyphB.svgString);
+
+    expect(glyphA1.paths.length).toBeGreaterThanOrEqual(5);
+    expect(glyphB.paths.length).toBeGreaterThanOrEqual(5);
+
+    for (const pathD of [...glyphA1.paths, ...glyphB.paths]) {
+      const commands = pathD.match(/[A-Za-z]+/g) ?? [];
+      expect(commands.length).toBeGreaterThan(1);
+      expect(commands[0]).toBe('M');
+      for (const cmd of commands) {
+        expect(cmd === 'M' || cmd === 'C').toBe(true);
+      }
+    }
   });
 });

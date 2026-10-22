@@ -55,7 +55,12 @@ export function Dialog({
   const prefersReducedMotion = useReducedMotion();
   const triggerRef = useRef<HTMLElement | null>(null);
   const containerRef = useRef<HTMLDivElement | null>(null);
+  const onCloseRef = useRef(onClose);
   const [vvState, setVvState] = useState<{ height: number; offsetTop: number } | null>(null);
+
+  useEffect(() => {
+    onCloseRef.current = onClose;
+  }, [onClose]);
 
   useEffect(() => {
     if (isOpen) {
@@ -64,19 +69,32 @@ export function Dialog({
       document.body.classList.add('dialog-open');
 
       const timer = setTimeout(() => {
-        const focusables = containerRef.current?.querySelectorAll<HTMLElement>(
+        const container = containerRef.current;
+        if (!container) return;
+        const active = document.activeElement as HTMLElement | null;
+        if (active && container.contains(active) && active !== container) {
+          return;
+        }
+        const firstField = container.querySelector<HTMLElement>(
+          'input:not([disabled]):not([readonly]), select:not([disabled]), textarea:not([disabled])'
+        );
+        if (firstField) {
+          firstField.focus();
+          return;
+        }
+        const focusables = container.querySelectorAll<HTMLElement>(
           'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])'
         );
-        if (focusables && focusables.length > 0) {
+        if (focusables.length > 0) {
           focusables[0].focus();
         } else {
-          containerRef.current?.focus();
+          container.focus();
         }
       }, 30);
 
       const handleKeyDown = (e: KeyboardEvent) => {
         if (e.key === 'Escape') {
-          onClose();
+          onCloseRef.current();
           return;
         }
 
@@ -111,9 +129,14 @@ export function Dialog({
       const updateVisualViewport = () => {
         const vv = typeof window !== 'undefined' ? window.visualViewport : null;
         if (vv) {
-          setVvState({
-            height: vv.height,
-            offsetTop: vv.offsetTop,
+          setVvState((prev) => {
+            if (prev && prev.height === vv.height && prev.offsetTop === vv.offsetTop) {
+              return prev;
+            }
+            return {
+              height: vv.height,
+              offsetTop: vv.offsetTop,
+            };
           });
         }
         const activeEl = document.activeElement as HTMLElement | null;
@@ -161,7 +184,7 @@ export function Dialog({
         }
       };
     }
-  }, [isOpen, onClose]);
+  }, [isOpen]);
 
   if (typeof document === 'undefined') return null;
 

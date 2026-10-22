@@ -254,7 +254,7 @@ export default function DashboardScreen() {
   };
 
   return (
-    <div className="max-w-[1360px] mx-auto xl:h-full flex min-w-0 flex-col gap-3">
+    <div className="dashboard-shell max-w-[1360px] mx-auto flex min-w-0 flex-col gap-3">
       {/* Header Row: Page title + one-line subtitle, "New project" primary button, "Import" secondary */}
       <div
         style={{ '--stagger-index': 0 } as React.CSSProperties}
@@ -296,7 +296,7 @@ export default function DashboardScreen() {
             stat cards (2x2), Next up, Focus timer, In motion, Weekly output, Projects, Project rings.
           - 640-1023px: 2 columns (sm:grid-cols-2).
           - >=1280px: 12-column desktop bento (xl:grid-cols-12). */}
-      <div className="dashboard-grid flex-1 min-h-0 min-w-0 grid grid-cols-2 sm:grid-cols-2 xl:grid-cols-12 gap-3 sm:gap-3.5 [grid-auto-rows:auto]">
+      <div className="dashboard-grid flex-1 xl:min-h-0 min-w-0 grid grid-cols-2 sm:grid-cols-2 xl:grid-cols-12 gap-3 sm:gap-3.5 [grid-auto-rows:auto]">
         <DashboardStatCards
           totalCount={totalCount}
           endedCount={endedCount}

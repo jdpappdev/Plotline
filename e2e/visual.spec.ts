@@ -19,6 +19,11 @@ const VIEWPORTS = [
   { width: 1180, height: 820 },
 ] as const;
 
+const PORTRAIT_DASHBOARD_VIEWPORTS = [
+  { width: 820, height: 1180 },
+  { width: 768, height: 1024 },
+] as const;
+
 async function prepareDeterministicPage(
   page: Page,
   routeHash: string,
@@ -74,6 +79,18 @@ for (const route of ROUTES) {
     const baselineFileName = `${route.id.toLowerCase()}-text.txt`;
 
     expect(capturedText).toMatchSnapshot(baselineFileName);
+  });
+}
+
+for (const viewport of PORTRAIT_DASHBOARD_VIEWPORTS) {
+  test(`visual baseline: Dashboard at ${viewport.width}x${viewport.height}`, async ({ page }) => {
+    await prepareDeterministicPage(page, '#dashboard', viewport);
+
+    await expect(page).toHaveScreenshot(`dashboard-${viewport.width}x${viewport.height}.png`, {
+      fullPage: true,
+      animations: 'disabled',
+      maxDiffPixelRatio: 0.0005,
+    });
   });
 }
 

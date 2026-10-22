@@ -24,6 +24,12 @@
   initial-value: #e9effa;
 }
 
+@property --accent-tint-1 {
+  syntax: '<color>';
+  inherits: true;
+  initial-value: #e2ebfa;
+}
+
 :root {
   /* 1. Page Background (#f6f6f5) & Cards (#fcfcf9) — No page-wide texture */
   --surface-canvas: #f6f6f5;
@@ -42,9 +48,9 @@
   --accent: #204282;
   --accent-mid: #2c52a3;
   --accent-light: #789ce2;
-  --accent-deep: color-mix(in oklab, var(--accent) 68%, black);
+  --accent-deep: #132852;
   --surface-accent: linear-gradient(155deg, var(--accent) 0%, var(--accent-deep) 100%);
-  --accent-tint-1: var(--accent);
+  --accent-tint-1: #e2ebfa;
   --accent-tint-2: color-mix(in oklab, var(--accent) 74%, white);
   --accent-tint-3: color-mix(in oklab, var(--accent) 52%, white);
   --accent-tint-4: var(--accent-deep);
@@ -96,14 +102,16 @@
     --accent 250ms var(--ease-plotline),
     --accent-deep 250ms var(--ease-plotline),
     --accent-mid 250ms var(--ease-plotline),
-    --accent-soft 250ms var(--ease-plotline);
+    --accent-soft 250ms var(--ease-plotline),
+    --accent-tint-1 250ms var(--ease-plotline);
 }
 
 :root[data-accent='tide'] {
   --accent: #204282;
   --accent-mid: #2c52a3;
   --accent-light: #789ce2;
-  --accent-deep: color-mix(in oklab, var(--accent) 68%, black);
+  --accent-deep: #132852;
+  --accent-tint-1: #e2ebfa;
   --surface-accent: linear-gradient(155deg, var(--accent) 0%, var(--accent-deep) 100%);
   --accent-hover: #2c52a3;
   --accent-soft: #e9effa;
@@ -114,7 +122,8 @@
   --accent: #2e6b47;
   --accent-mid: #3b8559;
   --accent-light: #84c29d;
-  --accent-deep: color-mix(in oklab, var(--accent) 68%, black);
+  --accent-deep: #173b25;
+  --accent-tint-1: #e1f0e7;
   --surface-accent: linear-gradient(155deg, var(--accent) 0%, var(--accent-deep) 100%);
   --accent-hover: #3b8559;
   --accent-soft: #e8f2ec;
@@ -125,7 +134,8 @@
   --accent: #5b43b8;
   --accent-mid: #6f56d1;
   --accent-light: #a594eb;
-  --accent-deep: color-mix(in oklab, var(--accent) 68%, black);
+  --accent-deep: #2f2066;
+  --accent-tint-1: #e8e4f8;
   --surface-accent: linear-gradient(155deg, var(--accent) 0%, var(--accent-deep) 100%);
   --accent-hover: #6f56d1;
   --accent-soft: #eeebf9;
@@ -136,7 +146,8 @@
   --accent: #be3a15;
   --accent-mid: #d94b24;
   --accent-light: #f59d84;
-  --accent-deep: color-mix(in oklab, var(--accent) 68%, black);
+  --accent-deep: #691c06;
+  --accent-tint-1: #fae5de;
   --surface-accent: linear-gradient(155deg, var(--accent) 0%, var(--accent-deep) 100%);
   --accent-hover: #d94b24;
   --accent-soft: #fcece7;
@@ -220,6 +231,14 @@ input[type='time']::-webkit-calendar-picker-indicator:hover {
 }
 
 /* Responsive dashboard cards size to their content without collapsing grid children. */
+.dashboard-shell {
+  height: auto;
+}
+
+.dashboard-grid {
+  grid-auto-rows: auto;
+}
+
 .dashboard-grid > * {
   min-width: 0;
   min-height: 116px;
@@ -228,6 +247,16 @@ input[type='time']::-webkit-calendar-picker-indicator:hover {
 @media (min-width: 640px) {
   .dashboard-grid > * {
     min-height: 132px;
+  }
+}
+
+@media (orientation: landscape) and (min-width: 1024px) {
+  .dashboard-shell {
+    height: 100%;
+  }
+
+  .dashboard-focus-card {
+    height: 100%;
   }
 }
 

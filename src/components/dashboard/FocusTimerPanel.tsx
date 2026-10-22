@@ -43,7 +43,7 @@ export function FocusTimerPanel({
           background: 'var(--surface-accent)',
         } as React.CSSProperties
       }
-      className="plotline-enter col-span-2 sm:col-span-1 xl:col-span-3 sm:order-10 time-tracker-surface rounded-[var(--radius-lg)] p-4 sm:p-3.5 text-white flex flex-col justify-between gap-2.5 w-full lg:h-full xl:max-h-[212px] self-start relative"
+      className="dashboard-focus-card plotline-enter col-span-2 sm:col-span-1 xl:col-span-3 sm:order-10 time-tracker-surface rounded-[var(--radius-lg)] p-4 sm:p-3.5 text-white flex flex-col justify-between gap-2.5 w-full xl:max-h-[212px] self-start relative"
     >
       {/* Large Contour Glyph Texture in White at 8–10% Opacity, Seeded from Active Task ID */}
       <div
