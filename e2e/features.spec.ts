@@ -139,7 +139,7 @@ test.describe('Plotline Messages, Notifications, Focus Prompts & Weekly Reportin
     await expect(popover.getByRole('listitem')).toHaveCount(2);
 
     // Reset filter to All
-    await popover.getByRole('button', { name: 'All' }).click();
+    await popover.getByTestId('notification-filter-all').click();
     await expect(popover.getByRole('listitem')).toHaveCount(3);
 
     // Mark all read and verify persistence across reload
