@@ -39,7 +39,7 @@ export function DashboardProjectsPanel({
     <section
       aria-labelledby="projects-card-heading"
       style={{ '--stagger-index': 7 } as React.CSSProperties}
-      className="plotline-enter col-span-2 sm:col-span-1 xl:col-span-3 sm:order-7 bg-[var(--surface-elevated)] border border-[var(--border-hairline)] rounded-[var(--radius-lg)] p-4 flex flex-col justify-between gap-1.5 min-h-0"
+      className="plotline-enter col-span-2 sm:col-span-1 xl:col-span-4 sm:order-7 bg-[var(--surface-elevated)] border border-[var(--border-hairline)] rounded-[var(--radius-lg)] p-4 flex flex-col justify-between gap-1.5 min-h-0"
     >
       <div className="flex items-center justify-between gap-2 shrink-0">
         <h2
