@@ -182,13 +182,11 @@ export const ContourGlyph: React.FC<ContourGlyphProps> = ({
 
   const tileStyle: React.CSSProperties = isLarge
     ? {
-        display: 'inline-block',
-        verticalAlign: 'middle',
+        display: 'block',
         ...style,
       }
     : {
-        display: 'inline-block',
-        verticalAlign: 'middle',
+        display: 'block',
         borderRadius: '21%',
         backgroundColor: 'var(--accent-tint-1)',
         ...style,
