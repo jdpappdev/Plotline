@@ -147,6 +147,7 @@ export interface ContourGlyphProps extends Omit<React.SVGProps<SVGSVGElement>, '
 
 /**
  * React SVG component for rendering procedural flowing Catmull-Rom wave glyphs.
+ * Fixed: Uses display: 'block' for proper flex container alignment on all viewports.
  */
 export const ContourGlyph: React.FC<ContourGlyphProps> = ({
   seed = 'plotline',
@@ -180,15 +181,15 @@ export const ContourGlyph: React.FC<ContourGlyphProps> = ({
   const svgWidth = isLarge && numericSize <= 120 ? Math.round(numericSize * 1.6) : numericSize;
   const svgHeight = numericSize;
 
+  // FIX: Use display: 'block' for proper flex container alignment
+  // Removed verticalAlign: 'middle' which conflicted with flex layout
   const tileStyle: React.CSSProperties = isLarge
     ? {
-        display: 'inline-block',
-        verticalAlign: 'middle',
+        display: 'block',
         ...style,
       }
     : {
-        display: 'inline-block',
-        verticalAlign: 'middle',
+        display: 'block',
         borderRadius: '21%',
         backgroundColor: 'var(--accent-tint-1)',
         ...style,
