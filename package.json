@@ -8,14 +8,14 @@
     "dev": "vite --port=3000 --host=0.0.0.0",
     "build": "vite build",
     "preview": "vite preview",
-    "clean": "rm -rf dist",
+    "clean": "node scripts/clean.mjs",
     "lint": "eslint .",
     "format:check": "prettier --check .",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "test:visual": "playwright test",
     "check:cycles": "eslint src --rule \"import/no-cycle: error\"",
-    "check:clock": "if grep -rnE 'Date\\.now\\(|new Date\\([[:space:]]*\\)' src --include='*.ts' --include='*.tsx' | grep -v '^src/lib/clock\\.ts:'; then exit 1; else echo 'Clock contract passed'; fi",
+    "check:clock": "node scripts/check-clock.mjs",
     "check:all": "npm run typecheck && npm run lint && npm run format:check && npm run test && npm run check:cycles && npm run check:clock"
   },
   "dependencies": {
@@ -28,7 +28,7 @@
     "react": "^19.0.1",
     "react-dom": "^19.0.1",
     "vite": "^8.3.0",
-    "xlsx": "^0.18.5",
+    "xlsx": "https://cdn.sheetjs.com/xlsx-0.20.3/xlsx-0.20.3.tgz",
     "zustand": "^5.0.15"
   },
   "devDependencies": {

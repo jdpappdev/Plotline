@@ -39,7 +39,7 @@ export function DashboardProjectsPanel({
     <section
       aria-labelledby="projects-card-heading"
       style={{ '--stagger-index': 7 } as React.CSSProperties}
-      className="plotline-enter col-span-2 sm:col-span-1 xl:col-span-3 sm:order-7 bg-[var(--surface-elevated)] border border-[var(--border-hairline)] rounded-[var(--radius-lg)] p-4 flex flex-col justify-between gap-1.5 min-h-0"
+      className="plotline-enter col-span-2 sm:col-span-1 xl:col-span-3 sm:order-7 bg-[var(--surface-elevated)] border border-[var(--border-hairline)] rounded-[var(--radius-lg)] p-4 flex flex-col gap-1.5 xl:min-h-[280px]"
     >
       <div className="flex items-center justify-between gap-2 shrink-0">
         <h2
@@ -72,23 +72,23 @@ export function DashboardProjectsPanel({
           </button>
         </div>
       ) : (
-        <ul className="flex-1 flex flex-col justify-between min-h-0 overflow-hidden divide-y sm:divide-y-0 divide-[var(--border-hairline)]">
+        <ul className="flex flex-col divide-y sm:divide-y-0 divide-[var(--border-hairline)]">
           {projects.slice(0, 5).map((project) => {
             const isNew = project.id === lastAddedProjectId;
             return (
               <li
                 key={project.id}
                 onClick={() => onOpenProject(project.id)}
-                className={`flex items-center justify-between gap-2.5 py-1.5 sm:p-1 min-h-[44px] sm:min-h-0 rounded-[var(--radius-sm)] cursor-pointer hover:bg-[var(--surface-sunken)] transition-colors ${
+                className={`flex flex-none items-center justify-between gap-2.5 px-1.5 py-1.5 sm:py-0.5 min-h-[44px] sm:min-h-8 rounded-[var(--radius-sm)] cursor-pointer hover:bg-[var(--surface-sunken)] transition-colors ${
                   isNew ? 'plotline-row-new' : ''
                 }`}
               >
                 <div className="flex items-center gap-2.5 min-w-0 flex-1">
                   <span
-                    className="w-9 h-9 rounded-[var(--radius-sm)] bg-[var(--accent-soft)] flex items-center justify-center shrink-0"
+                    className="w-7 h-7 rounded-[var(--radius-sm)] bg-[var(--accent-soft)] flex items-center justify-center shrink-0"
                     title={`Contour glyph for ${project.name}`}
                   >
-                    <ContourGlyph seed={project.id} size={36} />
+                    <ContourGlyph seed={project.id} size={28} />
                   </span>
                   <div className="min-w-0 flex-1">
                     <p className="text-xs font-semibold text-[var(--ink-primary)] truncate leading-tight">

@@ -1,12 +1,5 @@
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import AnalyticsScreen from './components/AnalyticsScreen';
-import CalendarScreen from './components/CalendarScreen';
-import DashboardScreen from './components/DashboardScreen';
+import { lazy, Suspense, useCallback, useEffect, useMemo, useState } from 'react';
 import HelpScreen from './components/HelpScreen';
-import ProjectsScreen from './components/ProjectsScreen';
-import SettingsScreen from './components/SettingsScreen';
-import TasksScreen from './components/TasksScreen';
-import TeamScreen from './components/TeamScreen';
 import { MobileTabBar } from './components/shell/MobileTabBar';
 import { ShellOverlays } from './components/shell/ShellOverlays';
 import { SidebarRail } from './components/shell/SidebarRail';
@@ -15,6 +8,14 @@ import { resolveRouteFromLocation } from './components/shell/types';
 import { applyAccentCssVariables, RouteId, usePlotlineStore } from './store';
 import { ContourGlyph } from './utils/contourGlyph';
 import { pluralize } from './utils/string';
+
+const AnalyticsScreen = lazy(() => import('./components/AnalyticsScreen'));
+const CalendarScreen = lazy(() => import('./components/CalendarScreen'));
+const DashboardScreen = lazy(() => import('./components/DashboardScreen'));
+const ProjectsScreen = lazy(() => import('./components/ProjectsScreen'));
+const SettingsScreen = lazy(() => import('./components/SettingsScreen'));
+const TasksScreen = lazy(() => import('./components/TasksScreen'));
+const TeamScreen = lazy(() => import('./components/TeamScreen'));
 
 export default function App() {
   const {
@@ -286,19 +287,33 @@ export default function App() {
           }`}
         >
           {activeRoute === 'Dashboard' ? (
-            <DashboardScreen />
+            <Suspense fallback={<RouteLoadingState route={activeRoute} />}>
+              <DashboardScreen />
+            </Suspense>
           ) : activeRoute === 'Projects' ? (
-            <ProjectsScreen />
+            <Suspense fallback={<RouteLoadingState route={activeRoute} />}>
+              <ProjectsScreen />
+            </Suspense>
           ) : activeRoute === 'Tasks' ? (
-            <TasksScreen />
+            <Suspense fallback={<RouteLoadingState route={activeRoute} />}>
+              <TasksScreen />
+            </Suspense>
           ) : activeRoute === 'Calendar' ? (
-            <CalendarScreen />
+            <Suspense fallback={<RouteLoadingState route={activeRoute} />}>
+              <CalendarScreen />
+            </Suspense>
           ) : activeRoute === 'Analytics' ? (
-            <AnalyticsScreen />
+            <Suspense fallback={<RouteLoadingState route={activeRoute} />}>
+              <AnalyticsScreen />
+            </Suspense>
           ) : activeRoute === 'Team' ? (
-            <TeamScreen />
+            <Suspense fallback={<RouteLoadingState route={activeRoute} />}>
+              <TeamScreen />
+            </Suspense>
           ) : activeRoute === 'Settings' ? (
-            <SettingsScreen />
+            <Suspense fallback={<RouteLoadingState route={activeRoute} />}>
+              <SettingsScreen />
+            </Suspense>
           ) : activeRoute === 'Help' ? (
             <HelpScreen />
           ) : (
@@ -383,6 +398,18 @@ export default function App() {
         onAddTask={addTask}
         onDismissToast={dismissToast}
       />
+    </div>
+  );
+}
+
+function RouteLoadingState({ route }: { route: string }) {
+  return (
+    <div
+      className="grid min-h-40 place-items-center text-sm text-[var(--ink-secondary)]"
+      role="status"
+      aria-live="polite"
+    >
+      Opening {route}…
     </div>
   );
 }

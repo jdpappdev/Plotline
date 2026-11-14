@@ -67,7 +67,7 @@ export function InMotionPanel({
     <section
       aria-labelledby="in-motion-heading"
       style={{ '--stagger-index': 8 } as React.CSSProperties}
-      className="plotline-enter col-span-2 sm:col-span-2 xl:col-span-5 sm:order-8 bg-[var(--surface-elevated)] border border-[var(--border-hairline)] rounded-[var(--radius-lg)] p-4 flex flex-col justify-between gap-2 min-h-0"
+      className="plotline-enter col-span-2 sm:col-span-2 xl:col-span-5 sm:order-8 bg-[var(--surface-elevated)] border border-[var(--border-hairline)] rounded-[var(--radius-lg)] p-4 flex flex-col gap-2 min-h-[260px]"
     >
       <div className="flex items-center justify-between gap-2 shrink-0">
         <h2 id="in-motion-heading" className="text-base font-semibold text-[var(--ink-primary)]">

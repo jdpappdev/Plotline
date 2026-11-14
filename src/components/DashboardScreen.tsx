@@ -296,7 +296,7 @@ export default function DashboardScreen() {
             stat cards (2x2), Next up, Focus timer, In motion, Weekly output, Projects, Project rings.
           - 640-1023px: 2 columns (sm:grid-cols-2).
           - >=1280px: 12-column desktop bento (xl:grid-cols-12). */}
-      <div className="dashboard-grid flex-1 xl:min-h-0 min-w-0 grid grid-cols-2 sm:grid-cols-2 xl:grid-cols-12 gap-3 sm:gap-3.5 [grid-auto-rows:auto]">
+      <div className="dashboard-grid min-w-0 grid grid-cols-2 sm:grid-cols-2 xl:grid-cols-12 gap-3 sm:gap-3.5 [grid-auto-rows:auto]">
         <DashboardStatCards
           totalCount={totalCount}
           endedCount={endedCount}
