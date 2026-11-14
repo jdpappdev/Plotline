@@ -1,13 +1,15 @@
 # Plotline Workspace
 
-Plotline is a professional workspace engineering and design tracking platform designed for cross-functional technical teams.
+Plotline is a workspace engineering and design tracking prototype with a polished, original interface for project planning and delivery tracking.
+
+> **Product status:** Plotline is currently a client-side demo. Workspace data is stored in the current browser, and the account/sign-out controls are simulated. There is no backend, real authentication or authorization, shared workspace, or cross-device sync. Do not use it for real team or sensitive data yet. See [the verified baseline](docs/AUDIT.md) for production readiness work.
 
 ## Setup
 
-1. Ensure Node.js (v18+) and npm / bun are installed.
+1. Ensure Node.js 20+ and npm 10+ are installed.
 2. Install dependencies:
    ```bash
-   npm install
+   npm ci
    ```
 3. Run the development server on port 3000:
    ```bash
