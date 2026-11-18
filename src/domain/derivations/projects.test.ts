@@ -107,4 +107,30 @@ describe('projects derivations', () => {
       status: 'Pending',
     });
   });
+
+  it('parses quoted commas and preserves imported project status', () => {
+    const result = parseAndValidateImportRows(
+      'name,client,targetDate,status\r\n"Field Guide, Phase 2","Aurora, Outdoors",2027-02-15,running',
+      projects
+    );
+
+    expect(result.validRows).toEqual([
+      {
+        name: 'Field Guide, Phase 2',
+        client: 'Aurora, Outdoors',
+        targetDate: '2027-02-15',
+        status: 'Running',
+      },
+    ]);
+  });
+
+  it('marks malformed CSV quoting as an invalid preview row', () => {
+    const result = parseAndValidateImportRows(
+      'name,client,targetDate,status\n"Unclosed project,Client,2027-02-15,running',
+      projects
+    );
+
+    expect(result.invalidCount).toBe(1);
+    expect(result.rows[0]?.error).toBe('Invalid CSV quoting or field structure');
+  });
 });

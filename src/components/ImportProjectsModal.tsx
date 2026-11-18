@@ -3,20 +3,12 @@ import { AlertCircle, CheckCircle2, Download, Upload } from 'lucide-react';
 import { Dialog } from '../ui/Dialog';
 import { usePlotlineStore } from '../store';
 import { pluralize } from '../utils/string';
-
-interface ParsedRow {
-  name: string;
-  client: string;
-  targetDate: string;
-  status: 'Pending' | 'Running' | 'Ended';
-  isValid: boolean;
-  error?: string;
-}
+import { parseAndValidateImportRows, type ParsedImportRow } from '../domain/derivations/projects';
 
 export default function ImportProjectsModal() {
-  const { importModalOpen, setImportModalOpen, importProjects } = usePlotlineStore();
+  const { importModalOpen, setImportModalOpen, importProjects, projects } = usePlotlineStore();
 
-  const [rows, setRows] = useState<ParsedRow[]>([]);
+  const [rows, setRows] = useState<ParsedImportRow[]>([]);
   const [fileName, setFileName] = useState<string>('');
   const [parseError, setParseError] = useState<string>('');
 
@@ -37,135 +29,48 @@ export default function ImportProjectsModal() {
     URL.revokeObjectURL(url);
   };
 
-  const parseStatus = (val: string): 'Pending' | 'Running' | 'Ended' | null => {
-    if (!val) return 'Running';
-    const clean = val.trim().toLowerCase();
-    if (clean === 'running' || clean === 'on track' || clean === 'at risk') return 'Running';
-    if (clean === 'pending' || clean === 'planning') return 'Pending';
-    if (clean === 'ended' || clean === 'completed') return 'Ended';
-    return null;
-  };
-
   const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
 
     setFileName(file.name);
+    setRows([]);
+    setParseError('');
     setParseError('');
 
     const reader = new FileReader();
     reader.onload = (event) => {
-      const content = event.target?.result as string;
-      if (!content) {
+      const content = typeof event.target?.result === 'string' ? event.target.result : '';
+      if (!content.trim()) {
+        setRows([]);
         setParseError('File is empty.');
         return;
       }
 
       try {
-        if (file.name.endsWith('.json')) {
-          const json = JSON.parse(content);
-          if (!Array.isArray(json)) {
-            setParseError('JSON file must contain an array of project objects.');
-            return;
-          }
-          const parsed = json.map((item: Record<string, unknown>) => {
-            const name = String(item.name || item.title || '').trim();
-            const client = String(item.client || '').trim();
-            const rawDate = String(item.due_date || item.targetDate || item.dueDate || '').trim();
-            const rawStatus = String(item.status || '').trim();
-
-            const parsedStat = parseStatus(rawStatus);
-            let isValid = true;
-            let error = '';
-
-            if (!name) {
-              isValid = false;
-              error = 'Missing project name';
-            } else if (!rawDate || Number.isNaN(Date.parse(rawDate))) {
-              isValid = false;
-              error = 'Invalid due_date format (expect YYYY-MM-DD)';
-            } else if (!parsedStat) {
-              isValid = false;
-              error = 'Invalid status (expect Running, Pending, or Ended)';
-            }
-
-            return {
-              name,
-              client: client || 'Imported Partner',
-              targetDate: rawDate,
-              status: parsedStat || 'Running',
-              isValid,
-              error,
-            };
-          });
-
-          setRows(parsed);
-        } else {
-          // CSV Parsing
-          const lines = content.split(/\r?\n/).filter((l) => l.trim().length > 0);
-          if (lines.length < 2) {
-            setParseError('CSV must include a header row and at least one data row.');
-            return;
-          }
-
-          const header = lines[0].split(',').map((h) => h.trim().toLowerCase());
-          const nameIdx = header.findIndex((h) => h === 'name' || h === 'title');
-          const clientIdx = header.findIndex((h) => h === 'client');
-          const dateIdx = header.findIndex(
-            (h) => h === 'due_date' || h === 'targetdate' || h === 'duedate'
-          );
-          const statusIdx = header.findIndex((h) => h === 'status');
-
-          if (nameIdx === -1) {
-            setParseError('CSV header missing required "name" column.');
-            return;
-          }
-
-          const parsed: ParsedRow[] = [];
-          for (let i = 1; i < lines.length; i++) {
-            const cols = lines[i].split(',').map((c) => c.trim().replace(/^["']|["']$/g, ''));
-            const name = cols[nameIdx] || '';
-            const client = clientIdx !== -1 ? cols[clientIdx] || '' : '';
-            const rawDate = dateIdx !== -1 ? cols[dateIdx] || '' : '';
-            const rawStatus = statusIdx !== -1 ? cols[statusIdx] || '' : '';
-
-            const parsedStat = parseStatus(rawStatus);
-            let isValid = true;
-            let error = '';
-
-            if (!name) {
-              isValid = false;
-              error = 'Missing project name';
-            } else if (!rawDate || Number.isNaN(Date.parse(rawDate))) {
-              isValid = false;
-              error = 'Invalid due_date format (expect YYYY-MM-DD)';
-            } else if (!parsedStat) {
-              isValid = false;
-              error = 'Invalid status (expect Running, Pending, or Ended)';
-            }
-
-            parsed.push({
-              name,
-              client: client || 'Imported Partner',
-              targetDate: rawDate,
-              status: parsedStat || 'Running',
-              isValid,
-              error,
-            });
-          }
-
-          setRows(parsed);
+        const parsed = parseAndValidateImportRows(content, projects);
+        if (parsed.rows.length === 0) {
+          setRows([]);
+          setParseError('No project rows were found.');
+          return;
         }
+        setRows(parsed.rows);
       } catch {
+        setRows([]);
         setParseError('Failed to parse file. Please check file format.');
       }
+    };
+
+    reader.onerror = () => {
+      setRows([]);
+      setParseError('Failed to read file. Please try again.');
     };
 
     reader.readAsText(file);
   };
 
   const handleImport = () => {
-    const validRows = rows.filter((r) => r.isValid);
+    const validRows = rows.filter((r) => r.valid && !r.duplicate);
     if (validRows.length === 0) return;
 
     importProjects(
@@ -182,7 +87,7 @@ export default function ImportProjectsModal() {
     setFileName('');
   };
 
-  const validCount = rows.filter((r) => r.isValid).length;
+  const validCount = rows.filter((r) => r.valid && !r.duplicate).length;
   const invalidCount = rows.length - validCount;
 
   return (
@@ -284,7 +189,10 @@ export default function ImportProjectsModal() {
                 </thead>
                 <tbody className="divide-y divide-[var(--border-hairline)] bg-[var(--surface-elevated)]">
                   {rows.map((r, idx) => (
-                    <tr key={idx} className={r.isValid ? '' : 'bg-red-50/50 dark:bg-red-950/10'}>
+                    <tr
+                      key={idx}
+                      className={r.valid && !r.duplicate ? '' : 'bg-red-50/50 dark:bg-red-950/10'}
+                    >
                       <td className="p-2 font-mono text-[var(--ink-muted)]">{idx + 1}</td>
                       <td className="p-2 font-semibold text-[var(--ink-primary)]">
                         {r.name || '—'}
@@ -307,7 +215,7 @@ export default function ImportProjectsModal() {
                         </span>
                       </td>
                       <td className="p-2">
-                        {r.isValid ? (
+                        {r.valid && !r.duplicate ? (
                           <span className="inline-flex items-center gap-1 text-[#216E3E] text-[11px] font-medium">
                             <CheckCircle2 className="w-3.5 h-3.5" />
                             <span>Valid</span>

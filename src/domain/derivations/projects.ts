@@ -169,8 +169,10 @@ function parseImportStatus(rawStatus: string | undefined): {
 } {
   const clean = (rawStatus || 'pending').trim().toLowerCase();
   if (clean === 'pending') return { status: 'Pending', valid: true };
-  if (clean === 'running') return { status: 'Running', valid: true };
-  if (clean === 'ended') return { status: 'Ended', valid: true };
+  if (clean === 'running' || clean === 'on track' || clean === 'at risk') {
+    return { status: 'Running', valid: true };
+  }
+  if (clean === 'ended' || clean === 'completed') return { status: 'Ended', valid: true };
   return { status: 'Pending', valid: false };
 }
 
@@ -179,6 +181,72 @@ function isValidIsoDateString(value: string): boolean {
   const [y, m, d] = value.split('-').map(Number);
   const dt = new Date(Date.UTC(y, m - 1, d));
   return dt.getUTCFullYear() === y && dt.getUTCMonth() === m - 1 && dt.getUTCDate() === d;
+}
+
+function parseCsvRecords(text: string): string[][] {
+  const records: string[][] = [];
+  let record: string[] = [];
+  let field = '';
+  let inQuotes = false;
+  let afterQuote = false;
+
+  const pushField = () => {
+    record.push(field.trim());
+    field = '';
+    afterQuote = false;
+  };
+  const pushRecord = () => {
+    pushField();
+    if (record.some((value) => value.length > 0)) records.push(record);
+    record = [];
+  };
+
+  for (let i = 0; i < text.length; i += 1) {
+    const char = text[i];
+    const isLineBreak = char === '\n' || char === '\r';
+
+    if (inQuotes) {
+      if (char === '"' && text[i + 1] === '"') {
+        field += '"';
+        i += 1;
+      } else if (char === '"') {
+        inQuotes = false;
+        afterQuote = true;
+      } else {
+        field += char;
+      }
+      continue;
+    }
+
+    if (afterQuote) {
+      if (char === ',') {
+        pushField();
+      } else if (isLineBreak) {
+        if (char === '\r' && text[i + 1] === '\n') i += 1;
+        pushRecord();
+      } else if (!/\s/.test(char)) {
+        throw new Error('Unexpected text after a quoted CSV field.');
+      }
+      continue;
+    }
+
+    if (char === '"') {
+      if (field.trim().length > 0) throw new Error('Unexpected quote in an unquoted CSV field.');
+      field = '';
+      inQuotes = true;
+    } else if (char === ',') {
+      pushField();
+    } else if (isLineBreak) {
+      if (char === '\r' && text[i + 1] === '\n') i += 1;
+      pushRecord();
+    } else {
+      field += char;
+    }
+  }
+
+  if (inQuotes) throw new Error('CSV contains an unclosed quoted field.');
+  if (field.length > 0 || record.length > 0 || afterQuote) pushRecord();
+  return records;
 }
 
 export function parseAndValidateImportRows(
@@ -212,9 +280,9 @@ export function parseAndValidateImportRows(
         if (item && typeof item === 'object') {
           const obj = item as Record<string, unknown>;
           rawRecords.push({
-            name: String(obj.name ?? '').trim(),
+            name: String(obj.name ?? obj.title ?? '').trim(),
             client: String(obj.client ?? 'Independent Partner').trim(),
-            targetDate: String(obj.targetDate ?? obj.dueDate ?? '').trim(),
+            targetDate: String(obj.due_date ?? obj.targetDate ?? obj.dueDate ?? '').trim(),
             statusRaw: String(obj.status ?? 'pending').trim(),
           });
         }
@@ -223,27 +291,37 @@ export function parseAndValidateImportRows(
       rawRecords.push({ name: '', client: '', targetDate: '', statusRaw: 'invalid-json' });
     }
   } else if (trimmed) {
-    const lines = trimmed
-      .split(/\r?\n/)
-      .map((l) => l.trim())
-      .filter(Boolean);
+    try {
+      const csvRecords = parseCsvRecords(trimmed);
+      const headers =
+        csvRecords[0]?.map((value) => value.toLowerCase().replace(/[\s-]+/g, '_')) ?? [];
+      const nameIndex = headers.findIndex((header) => header === 'name' || header === 'title');
+      const clientIndex = headers.indexOf('client');
+      const dateIndex = headers.findIndex((header) =>
+        ['due_date', 'duedate', 'target_date', 'targetdate'].includes(header)
+      );
+      const statusIndex = headers.indexOf('status');
+      const hasHeader = nameIndex !== -1 && dateIndex !== -1;
+      const dataRecords = hasHeader ? csvRecords.slice(1) : csvRecords;
 
-    lines.forEach((line, index) => {
-      const parts = line.split(',').map((s) => s.trim());
-      if (
-        index === 0 &&
-        parts[0]?.toLowerCase() === 'name' &&
-        (parts[1]?.toLowerCase() === 'client' || parts[2]?.toLowerCase().includes('date'))
-      ) {
-        return;
-      }
-      rawRecords.push({
-        name: parts[0] || '',
-        client: parts[1] || 'Independent Partner',
-        targetDate: parts[2] || '',
-        statusRaw: parts[3] || 'pending',
+      dataRecords.forEach((parts) => {
+        const valueAt = (index: number, fallback = '') =>
+          index < 0 ? fallback : (parts[index] ?? fallback);
+        rawRecords.push({
+          name: valueAt(hasHeader ? nameIndex : 0),
+          client: valueAt(hasHeader ? clientIndex : 1, 'Independent Partner'),
+          targetDate: valueAt(hasHeader ? dateIndex : 2),
+          statusRaw: valueAt(hasHeader ? statusIndex : 3, 'pending'),
+        });
       });
-    });
+    } catch {
+      rawRecords.push({
+        name: 'Malformed CSV payload',
+        client: '—',
+        targetDate: '—',
+        statusRaw: 'invalid-csv',
+      });
+    }
   }
 
   const seenKeys = new Set(
@@ -252,6 +330,18 @@ export function parseAndValidateImportRows(
 
   const rows: ParsedImportRow[] = rawRecords.map((rec, idx) => {
     const statusParsed = parseImportStatus(rec.statusRaw);
+    if (rec.statusRaw === 'invalid-csv') {
+      return {
+        rowNumber: idx + 1,
+        name: rec.name,
+        client: rec.client,
+        targetDate: rec.targetDate,
+        status: 'Pending',
+        valid: false,
+        duplicate: false,
+        error: 'Invalid CSV quoting or field structure',
+      };
+    }
     if (rec.statusRaw === 'invalid-json') {
       return {
         rowNumber: idx + 1,
