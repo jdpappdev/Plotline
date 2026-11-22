@@ -299,6 +299,9 @@ test.describe('Project glyph tiles and Help FAQ glyph samples', () => {
 
     const assertProjectTilesHaveVisibleGlyphs = async (tileSelector: string) => {
       const tiles = page.locator(tileSelector);
+      // Route screens are lazy-loaded; wait for the first tile before counting so
+      // the assertion does not race the Suspense fallback ("Opening Projects…").
+      await expect(tiles.first()).toBeVisible({ timeout: 10_000 });
       const count = await tiles.count();
       expect(count).toBeGreaterThan(0);
 
